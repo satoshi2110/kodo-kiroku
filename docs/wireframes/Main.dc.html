@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ホーム クイック記録</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <button style="display: flex; align-items: center; gap: 8px; background: none; border: 1px solid #c7cbd1; border-radius: 10px; padding: 8px 12px; font-size: 16px; font-weight: 600; color: #1f2328; min-height: 44px" aria-label="対象者を切り替える">
+      <span style="width: 28px; height: 28px; border-radius: 50%; background: #d9dce1; display: inline-block"></span>
+      Aさん
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button style="width: 44px; height: 44px; background: none; border: none" aria-label="設定">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; margin: 12px 16px 0; padding: 10px 12px; background: #e8eefc; border-radius: 10px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 12px; color: #3b4452">観察中（施設・日中活動）</span>
+      <span style="font-size: 15px; font-weight: 600">09:00〜 2時間15分</span>
+    </div>
+    <button style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #1d4ed8; background: #ffffff; color: #1d4ed8; font-size: 14px; font-weight: 600">終了</button>
+  </div>
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; margin: 16px 16px 8px">
+    <span style="font-size: 13px; font-weight: 600; color: #3b4452">記録する（タップで +1）</span>
+    <span style="font-size: 12px; color: #5b6472">11月3日（月）</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 16px">
+    <button style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; min-height: 108px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; text-align: left">
+      <span style="font-size: 11px; font-weight: 600; color: #9a3412; background: #ffedd5; padding: 2px 8px; border-radius: 999px">問題行動</span>
+      <span style="font-size: 16px; font-weight: 600">頭たたき</span>
+      <span style="font-size: 13px; color: #5b6472">今日 <strong style="font-size: 22px; color: #1f2328">3</strong> 回</span>
+    </button>
+    <button style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; min-height: 108px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; text-align: left">
+      <span style="font-size: 11px; font-weight: 600; color: #9a3412; background: #ffedd5; padding: 2px 8px; border-radius: 999px">問題行動</span>
+      <span style="font-size: 16px; font-weight: 600">大声</span>
+      <span style="font-size: 13px; color: #5b6472">今日 <strong style="font-size: 22px; color: #1f2328">1</strong> 回</span>
+    </button>
+    <button style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; min-height: 108px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; text-align: left">
+      <span style="font-size: 11px; font-weight: 600; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">代替行動</span>
+      <span style="font-size: 16px; font-weight: 600">休憩カードを渡す</span>
+      <span style="font-size: 13px; color: #5b6472">今日 <strong style="font-size: 22px; color: #1f2328">2</strong> 回</span>
+    </button>
+    <button style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; min-height: 108px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; text-align: left">
+      <span style="font-size: 11px; font-weight: 600; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">望ましい行動</span>
+      <span style="font-size: 16px; font-weight: 600">着席して課題</span>
+      <span style="font-size: 13px; color: #5b6472">今日 <strong style="font-size: 22px; color: #1f2328">4</strong> 回</span>
+    </button>
+  </div>
+
+  <div style="display: flex; gap: 10px; margin: 10px 16px 0">
+    <button style="flex: 1; min-height: 44px; border-radius: 10px; border: 1px dashed #8a94a3; background: #ffffff; color: #3b4452; font-size: 14px">本日なし（0回）を記録</button>
+    <button style="min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 14px">さかのぼって入力</button>
+  </div>
+
+  <div style="margin: 14px 16px 0; padding: 12px 14px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; display: flex; flex-direction: column; gap: 6px">
+    <span style="font-size: 12px; font-weight: 600; color: #1e40af">できたこと</span>
+    <span style="font-size: 14px; line-height: 1.5">「休憩カードを渡す」が 3日連続で増えています。頭たたきのない時間帯が午前に増えました。</span>
+  </div>
+
+  <div style="margin: 12px 16px 0; display: flex; flex-direction: column; gap: 6px">
+    <span style="font-size: 13px; font-weight: 600; color: #3b4452">今日の記録</span>
+    <a href="ABC.dc.html" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 10px; text-decoration: none; color: #1f2328; min-height: 44px">
+      <span style="font-size: 14px"><strong>10:42</strong> 頭たたき 強度2 ・ 山田</span>
+      <span style="font-size: 12px; color: #1d4ed8">ABCを追加</span>
+    </a>
+    <a href="ABC.dc.html" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 10px; text-decoration: none; color: #1f2328; min-height: 44px">
+      <span style="font-size: 14px"><strong>10:45</strong> 休憩カードを渡す ・ 山田</span>
+      <span style="font-size: 12px; color: #5b6472">ABC済</span>
+    </a>
+  </div>
+
+  <div style="flex: 1"></div>
+
+  <div style="margin: 0 16px 10px; padding: 12px 14px; background: #1f2328; color: #ffffff; border-radius: 10px; display: flex; align-items: center; justify-content: space-between">
+    <span style="font-size: 14px">「頭たたき」+1 を記録しました</span>
+    <button style="min-height: 44px; padding: 0 12px; background: none; border: 1px solid #ffffff; border-radius: 8px; color: #ffffff; font-size: 14px; font-weight: 600">取り消し</button>
+  </div>
+
+  <nav style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: #ffffff; border-top: 1px solid #d9dce1; padding: 6px 0 14px" aria-label="メイン">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #1d4ed8; text-decoration: none; font-weight: 600; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1z"/></svg>ホーム</a>
+    <a href="Graph.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 20h18M4 16l5-6 4 3 7-8"/></svg>グラフ</a>
+    <a href="Plan.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/></svg>計画</a>
+    <a href="Team.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0112 0M14 20a4.5 4.5 0 017 0"/></svg>チーム</a>
+    <a href="AI.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>AI</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

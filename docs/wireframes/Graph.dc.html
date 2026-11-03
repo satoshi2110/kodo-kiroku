@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>グラフ 行動の変化</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <span style="font-size: 18px; font-weight: 700">グラフ ・ Aさん</span>
+    <button style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 13px; color: #3b4452">PDF / CSV</button>
+  </div>
+
+  <div style="display: flex; gap: 8px; padding: 10px 16px 0">
+    <div style="display: flex; border: 1px solid #c7cbd1; border-radius: 8px; overflow: hidden" role="group" aria-label="種類">
+      <button style="min-height: 40px; padding: 0 12px; border: none; background: #1d4ed8; color: #ffffff; font-size: 13px; font-weight: 600">折れ線</button>
+      <button style="min-height: 40px; padding: 0 12px; border: none; background: #ffffff; color: #3b4452; font-size: 13px">時間帯</button>
+      <button style="min-height: 40px; padding: 0 12px; border: none; background: #ffffff; color: #3b4452; font-size: 13px">ABC集計</button>
+    </div>
+    <div style="display: flex; border: 1px solid #c7cbd1; border-radius: 8px; overflow: hidden; margin-left: auto" role="group" aria-label="期間">
+      <button style="min-height: 40px; padding: 0 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 13px; font-weight: 600">日</button>
+      <button style="min-height: 40px; padding: 0 10px; border: none; background: #ffffff; color: #3b4452; font-size: 13px">週</button>
+      <button style="min-height: 40px; padding: 0 10px; border: none; background: #ffffff; color: #3b4452; font-size: 13px">月</button>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px 0; font-size: 13px; color: #3b4452">
+    <span>縦軸:</span>
+    <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 12px; font-weight: 600">1時間あたりの回数</button>
+    <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">回数</button>
+    <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">強度</button>
+  </div>
+
+  <div style="margin: 10px 16px 0; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <span style="font-size: 13px; font-weight: 600">10/21 〜 11/3（14日）</span>
+      <span style="font-size: 12px; color: #5b6472">未記録 1日（線を切って表示）</span>
+    </div>
+    <svg viewBox="0 0 358 230" width="334" height="215" role="img" aria-label="頭たたきは支援開始後に1時間あたり6回から2回へ減少し、休憩カードを渡す行動は0回から5回へ増加した折れ線グラフ">
+      <line x1="30" y1="24" x2="30" y2="200" stroke="#c7cbd1"/>
+      <line x1="30" y1="200" x2="350" y2="200" stroke="#c7cbd1"/>
+      <text x="8" y="28" font-size="10" fill="#5b6472">8</text>
+      <text x="8" y="116" font-size="10" fill="#5b6472">4</text>
+      <text x="8" y="160" font-size="10" fill="#5b6472">2</text>
+      <text x="8" y="204" font-size="10" fill="#5b6472">0</text>
+      <line x1="30" y1="156" x2="350" y2="156" stroke="#1f2328" stroke-width="1" stroke-dasharray="2 3"/>
+      <text x="300" y="150" font-size="10" fill="#1f2328">達成基準 2回/時</text>
+      <line x1="186" y1="20" x2="186" y2="200" stroke="#5b6472" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <rect x="110" y="6" width="150" height="16" rx="4" fill="#e8eefc"/>
+      <text x="116" y="18" font-size="10" fill="#1e40af">支援開始 10/28（休憩カード導入）</text>
+      <text x="60" y="36" font-size="10" fill="#5b6472">ベースライン</text>
+      <polyline points="30,68 54,90 78,46 102,68" fill="none" stroke="#c2410c" stroke-width="2.5"/>
+      <polyline points="150,46 174,90 198,112 222,134 246,134 270,156 294,156 318,178 342,156" fill="none" stroke="#c2410c" stroke-width="2.5"/>
+      <g fill="#c2410c"><circle cx="30" cy="68" r="3"/><circle cx="54" cy="90" r="3"/><circle cx="78" cy="46" r="3"/><circle cx="102" cy="68" r="3"/><circle cx="150" cy="46" r="3"/><circle cx="174" cy="90" r="3"/><circle cx="198" cy="112" r="3"/><circle cx="222" cy="134" r="3"/><circle cx="246" cy="134" r="3"/><circle cx="270" cy="156" r="3"/><circle cx="294" cy="156" r="3"/><circle cx="318" cy="178" r="3"/><circle cx="342" cy="156" r="3"/></g>
+      <polyline points="30,200 54,200 78,200 102,178" fill="none" stroke="#1d4ed8" stroke-width="2.5" stroke-dasharray="6 3"/>
+      <polyline points="150,200 174,178 198,156 222,134 246,134 270,112 294,112 318,90 342,90" fill="none" stroke="#1d4ed8" stroke-width="2.5" stroke-dasharray="6 3"/>
+      <g fill="#ffffff" stroke="#1d4ed8" stroke-width="2"><rect x="27" y="197" width="6" height="6"/><rect x="51" y="197" width="6" height="6"/><rect x="75" y="197" width="6" height="6"/><rect x="99" y="175" width="6" height="6"/><rect x="147" y="197" width="6" height="6"/><rect x="171" y="175" width="6" height="6"/><rect x="195" y="153" width="6" height="6"/><rect x="219" y="131" width="6" height="6"/><rect x="243" y="131" width="6" height="6"/><rect x="267" y="109" width="6" height="6"/><rect x="291" y="109" width="6" height="6"/><rect x="315" y="87" width="6" height="6"/><rect x="339" y="87" width="6" height="6"/></g>
+      <text x="120" y="212" font-size="9" fill="#9a3412">未記録</text>
+      <text x="26" y="224" font-size="10" fill="#5b6472">10/21</text>
+      <text x="170" y="224" font-size="10" fill="#5b6472">10/27</text>
+      <text x="330" y="224" font-size="10" fill="#5b6472">11/3</text>
+    </svg>
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: #3b4452">
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 3px; background: #c2410c; display: inline-block"></span>頭たたき（問題行動）</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 0; border-top: 3px dashed #1d4ed8; display: inline-block"></span>休憩カードを渡す（代替行動）</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 0">
+    <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c2410c; background: #ffedd5; color: #9a3412; font-size: 13px; font-weight: 600">頭たたき</button>
+    <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600">休憩カードを渡す</button>
+    <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">大声</button>
+    <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">着席して課題</button>
+  </div>
+
+  <div style="margin: 12px 16px 0; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+    <span style="font-size: 13px; font-weight: 600">この期間のまとめ</span>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #5b6472">頭たたき</span><span style="font-size: 18px; font-weight: 700">6.0 → 1.8<span style="font-size: 11px; font-weight: 400; color: #5b6472"> 回/時</span></span></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #5b6472">休憩カード</span><span style="font-size: 18px; font-weight: 700">0.3 → 4.5<span style="font-size: 11px; font-weight: 400; color: #5b6472"> 回/時</span></span></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #5b6472">観察時間</span><span style="font-size: 18px; font-weight: 700">52<span style="font-size: 11px; font-weight: 400; color: #5b6472"> 時間</span></span></div>
+    </div>
+    <span style="font-size: 12px; color: #5b6472">記録者: 山田・佐藤（施設）、母（家庭）</span>
+  </div>
+
+  <div style="flex: 1"></div>
+
+  <nav style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: #ffffff; border-top: 1px solid #d9dce1; padding: 6px 0 14px" aria-label="メイン">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1z"/></svg>ホーム</a>
+    <a href="Graph.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #1d4ed8; text-decoration: none; font-weight: 600; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 20h18M4 16l5-6 4 3 7-8"/></svg>グラフ</a>
+    <a href="Plan.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/></svg>計画</a>
+    <a href="Team.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0112 0M14 20a4.5 4.5 0 017 0"/></svg>チーム</a>
+    <a href="AI.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: #3b4452; text-decoration: none; min-height: 44px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>AI</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
