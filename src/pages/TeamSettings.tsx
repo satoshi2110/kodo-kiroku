@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import RestraintThreshold from '../components/RestraintThreshold';
 import { AI_LIMITS, aiUsage, canEditTeamSettings, canExport, logExport, setAiEnabled, TEAM_DELETE_DAYS, updateTeamSetting } from '../db/repo';
 import { useApp } from '../state';
 import { buildCsv, downloadCsv, type CsvKind } from '../lib/csv';
@@ -122,6 +123,13 @@ export default function TeamSettings() {
             ))}
           </div>
           <p className="help">年齢によって必要な睡眠時間がちがうため、初期設定は「いつもと比べて」です。短い夜の日の ABC記録には「睡眠不足」が最初から付きます。</p>
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="card stack">
+          <span className="label">身体拘束の記録</span>
+          <RestraintThreshold />
         </div>
       </div>
 

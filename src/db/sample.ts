@@ -1,12 +1,15 @@
 /**
  * お試し用のサンプル（発注者回答 2026-11-05）。審査やお試しで、すぐにグラフ・ABC集計・AI分析を見られるようにする。
- * 架空の対象者「サンプルさん」と、3週間分の記録を端末内にだけ作る。実在の人のデータではない。画面には「サンプル」と表示する。
+ * 架空の対象者「サンプルさん」と、3週間分の記録・支援計画（2回の実施）・支援会議メモを端末内にだけ作る（身体拘束の記録は作らない）。実在の人のデータではない。画面には「サンプル」と表示する。
  */
 import { db } from './db';
 import { newId } from '../lib/id';
 import { addDays, toLocalDate, toLocalISO, parseLocalDate } from '../lib/date';
 import { ensureChoiceOptions, getDevice, saveDevice } from './repo';
-import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type Observation, type SleepLog, type Person, type Place, type Reinforcer, type TeamMember } from './types';
+import { diffFields } from './phase2';
+import { loadRecordSet } from '../lib/series';
+import { takeSnapshots } from '../lib/snapshot';
+import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type MeetingNote, type Observation, type PlanChange, type PlanContent, type PlanSignoff, type SupportPlan, type Comment, type SleepLog, type Person, type Place, type Reinforcer, type TeamMember } from './types';
 
 const DAYS = 21;
 
@@ -229,5 +232,79 @@ export async function createSampleTeam(): Promise<void> {
     await db.sleepLogs.bulkAdd(sleeps);
     await db.observations.bulkAdd(observations);
     await db.abcDetails.bulkAdd(details);
+  });
+
+  // 支援計画（6.7）: 14日前に支援開始、5日前の支援会議で先行子の工夫を変えた。グラフにベースライン・支援開始・計画の変更の線が入る
+  const startDate = addDays(today, -14);
+  const changeDate = addDays(today, -5);
+  const plan1: PlanContent = {
+    problemBehaviorId: hit.id,
+    alternativeBehaviorId: card.id,
+    func: 'escape',
+    goal: '個別課題の時間に、頭をたたく代わりに休憩カードを渡して休めるようになる',
+    criteria: [
+      { behaviorId: hit.id, op: 'lte', value: 3, note: '' },
+      { behaviorId: card.id, op: 'gte', value: 3, note: '' },
+    ],
+    antecedent: '課題は短く区切り、残りの量を見せる',
+    reinforcement: 'カードを渡したら、すぐに2分休める',
+    prompting: '課題の前にカードを机に置き、指さしで教える。だんだん指さしを減らす',
+    crisis: '頭を守るためクッションを間に入れ、少し離れて見守る。叱らない',
+    reviewDate: addDays(today, 23),
+    owner: '職員A（見本）',
+  };
+  const plan2: PlanContent = { ...plan1, antecedent: '午前の課題の量を2つ減らし、終わりの合図を写真カードで見せる。学校でも同じカードを使う' };
+  const stamp = (date: string, hour: number) => at(date, hour, 0);
+  const planRec: SupportPlan = { ...rec(), createdAt: stamp(startDate, 17), personId: person.id, content: plan2, activeContent: plan2, activeSince: changeDate };
+  const change = (c: Omit<PlanChange, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'personId' | 'planId' | 'closedBy' | 'fields'>, createdAt: string): PlanChange => ({
+    ...rec(),
+    createdAt,
+    updatedAt: createdAt,
+    personId: person.id,
+    planId: planRec.id,
+    closedBy: null,
+    fields: diffFields(c.before, c.after),
+    ...c,
+  });
+  const ch1 = change({ savedBy: staff.userId, reason: '支援を始める', before: null, after: plan1, signerMemberIds: [me.id, staff.id, teacher.id], status: 'past', activeSince: startDate }, stamp(addDays(startDate, -1), 17));
+  const ch2 = change({ savedBy: staff.userId, reason: '支援会議で、午前の課題の量と終わりの合図を見直した', before: plan1, after: plan2, signerMemberIds: [me.id, staff.id, teacher.id], status: 'active', activeSince: changeDate }, stamp(changeDate, 16));
+  const sign = (c: PlanChange, m: TeamMember, state: PlanSignoff['state'], opinion = ''): PlanSignoff => ({ ...rec(), createdAt: c.createdAt, personId: person.id, changeId: c.id, memberId: m.id, state, opinion });
+  const signoffs = [sign(ch1, me, 'agreed'), sign(ch1, staff, 'agreed'), sign(ch1, teacher, 'agreed'), sign(ch2, staff, 'agreed'), sign(ch2, me, 'agreed')];
+
+  // 支援会議メモ（6.10）: 計画の変更を決めた日の会議。グラフはその日の時点で保存
+  const rs = await loadRecordSet(person.id);
+  const meetingDay = changeDate;
+  const heldAt = stamp(meetingDay, 15);
+  const charts = takeSnapshots(
+    [hit, card, dress, voice],
+    rs,
+    Array.from({ length: 28 }, (_, i) => addDays(meetingDay, -28 + i)),
+    'week',
+    plan1,
+    [{ date: startDate, label: '支援開始' }],
+  );
+  const meeting: MeetingNote = {
+    ...rec(),
+    createdAt: heldAt,
+    personId: person.id,
+    heldAt,
+    place: 'ひまわり園の会議室',
+    participantIds: [me.id, staff.id, teacher.id],
+    otherParticipants: '相談員',
+    charts,
+    results: '休憩カードを渡せる日が増えてきた。頭たたきは支援開始前より少し減った。',
+    decisions: '午前の課題の量を2つ減らし、終わりの合図を写真カードで見せる。学校でも同じカードを使う。',
+    nextReview: plan2.reviewDate,
+    planSnapshot: plan1,
+    recorderId: staff.userId,
+  };
+  const comment: Comment = { ...rec(), createdAt: stamp(meetingDay, 18), personId: person.id, target: 'meeting', targetId: meeting.id, text: '学校の写真カードを、家庭用にもう1組作ります。', authorId: teacher.userId };
+
+  await db.transaction('rw', [db.supportPlans, db.planChanges, db.planSignoffs, db.meetingNotes, db.comments], async () => {
+    await db.supportPlans.add(planRec);
+    await db.planChanges.bulkAdd([ch1, ch2]);
+    await db.planSignoffs.bulkAdd(signoffs);
+    await db.meetingNotes.add(meeting);
+    await db.comments.add(comment);
   });
 }

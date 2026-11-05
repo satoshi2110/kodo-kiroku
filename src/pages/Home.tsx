@@ -14,11 +14,15 @@ import { formatDuration, formatTime, toLocalDate } from '../lib/date';
 import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
 import { Chip, KindBadge, Sheet, TopBar } from '../components/ui';
 import { formatSleep, sleepMinutes } from '../lib/sleep';
+import { useRecordSet } from '../lib/series';
+import { computeWins } from '../lib/wins';
+import { usePlanData } from '../lib/usePlan';
+import { addDays, formatShortDate } from '../lib/date';
 
 type Timer = { behaviorId: string; startedAt: number };
 
 export default function Home() {
-  const { person, behaviors, me, members, userId, places, place, placeOutside, useLocation } = useApp();
+  const { person, persons, setCurrentPerson, behaviors, me, members, userId, places, place, placeOutside, useLocation } = useApp();
   const today = toLocalDate();
   const personId = person?.id ?? '';
   const now = useNow(30_000);
@@ -53,6 +57,16 @@ export default function Home() {
   const events = useMemo(() => [...(todayEvents ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [todayEvents]);
   const rows = useMemo(() => pairRows(behaviors), [behaviors]);
   const [pickingPlace, setPickingPlace] = useState(false);
+  const rs = useRecordSet(personId);
+  const planData = usePlanData(personId);
+  const wins = useMemo(
+    () => (rs && planData !== undefined ? computeWins(behaviors, rs, planData.plan?.activeContent ?? null, today).filter((w) => w.date >= addDays(today, -6)) : []),
+    [rs, planData, behaviors, today],
+  );
+  // 合意の依頼（決定75）: 自分が合意者で、まだ返事をしていない変更
+  const signRequest = planData?.changes.find(
+    (c) => (c.status === 'pending' || c.status === 'active') && me && c.signerMemberIds.includes(me.id) && !planData.signoffs.some((s) => s.changeId === c.id && s.memberId === me.id),
+  );
 
   // 場所の自動判定（6.3.3）: 開いたときと前面に戻ったときに1回だけ位置を取り、端末の中で照らし合わせる
   const placeRef = useRef({ places, placeId: place?.id });
@@ -153,7 +167,15 @@ export default function Home() {
   return (
     <div className="page">
       <TopBar
-        title={person.displayName}
+        title={
+          persons.length > 1 ? (
+            <select className="person-select" value={person.id} aria-label="対象者を切りかえる" onChange={(e) => setCurrentPerson(e.target.value)}>
+              {persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
+            </select>
+          ) : (
+            person.displayName
+          )
+        }
         sub={
           <>
             {formatTime(new Date(now).toISOString())} ・{' '}
@@ -172,6 +194,25 @@ export default function Home() {
 
       {person.isSample && <p className="section sample-note">これは架空の「サンプル」です。自由に押して試せます。</p>}
       {!recordable && <p className="section help">閲覧者は記録を見るだけです。</p>}
+      {signRequest && (
+        <div className="section">
+          <Link to="/plan/signoff" className="card row row--between notice-card">
+            <span className="stack" style={{ gap: 2 }}>
+              <strong>支援計画の確認の依頼があります</strong>
+              <span className="muted">{formatShortDate(signRequest.createdAt.slice(0, 10))} の変更 ・ 内容を見て返事をしてください</span>
+            </span>
+            <span className="today-row__go" aria-hidden="true">›</span>
+          </Link>
+        </div>
+      )}
+      {recordable && !person.isSample && rs && rs.events.length === 0 && rs.observations.length === 0 && behaviors.length > 0 && (
+        <div className="section">
+          <div className="card stack first-guide">
+            <span className="label">はじめての設定 5 / 5: 最初の記録</span>
+            <p className="help">行動のボタンを1回押してみましょう。押し間違えたら、右上の「−1」で取り消せます（取り消しも履歴に残ります）。</p>
+          </div>
+        </div>
+      )}
 
       <div className="section">
         <Link to="/sleep" className="card sleep-card">
@@ -209,7 +250,24 @@ export default function Home() {
           </div>
         ))}
         {behaviors.length === 0 && <p className="empty">まだ行動がありません。</p>}
+        {behaviors.some((b) => b.method === 'frequency' || b.method === 'duration') && (
+          <p className="help">回数・時間で記録する行動は、記録を付けた日に記録がなければ、自動で 0 になります。観察していなかった日は「さかのぼって入力」で直せます。</p>
+        )}
       </div>
+
+      {wins.length > 0 && (
+        <div className="section">
+          <div className="card stack wins-card">
+            <div className="row row--between">
+              <h2 className="card__title" style={{ margin: 0 }}>できたこと</h2>
+              <Link to="/wins" className="btn btn--sm">すべて見る</Link>
+            </div>
+            {wins.slice(0, 3).map((w, i) => (
+              <p key={i} className="win-text">{w.text}<span className="muted"> ・ {formatShortDate(w.date)}{w.place ? ` ${w.place}` : ''}</span></p>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="section">
         <div className="card">

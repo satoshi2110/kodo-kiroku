@@ -1,40 +1,89 @@
 /**
  * 折れ線グラフ（自前の SVG、決定65・66・73）。
  * - 縦軸: 目盛り・補助線・単位つきの軸名。目盛りは記録全体の最大値で固定し、横に動かしても変わらない
- * - 横軸: 1日ずつの目盛りに日付と曜日。文字は最後の日から数えて1日おき。軸名「日付」
- * - 記録がない日は線を切る。線の終わりに最後の値を書く
- * - 横にスクロールでき、縦軸は左に固定。最初は最後の14日を見せ、「今日に戻る」で右端へ
+ * - 横軸: 1日（週・月）ずつの目盛りに日付。文字は最後から数えて1つおき。軸名を右下に書く
+ * - 記録がない日は線を切る。条件変更（フェーズ）の前後も線をつながない（決定25）
+ * - 線の右端に行動名と最後の値を書く（決定31）。問題行動は実線、代替行動・望ましい行動は点線（色だけに頼らない）
+ * - 横にスクロールでき、縦軸は左に固定。同じ sync を渡したパネルは一緒に動く（決定73）。最初は最後の14区切り、「今日に戻る」で右端へ
+ * - staticMode: スクロールしない（支援会議メモ・PDF レポート用。全期間を幅に収める）
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { parseLocalDate } from '../lib/date';
+import type { Granularity } from '../lib/series';
 
 const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土'];
 const AXIS_W = 48;
-const TOP = 16;
+const TOP = 22;
 const PLOT_H = 160;
 const BOTTOM = 52;
 const H = TOP + PLOT_H + BOTTOM;
-const VISIBLE_DAYS = 14;
-const PAD_R = 16; // 最後の日付の文字が切れないように
+const VISIBLE = 14;
+const PAD_R = 16;
 
-export interface Series {
-  dates: string[]; // YYYY-MM-DD、古い順
-  values: (number | null)[]; // null は記録なし（線を切る）
+export interface ChartLine {
+  name: string;
+  color: string;
+  dashed?: boolean;
+  values: (number | null)[];
+}
+
+export interface Phase {
+  date: string;
+  label: string;
+}
+
+export interface Target {
+  value: number;
+  label: string;
+  color: string;
+}
+
+/** 縦に並んだパネルを一緒にスクロールさせる（決定73） */
+export class ScrollSync {
+  private els = new Set<HTMLDivElement>();
+  private busy = false;
+  add(el: HTMLDivElement) {
+    this.els.add(el);
+    return () => this.els.delete(el);
+  }
+  move(from: HTMLDivElement) {
+    if (this.busy) return;
+    this.busy = true;
+    for (const el of this.els) if (el !== from) el.scrollLeft = from.scrollLeft;
+    this.busy = false;
+  }
+}
+
+const SyncCtx = createContext<ScrollSync | null>(null);
+export const ChartSyncProvider = SyncCtx.Provider;
+export function useNewSync() {
+  return useMemo(() => new ScrollSync(), []);
 }
 
 export default function LineChart({
-  series,
+  dates,
+  lines,
   unit,
-  color,
+  granularity = 'day',
   format = (v) => String(v),
   fixedMax,
+  fixedMin = 0,
+  phases = [],
+  targets = [],
+  staticMode = false,
 }: {
-  series: Series;
+  dates: string[];
+  lines: ChartLine[];
   unit: string;
-  color: string;
+  granularity?: Granularity;
   format?: (v: number) => string;
   fixedMax?: number;
+  fixedMin?: number;
+  phases?: Phase[];
+  targets?: Target[];
+  staticMode?: boolean;
 }) {
+  const sync = useContext(SyncCtx);
   const wrap = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -49,80 +98,186 @@ export default function LineChart({
     return () => ro.disconnect();
   }, []);
 
-  const n = series.dates.length;
-  const dayW = width ? Math.max(18, (width - AXIS_W - PAD_R) / VISIBLE_DAYS) : 20;
-  const plotW = Math.max(n * dayW + PAD_R, width - AXIS_W);
+  const n = dates.length;
+  const w = width || 340;
+  const slotW = staticMode ? Math.max(4, (w - AXIS_W - PAD_R) / Math.max(1, n)) : Math.max(18, (w - AXIS_W - PAD_R) / VISIBLE);
+  const plotW = staticMode ? w - AXIS_W : Math.max(n * slotW + PAD_R, w - AXIS_W);
 
-  // 最初は右端（最後の14日）を見せる
+  // 最初は右端（最後の14区切り）を見せる
   useEffect(() => {
     const s = scroller.current;
-    if (s) s.scrollLeft = s.scrollWidth;
-  }, [width, n]);
+    if (s && !staticMode) s.scrollLeft = s.scrollWidth;
+  }, [width, n, staticMode]);
 
-  const maxVal = Math.max(0, ...series.values.filter((v): v is number => v != null));
-  const { max, ticks } = niceScale(fixedMax ?? maxVal);
-  const y = (v: number) => TOP + PLOT_H - (v / max) * PLOT_H;
-  const x = (i: number) => i * dayW + dayW / 2;
+  useEffect(() => {
+    const s = scroller.current;
+    if (!s || !sync || staticMode) return;
+    const off = sync.add(s);
+    return () => {
+      off();
+    };
+  }, [sync, staticMode]);
 
-  const segments: string[] = [];
-  let cur: string[] = [];
-  series.values.forEach((v, i) => {
-    if (v == null) {
-      if (cur.length) segments.push(cur.join(' '));
-      cur = [];
-    } else cur.push(`${cur.length ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const all = lines.flatMap((l) => l.values.filter((v): v is number => v != null));
+  const maxVal = Math.max(0, ...all, ...targets.map((t) => t.value));
+  const { min, max, ticks } = fixedMax != null && fixedMin > 0 ? evenScale(fixedMin, fixedMax) : niceScale(fixedMax ?? maxVal);
+  const y = (v: number) => TOP + PLOT_H - ((v - min) / (max - min)) * PLOT_H;
+  const x = (i: number) => i * slotW + slotW / 2;
+
+  // 条件変更の位置: その区切りの左端（週・月は、変更日の入る区切りの中の位置）
+  const phaseX = (date: string) => {
+    let j = -1;
+    dates.forEach((d, i) => { if (d <= date) j = i; });
+    if (j < 0) return null;
+    if (granularity === 'day' || dates[j] === date) return j * slotW;
+    const start = parseLocalDate(dates[j]).getTime();
+    const end = j + 1 < n ? parseLocalDate(dates[j + 1]).getTime() : start + (granularity === 'week' ? 7 : 30) * 86400_000;
+    return j * slotW + ((parseLocalDate(date).getTime() - start) / (end - start)) * slotW;
+  };
+  const shownPhases = phases.filter((p) => p.date > (dates[0] ?? '') && p.date <= (dates[n - 1] ?? ''));
+  // i と i+1 の間に条件変更があれば線を切る
+  const breakAfter = new Set<number>();
+  for (const p of shownPhases) {
+    for (let i = 0; i + 1 < n; i++) if (dates[i] < p.date && p.date <= dates[i + 1]) breakAfter.add(i);
+  }
+
+  const paths = lines.map((l) => {
+    const segs: string[] = [];
+    let cur: string[] = [];
+    l.values.forEach((v, i) => {
+      if (v == null) {
+        if (cur.length) segs.push(cur.join(' '));
+        cur = [];
+        return;
+      }
+      cur.push(`${cur.length ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+      if (breakAfter.has(i)) {
+        segs.push(cur.join(' '));
+        cur = [];
+      }
+    });
+    if (cur.length) segs.push(cur.join(' '));
+    let last = -1;
+    l.values.forEach((v, i) => { if (v != null) last = i; });
+    return { segs, last };
   });
-  if (cur.length) segments.push(cur.join(' '));
-  let lastIdx = -1;
-  series.values.forEach((v, i) => { if (v != null) lastIdx = i; });
+
+  const every = staticMode ? Math.max(1, Math.ceil(36 / slotW)) : granularity === 'day' ? 2 : 1;
+  const xLabel = granularity === 'day' ? '日付（1日ごと）' : granularity === 'week' ? '週（1週間ごと）' : '月（1か月ごと）';
+  const dateLabel = (d: string): [string, string | null, boolean] => {
+    const dt = parseLocalDate(d);
+    if (granularity === 'month') return [`${dt.getMonth() + 1}月`, null, false];
+    if (granularity === 'week') return [`${dt.getMonth() + 1}/${dt.getDate()}〜`, null, false];
+    return [`${dt.getMonth() + 1}/${dt.getDate()}`, WEEKDAY[dt.getDay()], dt.getDay() === 0];
+  };
+
+  // 線の右端の文字（行動名と最後の値）。重なるときは上下にずらす
+  const ends = paths
+    .map((p, k) => (p.last >= 0 ? { k, x: x(p.last), y: y(lines[k].values[p.last]!), text: `${lines.length > 1 ? `${lines[k].name} ` : ''}${format(lines[k].values[p.last]!)}` } : null))
+    .filter((e): e is { k: number; x: number; y: number; text: string } => !!e)
+    .sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+
+  const plot = (
+    <>
+      {ticks.map((t) => (
+        <line key={t} x1={0} x2={plotW} y1={y(t)} y2={y(t)} className={t === min ? 'chart__base' : 'chart__grid'} />
+      ))}
+      {dates.map((d, i) => {
+        const [a, b, sun] = dateLabel(d);
+        const label = (n - 1 - i) % every === 0;
+        return (
+          <g key={d}>
+            <line x1={x(i)} x2={x(i)} y1={TOP + PLOT_H} y2={TOP + PLOT_H + 4} className="chart__base" />
+            {label && (
+              <>
+                <text x={x(i)} y={TOP + PLOT_H + 16} textAnchor="middle" className="chart__tick">{a}</text>
+                {b && <text x={x(i)} y={TOP + PLOT_H + 29} textAnchor="middle" className={`chart__tick${sun ? ' chart__tick--sun' : ''}`}>{b}</text>}
+              </>
+            )}
+          </g>
+        );
+      })}
+      {shownPhases.length > 0 && dates[0] < shownPhases[0].date && (
+        <text x={4} y={TOP - 8} className="chart__phase">ベースライン</text>
+      )}
+      {shownPhases.map((p) => {
+        const px = phaseX(p.date);
+        return px == null ? null : (
+          <g key={p.date + p.label}>
+            <line x1={px} x2={px} y1={TOP - 4} y2={TOP + PLOT_H} className="chart__phase-line" />
+            {px + 4 + p.label.length * 11 > plotW ? (
+              <text x={px - 4} y={TOP - 8} textAnchor="end" className="chart__phase">{p.label}</text>
+            ) : (
+              <text x={px + 4} y={TOP - 8} className="chart__phase">{p.label}</text>
+            )}
+          </g>
+        );
+      })}
+      {targets.map((t, i) => (
+        <g key={i}>
+          <line x1={0} x2={plotW} y1={y(t.value)} y2={y(t.value)} stroke={t.color} strokeWidth={1.5} strokeDasharray="6 4" />
+          <text x={plotW - 6} y={y(t.value) + 14 + 13 * targets.slice(0, i).filter((o) => o.value === t.value).length} textAnchor="end" className="chart__target" fill={t.color}>{t.label}</text>
+        </g>
+      ))}
+      {paths.map((p, k) =>
+        p.segs.map((d, i) => (
+          <path key={`${k}-${i}`} d={d} fill="none" stroke={lines[k].color} strokeWidth={2.5} strokeLinejoin="round" strokeDasharray={lines[k].dashed ? '6 4' : undefined} />
+        )),
+      )}
+      {lines.map((l, k) =>
+        l.values.map((v, i) =>
+          v == null ? null : l.dashed ? (
+            <rect key={`${k}-${i}`} x={x(i) - 3.5} y={y(v) - 3.5} width={7} height={7} fill={l.color} />
+          ) : (
+            <circle key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={3.5} fill={l.color} />
+          ),
+        ),
+      )}
+      {ends.map((e) => (
+        <text key={e.k} x={e.x - 6} y={e.y - 8} textAnchor="end" className="chart__end" fill={lines[e.k].color}>{e.text}</text>
+      ))}
+      <text x={plotW - 4} y={H - 6} textAnchor="end" className="chart__title">{xLabel}</text>
+    </>
+  );
+
+  const axis = (
+    <>
+      <text x={10} y={TOP + PLOT_H / 2} transform={`rotate(-90 10 ${TOP + PLOT_H / 2})`} textAnchor="middle" className="chart__title">
+        {unit}
+      </text>
+      {ticks.map((t) => (
+        <text key={t} x={AXIS_W - 6} y={y(t) + 4} textAnchor="end" className="chart__tick">{format(t)}</text>
+      ))}
+    </>
+  );
+
+  const label = `${unit}の推移。${lines.map((l, k) => `${l.name} 最後の値 ${paths[k].last >= 0 ? format(l.values[paths[k].last]!) : 'なし'}`).join('、')}`;
+
+  if (staticMode) {
+    return (
+      <div className="chart" ref={wrap}>
+        <svg viewBox={`0 0 ${w} ${H}`} width="100%" role="img" aria-label={label} className="chart__static">
+          <g>{axis}</g>
+          <g transform={`translate(${AXIS_W} 0)`}>{plot}</g>
+        </svg>
+      </div>
+    );
+  }
 
   function onScroll() {
     const s = scroller.current;
-    if (s) setAtEnd(s.scrollLeft + s.clientWidth >= s.scrollWidth - 4);
+    if (!s) return;
+    setAtEnd(s.scrollLeft + s.clientWidth >= s.scrollWidth - 4);
+    sync?.move(s);
   }
 
   return (
     <div className="chart" ref={wrap}>
       <div className="chart__row">
-        <svg width={AXIS_W} height={H} className="chart__axis" aria-hidden="true">
-          <text x={10} y={TOP + PLOT_H / 2} transform={`rotate(-90 10 ${TOP + PLOT_H / 2})`} textAnchor="middle" className="chart__title">
-            {unit}
-          </text>
-          {ticks.map((t) => (
-            <text key={t} x={AXIS_W - 6} y={y(t) + 4} textAnchor="end" className="chart__tick">{format(t)}</text>
-          ))}
-        </svg>
+        <svg width={AXIS_W} height={H} className="chart__axis" aria-hidden="true">{axis}</svg>
         <div className="chart__scroll" ref={scroller} onScroll={onScroll}>
-          <svg width={plotW} height={H} role="img" aria-label={`${unit}の推移。最後の値 ${lastIdx >= 0 ? format(series.values[lastIdx]!) : 'なし'}`}>
-            {ticks.map((t) => (
-              <line key={t} x1={0} x2={plotW} y1={y(t)} y2={y(t)} className={t === 0 ? 'chart__base' : 'chart__grid'} />
-            ))}
-            {series.dates.map((d, i) => {
-              const label = (n - 1 - i) % 2 === 0;
-              const dt = parseLocalDate(d);
-              return (
-                <g key={d}>
-                  <line x1={x(i)} x2={x(i)} y1={TOP + PLOT_H} y2={TOP + PLOT_H + 4} className="chart__base" />
-                  {label && (
-                    <>
-                      <text x={x(i)} y={TOP + PLOT_H + 16} textAnchor="middle" className="chart__tick">{`${dt.getMonth() + 1}/${dt.getDate()}`}</text>
-                      <text x={x(i)} y={TOP + PLOT_H + 29} textAnchor="middle" className={`chart__tick${dt.getDay() === 0 ? ' chart__tick--sun' : ''}`}>
-                        {WEEKDAY[dt.getDay()]}
-                      </text>
-                    </>
-                  )}
-                </g>
-              );
-            })}
-            {segments.map((d, i) => <path key={i} d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />)}
-            {series.values.map((v, i) => v != null && <circle key={i} cx={x(i)} cy={y(v)} r={3.5} fill={color} />)}
-            {lastIdx >= 0 && (
-              <text x={x(lastIdx) - 6} y={y(series.values[lastIdx]!) - 8} textAnchor="end" className="chart__end" fill={color}>
-                {format(series.values[lastIdx]!)}
-              </text>
-            )}
-            <text x={plotW - 4} y={H - 6} textAnchor="end" className="chart__title">日付</text>
-          </svg>
+          <svg width={plotW} height={H} role="img" aria-label={label}>{plot}</svg>
         </div>
       </div>
       {!atEnd && (
@@ -135,8 +290,8 @@ export default function LineChart({
 }
 
 /** 0 から始まる、きりのよい目盛り（4〜5本） */
-function niceScale(maxVal: number): { max: number; ticks: number[] } {
-  if (maxVal <= 0) return { max: 4, ticks: [0, 1, 2, 3, 4] };
+function niceScale(maxVal: number): { min: number; max: number; ticks: number[] } {
+  if (maxVal <= 0) return { min: 0, max: 4, ticks: [0, 1, 2, 3, 4] };
   const raw = maxVal / 4;
   const mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw)!;
@@ -144,5 +299,13 @@ function niceScale(maxVal: number): { max: number; ticks: number[] } {
   const max = Math.ceil(maxVal / stepInt) * stepInt;
   const ticks: number[] = [];
   for (let t = 0; t <= max + 1e-9; t += stepInt) ticks.push(+t.toFixed(6));
-  return { max, ticks };
+  return { min: 0, max, ticks };
+}
+
+/** 強度（1〜3、1〜5）のように範囲が決まっているとき。3段階は 0.5 きざみ */
+function evenScale(min: number, max: number): { min: number; max: number; ticks: number[] } {
+  const step = max - min <= 2 ? 0.5 : 1;
+  const ticks: number[] = [];
+  for (let t = min; t <= max + 1e-9; t += step) ticks.push(+t.toFixed(6));
+  return { min, max, ticks };
 }

@@ -8,12 +8,13 @@ import { Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
-import { aiUsage, canDecideAi, canRunAi, decideAi, saveAnalysis, saveSuggestion } from '../db/repo';
+import { aiTeamUsage, aiUsage, canDecideAi, canRunAi, decideAi, saveAnalysis, saveSuggestion } from '../db/repo';
 import { buildAnalysisInput, makeMasker } from '../ai/build';
 import { isMockProvider, requestAi } from '../ai/adapter';
 import { MIN_ABC_RECORDS } from '../ai/schema';
 import { formatDateTimeJa, formatShortDate } from '../lib/date';
-import { FUNCTION_LABEL, type AiAnalysis, type AiDecision, type AiSuggestion } from '../db/types';
+import { FUNCTION_LABEL, type AiAnalysis, type AiDecision, type AiSuggestion, type Behavior } from '../db/types';
+import { FBA_LINK } from '../lib/links';
 import { TopBar } from '../components/ui';
 
 const CONFIDENCE_LABEL = { high: '高', medium: '中', low: '低' } as const;
@@ -32,6 +33,11 @@ export default function AI() {
     [person?.id, behavior?.id, members],
   );
   const usage = useLiveQuery(async () => (userId ? aiUsage(userId, me?.role) : null), [userId, me?.role, busy]);
+  const teamUsage = useLiveQuery(async () => (person ? aiTeamUsage(person.id) : null), [person?.id, busy]);
+  const allAnalyses = useLiveQuery(
+    async () => (person ? (await db.aiAnalyses.where('personId').equals(person.id).filter((a) => !a.deletedAt).toArray()) : []),
+    [person?.id],
+  );
   const analyses = useLiveQuery(
     async () =>
       person && behavior
@@ -49,7 +55,8 @@ export default function AI() {
   if (!person || !userId) return null;
   if (!aiEnabled) return <Navigate to="/team" replace />;
   const latest = analyses?.[0];
-  const runnable = canRunAi(me?.role) && (usage?.dayLeft ?? 0) > 0 && (usage?.monthLeft ?? 0) > 0;
+  const runnable =
+    canRunAi(me?.role) && (usage?.dayLeft ?? 0) > 0 && (usage?.monthLeft ?? 0) > 0 && (teamUsage?.dayLeft ?? 0) > 0 && (teamUsage?.monthLeft ?? 0) > 0;
 
   async function analyze() {
     if (!person || !behavior || !input || !userId) return;
@@ -109,6 +116,7 @@ export default function AI() {
             <div className="ai-note">
               これは <strong>AI による仮説</strong> です（支援者の確認が必要）。診断や治療方針ではありません。採否は管理者・副管理者・支援リーダーが決めます。
             </div>
+            <a className="help" href={FBA_LINK} target="_blank" rel="noopener noreferrer">機能分析について（外部のページ）</a>
             {isMockProvider && <p className="help">いまは開発用の「見本の結果」モードです。外の AI には何も送りません。</p>}
             <div className="card stack">
               <div className="stack" style={{ gap: 2 }}>
@@ -116,6 +124,11 @@ export default function AI() {
                   {input ? `${formatShortDate(input.period.from)}〜${formatShortDate(input.period.to)} ・ ABC記録 ${input.abcRecords.length}件` : '読み込み中…'}
                 </span>
                 {usage && <span className="muted">あなたの残り: 今日 {usage.dayLeft}回 ・ 今月 {usage.monthLeft}回</span>}
+                {teamUsage && (
+                  <span className="muted">
+                    チームの残り: 今日 {teamUsage.dayLeft}回 ・ 今月 {teamUsage.monthLeft}回（上限 1日{teamUsage.limit.day}回・月{teamUsage.limit.month}回）
+                  </span>
+                )}
               </div>
               {input && input.abcRecords.length < MIN_ABC_RECORDS && (
                 <p className="help">ABC記録が {MIN_ABC_RECORDS} 件以上になると分析できます（いま {input.abcRecords.length} 件）。</p>
@@ -165,6 +178,48 @@ export default function AI() {
           )}
         </>
       )}
+
+      <Adopted analyses={allAnalyses ?? []} suggestions={suggestions ?? []} behaviors={behaviors} />
+    </div>
+  );
+}
+
+/**
+ * 採用したもの（決定70）: 採用・修正して採用した仮説と案。支援計画を作るときに取り込める（Phase 2）。
+ */
+function Adopted({ analyses, suggestions, behaviors }: { analyses: AiAnalysis[]; suggestions: AiSuggestion[]; behaviors: Behavior[] }) {
+  const ok = (d: AiDecision | null) => d === 'adopted' || d === 'modified';
+  const hyps = analyses.filter((a) => ok(a.decision) && a.output).sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? ''));
+  const plans = suggestions.filter((x) => ok(x.decision)).sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? ''));
+  const nameOf = (id: string) => behaviors.find((b) => b.id === id)?.name ?? '（非表示の行動）';
+  return (
+    <div className="section">
+      <div className="card stack">
+        <span className="label">採用したもの</span>
+        {hyps.length === 0 && plans.length === 0 && <span className="muted">まだありません。採用すると、ここに残ります。</span>}
+        {hyps.map((a) => (
+          <div key={a.id} className="today-row stack" style={{ gap: 2 }}>
+            <span>
+              <span className="badge badge--role">採用した仮説</span> {nameOf(a.behaviorId)}: {topFunctions(a)}
+            </span>
+            {a.decisionNote && <span className="help">修正した内容: {a.decisionNote}</span>}
+            <span className="muted">{a.decidedAt ? formatDateTimeJa(a.decidedAt) : ''} ・ {DECISION_LABEL[a.decision!]}</span>
+          </div>
+        ))}
+        {plans.map((x) => {
+          const a = analyses.find((y) => y.id === x.analysisId);
+          return (
+            <div key={x.id} className="today-row stack" style={{ gap: 2 }}>
+              <span>
+                <span className="badge badge--role">採用した案</span> {a ? nameOf(a.behaviorId) : ''}: {x.output.alternatives.map((y) => y.behavior).join('、')}
+              </span>
+              {x.decisionNote && <span className="help">修正した内容: {x.decisionNote}</span>}
+              <span className="muted">{x.decidedAt ? formatDateTimeJa(x.decidedAt) : ''} ・ {DECISION_LABEL[x.decision!]}</span>
+            </div>
+          );
+        })}
+        {(hyps.length > 0 || plans.length > 0) && <p className="help">支援計画を作るときに、ここから取り込めます（計画の画面の「採用したものから取り込む」）。</p>}
+      </div>
     </div>
   );
 }

@@ -104,6 +104,15 @@ export default function Sleep() {
       <div className="section">
         <div className="card stack">
           <h2 className="card__title">この1週間</h2>
+          {(() => {
+            const mins = week.flatMap((d) => {
+              const l = logs.find((x) => x.wakeDate === d);
+              return l ? [sleepMinutes(l)] : [];
+            });
+            return mins.length ? (
+              <p className="label">平均 {formatSleep(Math.round(mins.reduce((a, b) => a + b, 0) / mins.length))}（記録した{mins.length}夜）</p>
+            ) : null;
+          })()}
           {week.map((d) => {
             const l = logs.find((x) => x.wakeDate === d);
             const min = l ? sleepMinutes(l) : 0;

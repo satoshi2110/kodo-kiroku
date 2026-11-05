@@ -63,11 +63,30 @@ export interface SuggestionOutput {
   reinforcement: { method: string; detail: string }[];
 }
 
-export type AiRequest = { kind: 'analyze'; input: AnalysisInput } | { kind: 'suggest'; input: SuggestionInput };
+/** ABC集計の AI のまとめ（6.4.3、決定72）に送る集計。件数だけで、記録の文章は送らない */
+export interface SummaryInput {
+  behaviorName: string;
+  period: { from: string; to: string };
+  abcCount: number;
+  tallies: { title: string; items: { name: string; count: number }[] }[];
+}
+
+export interface SummaryOutput {
+  summary: string;
+}
+
+/** まとめは短く（受け取る量の上限、14.2 #36） */
+export const SUMMARY_MAX_CHARS = 300;
+
+export type AiRequest =
+  | { kind: 'analyze'; input: AnalysisInput }
+  | { kind: 'suggest'; input: SuggestionInput }
+  | { kind: 'summarize'; input: SummaryInput };
 
 export type AiResponse =
   | { status: 'ok'; kind: 'analyze'; output: AnalysisOutput; model: string }
   | { status: 'ok'; kind: 'suggest'; output: SuggestionOutput; model: string }
+  | { status: 'ok'; kind: 'summarize'; output: SummaryOutput; model: string }
   | { status: 'insufficient'; message: string }
   | { status: 'error'; message: string };
 
@@ -99,6 +118,8 @@ export const SUGGESTION_SCHEMA = obj({
   antecedentStrategies: { type: 'array', items: obj({ strategy: str, detail: str }) },
   reinforcement: { type: 'array', items: obj({ method: str, detail: str }) },
 });
+
+export const SUMMARY_SCHEMA = obj({ summary: str });
 
 /**
  * 出力に出てはいけない言葉（6.6 の絶対条件、9章、決定76）。
@@ -144,4 +165,27 @@ export function quotedInputsOf(input: AnalysisInput): string[] {
   const s = new Set<string>();
   for (const r of input.abcRecords) for (const x of [...r.antecedents, ...r.consequences, ...r.settingEvents]) s.add(x);
   return [...s];
+}
+
+/**
+ * まとめでは、機能の判断や支援の方法を書かない（決定72）。その手がかりになる言葉も、引用（「」）の外では使わせない。
+ */
+export const SUMMARY_BANNED_WORDS = ['機能', '注目', '要求', '回避', '逃避', '感覚', '仮説', '支援方法', 'すべき', 'しましょう', 'ください'];
+
+export function findSummaryBannedWords(output: unknown, quotedInputs: string[]): string[] {
+  let text = collectText(output);
+  for (const q of quotedInputs) if (q) text = text.split(`「${q}」`).join('「」');
+  return [...BANNED_WORDS, ...SUMMARY_BANNED_WORDS].filter((w) => text.includes(w));
+}
+
+export function validateSummaryInput(x: SummaryInput): string | null {
+  if (!x?.behaviorName || !Array.isArray(x.tallies) || typeof x.abcCount !== 'number') return '入力の形が正しくありません';
+  if (x.tallies.length > 10 || x.tallies.some((t) => !Array.isArray(t.items) || t.items.length > 30)) return '入力が大きすぎます';
+  if (JSON.stringify(x).length > 20_000) return '入力が大きすぎます';
+  return null;
+}
+
+/** まとめの出力で「」付きで出てよい集計の項目名 */
+export function quotedSummaryInputs(input: SummaryInput): string[] {
+  return [...new Set(input.tallies.flatMap((t) => t.items.map((i) => i.name)))];
 }

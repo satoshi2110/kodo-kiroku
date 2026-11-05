@@ -3,6 +3,7 @@
  * 「いまハマっているもの」（最近2週間に更新または使った）と「以前好きだったもの」に分ける。
  * 写真は物・活動・場所だけ。チーム内だけで見られ、書き出しにも AI にも入らない（6.14a）。
  */
+import { FBA_LINK } from '../lib/links';
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -14,7 +15,6 @@ import { REINFORCER_CATEGORY_LABEL, type Reinforcer, type ReinforcerCategory } f
 import { Chip, Sheet, TopBar } from '../components/ui';
 
 const RECENT_DAYS = 14;
-const FBA_LINK = 'https://www.masahiko-inoue.com/asessment-fast'; // 決定58: 中身は取り込まず、リンクだけ置く
 
 type Form = { id: string | null; name: string; category: ReinforcerCategory; level: number; usage: string; photo: Blob | null | undefined };
 

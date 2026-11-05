@@ -80,7 +80,7 @@ export default function BehaviorAdd() {
       },
       userId,
     );
-    nav(fromSetup ? '/' : '/behaviors', { replace: true });
+    nav(fromSetup ? '/places?from=setup' : '/behaviors', { replace: true });
   }
 
   return (
@@ -89,7 +89,7 @@ export default function BehaviorAdd() {
 
       {step === 1 && (
         <div className="section stack">
-          {fromSetup && <p className="help">まず1つ、記録したい行動を決めましょう。あとから増やせます。</p>}
+          {fromSetup && <p className="help">はじめての設定 3 / 5: まず1つ、記録したい行動を決めましょう。あとから増やせます。</p>}
           <div className="card stack">
             <span className="label">種類</span>
             <div className="chips">

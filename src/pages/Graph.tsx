@@ -1,144 +1,130 @@
 /**
- * グラフ（6.4、ワイヤーフレーム 3）。行動ごとに、回数・時間・待ち時間と、強度を付けた行動は強度の平均を出す。
- * 自動0（決定19・21）: 回数と時間は、記録を付けた日（その対象者に何か記録がある日）に記録がなければ 0 として描く。
- * 保存はせず、表示のたびに計算する。在席・観察時間の記録ができたら「いた日」の判定をそれに置きかえる。
- * 「さかのぼって入力」で「観察していなかった」にした日は 0 を付けず、線を切る。
+ * グラフ（6.4.1、ワイヤーフレーム 3）。
+ * - 日 / 週 / 月 を切りかえる。週・月は値のある日の平均（【暫定】）
+ * - 問題行動とその代替行動は同じ枠に入れる。同じ測り方なら重ね、違えば上下に並べて日付をそろえる（決定33）
+ * - 縦に並んだパネルは一緒に横スクロールする（決定73）
+ * - 条件変更（支援計画が実施中になった日）は縦の点線、達成基準は横の点線（Phase 2）
+ * - 表示する行動と睡眠時間のパネルを選べる
  */
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
 import { useApp } from '../state';
-import { dateRange, formatDuration, toLocalDate } from '../lib/date';
-import { METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
-import { observedRatio } from '../db/repo';
-import { KindBadge, TopBar } from '../components/ui';
-import LineChart, { type Series } from '../components/LineChart';
+import { canExport } from '../db/repo';
+import { formatShortDate } from '../lib/date';
+import { allDates, useRecordSet, type Granularity } from '../lib/series';
+import { buildGroups, groupTitle, sleepPanel, type PanelSpec } from '../lib/panels';
+import { usePlanData } from '../lib/usePlan';
+import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
+import LineChart, { ChartSyncProvider, useNewSync, type Phase } from '../components/LineChart';
+import GraphTabs from '../components/GraphTabs';
 
 export default function Graph() {
-  const { person, behaviors } = useApp();
-  const personId = person?.id ?? '';
-  const events = useLiveQuery(
-    async () => (personId ? (await db.events.where('personId').equals(personId).toArray()).filter((e) => !e.deletedAt) : []),
-    [personId],
-  );
-  const observations = useLiveQuery(
-    async () => (personId ? (await db.observations.where('personId').equals(personId).toArray()).filter((o) => !o.deletedAt && o.results.length > 0) : []),
-    [personId],
-  );
+  const { person, behaviors, me } = useApp();
+  const rs = useRecordSet(person?.id);
+  const planData = usePlanData(person?.id);
+  const [g, setG] = useState<Granularity>('day');
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [showSleep, setShowSleep] = useState(false);
+  const sync = useNewSync();
+  if (!person || !rs) return null;
 
-  const notObserved = useLiveQuery(
-    async () =>
-      personId
-        ? new Set((await db.notObservedDays.where('personId').equals(personId).toArray()).filter((x) => !x.deletedAt).map((x) => `${x.behaviorId}|${x.localDate}`))
-        : new Set<string>(),
-    [personId],
-  );
-
-  const today = toLocalDate();
-  const { dates, recordedDays } = useMemo(() => {
-    const days = [...(events ?? []), ...(observations ?? [])].map((x) => x.localDate);
-    const first = days.reduce((m, d) => (d < m ? d : m), today);
-    return { dates: dateRange(first, today), recordedDays: new Set(days) };
-  }, [events, observations, today]);
-  const empty = (events ?? []).length === 0 && (observations ?? []).length === 0;
-
-  if (!person) return null;
+  const empty = rs.events.length === 0 && rs.observations.length === 0;
+  const days = allDates(rs);
+  const shown = behaviors.filter((b) => !hidden.has(b.id));
+  const groups = buildGroups(shown, rs, days, g, planData?.plan?.activeContent ?? null);
+  const phases = planData?.phases ?? [];
+  const toggle = (id: string) => setHidden((h) => {
+    const n = new Set(h);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
 
   return (
     <div className="page">
-      <TopBar title="グラフ" sub={person.displayName} right={<Link to="/graph/abc" className="btn btn--sm">ABC集計</Link>} />
+      <TopBar
+        title="グラフ"
+        sub={person.displayName}
+        right={canExport(me?.role) ? <Link to="/report" className="btn btn--sm">PDF</Link> : undefined}
+      />
+      <GraphTabs />
       {empty && <p className="empty">記録がたまると、ここにグラフが出ます。</p>}
-      {!empty &&
-        behaviors.map((b) => (
-          <BehaviorPanels
-            key={b.id}
-            b={b}
-            events={(events ?? []).filter((e) => e.behaviorId === b.id)}
-            observations={(observations ?? []).filter((o) => o.behaviorId === b.id)}
-            dates={dates}
-            recordedDays={recordedDays}
-            notObserved={notObserved ?? new Set()}
-          />
-        ))}
+      {!empty && (
+        <>
+          <div className="section stack">
+            <Segmented
+              label="区切り"
+              value={g}
+              onChange={setG}
+              options={[
+                { value: 'day', label: '日' },
+                { value: 'week', label: '週' },
+                { value: 'month', label: '月' },
+              ]}
+            />
+            {phases.length > 0 && (
+              <p className="help">縦の点線 = 条件の変更（{phases.map((p) => `${formatShortDate(p.date)} ${p.label}`).join('、')}）。横の点線 = 支援計画の達成基準。</p>
+            )}
+            {g !== 'day' && <p className="help">週・月は、記録のある日の平均です。</p>}
+          </div>
+          <ChartSyncProvider value={sync}>
+            {groups.map((grp) => (
+              <div key={grp.key} className="section">
+                <div className="card stack">
+                  <div className="row" style={{ flexWrap: 'wrap' }}>
+                    {grp.behaviors.map((b, i) => (
+                      <span key={b.id} className="row" style={{ gap: 6 }}>
+                        {i > 0 && <span className="muted">と</span>}
+                        <strong className="graph-name">{b.name}</strong>
+                        <KindBadge kind={b.kind} />
+                      </span>
+                    ))}
+                  </div>
+                  {grp.panels.map((p) => <Panel key={p.key} p={p} g={g} phases={phases} title={groupTitle(grp.behaviors)} />)}
+                </div>
+              </div>
+            ))}
+            {showSleep && (
+              <div className="section">
+                <div className="card stack">
+                  <strong className="graph-name">睡眠</strong>
+                  <Panel p={sleepPanel(rs, days, g)} g={g} phases={phases} title="睡眠" />
+                </div>
+              </div>
+            )}
+          </ChartSyncProvider>
+          <div className="section">
+            <div className="card stack">
+              <span className="label">表示する行動</span>
+              <div className="chips">
+                {behaviors.map((b) => (
+                  <Chip key={b.id} on={!hidden.has(b.id)} onClick={() => toggle(b.id)} problem={b.kind === 'problem'}>{b.name}</Chip>
+                ))}
+                <Chip on={showSleep} onClick={() => setShowSleep(!showSleep)} dashed>睡眠時間</Chip>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function BehaviorPanels({
-  b,
-  events,
-  observations,
-  dates,
-  recordedDays,
-  notObserved,
-}: {
-  b: Behavior;
-  events: Event[];
-  observations: Observation[];
-  dates: string[];
-  recordedDays: Set<string>;
-  notObserved: Set<string>;
-}) {
-  const byDate = new Map<string, Event[]>();
-  for (const e of events) byDate.set(e.localDate, [...(byDate.get(e.localDate) ?? []), e]);
-  const color = b.kind === 'problem' ? 'var(--problem)' : 'var(--primary)';
-
-  const perDay = (fn: (list: Event[]) => number | null, autoZero: boolean): Series => ({
-    dates,
-    values: dates.map((d) => {
-      const list = byDate.get(d);
-      if (list?.length) return fn(list);
-      return autoZero && recordedDays.has(d) && !notObserved.has(`${b.id}|${d}`) ? 0 : null;
-    }),
-  });
-  const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((s, v) => s + v, 0) / xs.length) * 10) / 10 : null);
-
-  let main: { series: Series; unit: string; format?: (v: number) => string } | null = null;
-  if (b.method === 'frequency') main = { series: perDay((l) => l.reduce((s, e) => s + e.count, 0), true), unit: '回数（回）' };
-  if (b.method === 'duration')
-    main = {
-      series: perDay((l) => Math.round((l.reduce((s, e) => s + (e.durationSec ?? 0), 0) / 60) * 10) / 10, true),
-      unit: '時間（分）',
-    };
-  if (b.method === 'latency')
-    main = { series: perDay((l) => avg(l.flatMap((e) => (e.latencySec != null ? [e.latencySec] : []))), false), unit: '待ち時間（秒・平均）', format: (v) => formatDuration(Math.round(v)) };
-
-  // インターバル・時間サンプリング: 観察した区間のうち起きた区間の割合。自動0は付けない（決定31）
-  if (b.method === 'interval' || b.method === 'sampling')
-    main = {
-      series: { dates, values: dates.map((d) => observedRatio(observations.filter((o) => o.localDate === d))) },
-      unit: '起きた区間の割合（%）',
-    };
-
-  const intensity = b.intensity
-    ? { series: perDay((l) => avg(l.flatMap((e) => (e.intensity != null ? [e.intensity] : []))), false), max: b.intensity.levels }
-    : null;
-
+function Panel({ p, g, phases, title }: { p: PanelSpec; g: Granularity; phases: Phase[]; title: string }) {
   return (
-    <div className="section">
-      <div className="card stack">
-        <div className="row">
-          <KindBadge kind={b.kind} />
-          <strong>{b.name}</strong>
-          <span className="muted">{METHOD_LABEL[b.method]}</span>
-        </div>
-        {main && (
-          <LineChart
-            series={main.series}
-            unit={main.unit}
-            color={color}
-            format={main.format}
-            fixedMax={b.method === 'interval' || b.method === 'sampling' ? 100 : undefined}
-          />
-        )}
-        {intensity && (
-          <>
-            <span className="label">強度（1日の平均。未評価は除く）</span>
-            <LineChart series={intensity.series} unit={`強度（1〜${intensity.max}）`} color={color} fixedMax={intensity.max} />
-          </>
-        )}
-      </div>
+    <div className="stack" style={{ gap: 2 }} aria-label={title}>
+      <span className="muted">{p.caption}</span>
+      <LineChart
+        dates={p.dates}
+        lines={p.lines}
+        unit={p.unit}
+        granularity={g}
+        format={p.format}
+        fixedMax={p.fixedMax}
+        fixedMin={p.fixedMin}
+        phases={phases}
+        targets={p.targets}
+      />
     </div>
   );
 }

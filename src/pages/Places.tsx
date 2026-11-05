@@ -4,6 +4,7 @@
  * 自宅は住所を一覧に出さない（いまは住所を持たない）。削除は非表示で、過去の記録に付いた場所名は残る。
  */
 import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { canEditPlaces, hidePlace, savePlace, saveDevice, setPlaceChoice } from '../db/repo';
 import { useApp } from '../state';
 import { getPositionOnce, matchPlace, type Pos } from '../lib/place';
@@ -17,6 +18,9 @@ export default function Places() {
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [explaining, setExplaining] = useState(false);
+  const [explained, setExplained] = useState(false);
+  const fromSetup = useSearchParams()[0].get('from') === 'setup';
 
   if (!person || !userId) return null;
   const editable = canEditPlaces(me?.role);
@@ -47,6 +51,8 @@ export default function Places() {
   }
 
   async function toggleLocation(on: boolean) {
+    // オンにする前に、アプリの中で説明してから OS の許可を出す（6.3.3）
+    if (on && !explained) return setExplaining(true);
     await saveDevice({ useLocation: on });
     if (!on || !person) return;
     const pos = await getPositionOnce();
@@ -56,7 +62,16 @@ export default function Places() {
 
   return (
     <div className="page page--no-nav">
-      <TopBar title="場所" sub="記録に自動で付く場所です。チームで共有します" back="/" />
+      <TopBar title="場所" sub="記録に自動で付く場所です。チームで共有します" back={fromSetup ? undefined : '/'} />
+      {fromSetup && (
+        <div className="section">
+          <div className="card stack">
+            <span className="label">はじめての設定 4 / 5: 場所（あとでも登録できます）</span>
+            <p className="help">自宅・学校・施設など、記録する場所を登録します。登録すると、記録に場所の名前が付きます。</p>
+            <Link to="/" className="btn btn--primary btn--block">次へ: 最初の記録</Link>
+          </div>
+        </div>
+      )}
 
       <div className="section">
         <div className="card">
@@ -107,6 +122,39 @@ export default function Places() {
           </p>
         </div>
       </div>
+
+      {explaining && (
+        <Sheet title="位置情報を使う前に" onClose={() => setExplaining(false)}>
+          <div className="stack">
+            <p className="help">
+              アプリを開いたときと記録したときに、この端末の位置を1回だけ取ります。登録した場所（半径の円）に入っていれば、場所を自動で切りかえます。
+            </p>
+            <p className="help">
+              あなたがいまどこにいるか（現在地）は、この端末の中で照らし合わせるだけで、保存も送信もしません。記録に残るのは「施設」のような場所の名前だけです。
+              ずっと追いかけること（バックグラウンドでの取得）はしません。許可は「アプリの使用中のみ」で足ります。
+            </p>
+            <p className="help">このあと、端末から位置情報の許可を求める画面が出ます。いつでもここでオフにできます。</p>
+            <button
+              type="button"
+              className="btn btn--primary btn--block"
+              onClick={() => {
+                setExplaining(false);
+                setExplained(true);
+                void (async () => {
+                  await saveDevice({ useLocation: true });
+                  if (!person) return;
+                  const pos = await getPositionOnce();
+                  if (pos) await setPlaceChoice(person.id, matchPlace(places, pos)?.id ?? 'outside');
+                  else setMsg('位置を取れませんでした。場所は手で選んでください。');
+                })();
+              }}
+            >
+              位置情報を使う
+            </button>
+            <button type="button" className="btn btn--block" onClick={() => setExplaining(false)}>使わない</button>
+          </div>
+        </Sheet>
+      )}
 
       {form && (
         <Sheet title={form.id ? '場所の編集' : form.pos ? '新しい場所（いまここ）' : '新しい場所（位置なし）'} onClose={() => setForm(null)}>

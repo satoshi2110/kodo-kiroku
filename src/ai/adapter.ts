@@ -12,6 +12,8 @@ import {
   type AnalysisOutput,
   type SuggestionInput,
   type SuggestionOutput,
+  type SummaryInput,
+  type SummaryOutput,
 } from './schema';
 
 type Provider = 'server' | 'mock';
@@ -38,7 +40,17 @@ export async function requestAi(req: AiRequest): Promise<AiResponse> {
 async function mock(req: AiRequest): Promise<AiResponse> {
   await new Promise((r) => setTimeout(r, 600));
   if (req.kind === 'analyze') return { status: 'ok', kind: 'analyze', output: mockAnalysis(req.input), model: 'mock' };
+  if (req.kind === 'summarize') return { status: 'ok', kind: 'summarize', output: mockSummary(req.input), model: 'mock' };
   return { status: 'ok', kind: 'suggest', output: mockSuggestion(req.input), model: 'mock' };
+}
+
+/** 見本のまとめ。いちばん多い項目を並べるだけ */
+function mockSummary(input: SummaryInput): SummaryOutput {
+  const top = input.tallies
+    .filter((t) => t.items.length > 0)
+    .map((t) => `${t.title}は「${t.items[0].name}」（${t.items[0].count}件）`)
+    .join('、');
+  return { summary: `（見本）${input.abcCount}件のうち、いちばん多いのは ${top || 'まだありません'}。実際のまとめでは、ここに AI が書いた短い文が出ます。` };
 }
 
 function mockAnalysis(input: AnalysisInput): AnalysisOutput {

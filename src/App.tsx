@@ -17,9 +17,21 @@ import Places from './pages/Places';
 import TeamSettings from './pages/TeamSettings';
 import ABCSummary from './pages/ABCSummary';
 import AI from './pages/AI';
+import Scatter from './pages/Scatter';
+import PersonProfile from './pages/PersonProfile';
+import Wins from './pages/Wins';
+import Plan from './pages/Plan';
+import PlanEdit from './pages/PlanEdit';
+import PlanHistory from './pages/PlanHistory';
+import PlanSignoff from './pages/PlanSignoff';
+import Restraint from './pages/Restraint';
+import Meetings from './pages/Meetings';
+import Report from './pages/Report';
+import MeetingEdit from './pages/MeetingEdit';
+import RestraintEdit from './pages/RestraintEdit';
 
-const NO_NAV = ['/setup', '/behaviors/new', '/graph/abc', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings'];
-const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
+const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
+const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
 
 function Shell() {
   const { loading, userId, person } = useApp();
@@ -42,8 +54,20 @@ function Shell() {
         <Route path="/places" element={<Places />} />
         <Route path="/graph" element={<Graph />} />
         <Route path="/graph/abc" element={<ABCSummary />} />
+        <Route path="/graph/scatter" element={<Scatter />} />
         <Route path="/team" element={<Team />} />
         <Route path="/team/settings" element={<TeamSettings />} />
+        <Route path="/person" element={<PersonProfile />} />
+        <Route path="/wins" element={<Wins />} />
+        <Route path="/plan" element={<Plan />} />
+        <Route path="/plan/edit" element={<PlanEdit />} />
+        <Route path="/plan/history" element={<PlanHistory />} />
+        <Route path="/plan/signoff" element={<PlanSignoff />} />
+        <Route path="/restraint" element={<Restraint />} />
+        <Route path="/meetings" element={<Meetings />} />
+        <Route path="/report" element={<Report />} />
+        <Route path="/meetings/:id" element={<MeetingEdit />} />
+        <Route path="/restraint/:id" element={<RestraintEdit />} />
         <Route path="/ai" element={<AI />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -38,7 +38,9 @@ export interface User extends BaseRecord {
 export interface Person extends BaseRecord {
   displayName: string;
   birthMonth: string | null; // YYYY-MM
-  notes: string;
+  notes: string; // 特性メモ
+  belongs?: string; // 通っているところ（任意）
+  cautions?: string; // 苦手なこと・気をつけること（苦手な刺激リスト、任意）
   isSample?: boolean; // お試し用のサンプル（端末内だけ）
 }
 
@@ -225,9 +227,15 @@ export const DEFAULT_CHOICES: Record<ChoiceKind, string[]> = {
 };
 
 /** チームの設定（8章 TeamSetting）。AI の既定は なし（9章） */
+export type RestraintPeriod = 'week' | 'month' | 'quarter';
+
+export const RESTRAINT_PERIOD_LABEL: Record<RestraintPeriod, string> = { week: '1週間', month: '1か月', quarter: '3か月' };
+
 export interface TeamSetting {
   personId: string; // チーム = 対象者ごと
   aiEnabled: boolean;
+  restraintPeriod?: RestraintPeriod | null; // 身体拘束の見直しをすすめる目安の期間。初期値なし（決定74）
+  restraintCount?: number | null; // 目安の件数（この件数を超えたら）。0 なら1件でも記録されたら
   shortSleepUnderHours?: number | null; // 睡眠不足の判定を「○時間未満」にする。null = いつもより2時間以上短い夜（初期設定）
   deleteRequestedAt?: ISODateTime | null; // チームの削除を申し込んだ日時。30日たつと消える
   updatedAt: ISODateTime;
@@ -273,8 +281,157 @@ export interface Consent extends BaseRecord {
   revokedAt: ISODateTime | null;
 }
 
+/** ABC集計の AI のまとめ（6.4.3、決定72・Phase 3）。集計を文にするだけで、機能の判断や支援の方法は書かない */
+export interface AiSummary extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  periodFrom: LocalDate;
+  periodTo: LocalDate;
+  requestedBy: string;
+  input: import('../ai/schema').SummaryInput;
+  output: import('../ai/schema').SummaryOutput;
+  model: string;
+}
+
+// ---------- 支援計画（6.7、Phase 2） ----------
+
+/** 達成基準（例: 頭たたき 1日2回以下）。グラフに横線で出す */
+export interface PlanCriterion {
+  behaviorId: string;
+  op: 'lte' | 'gte'; // 以下 / 以上
+  value: number; // グラフの1日の値と同じ単位（回・分・秒・%）
+  note: string; // 例: 2週連続
+}
+
+/** 計画の中身。1つの計画を上書きで保存し、変更は PlanChange に残す（決定67） */
+export interface PlanContent {
+  problemBehaviorId: string | null;
+  alternativeBehaviorId: string | null;
+  func: BehaviorFunction | null; // 機能仮説
+  goal: string; // 支援目標
+  criteria: PlanCriterion[];
+  antecedent: string; // 先行子操作（予防）
+  reinforcement: string; // 代替行動への対応（強化）
+  prompting: string; // プロンプト
+  crisis: string; // 危機時の対応（安全確保）
+  reviewDate: LocalDate | null; // 見直し日
+  owner: string; // 担当
+}
+
+export const PLAN_FIELD_LABEL: Record<keyof PlanContent, string> = {
+  problemBehaviorId: '標的とする問題行動',
+  alternativeBehaviorId: '代替行動',
+  func: '機能仮説',
+  goal: '支援目標',
+  criteria: '達成基準',
+  antecedent: '先行子操作（予防）',
+  reinforcement: '代替行動への対応（強化）',
+  prompting: 'プロンプト（手がかり）',
+  crisis: '危機時の対応（安全確保）',
+  reviewDate: '見直し日',
+  owner: '担当',
+};
+
+/** 支援計画。content は最後に保存した内容、activeContent は実施中の内容（合意待ちの間は前のまま、決定68） */
+export interface SupportPlan extends BaseRecord {
+  personId: string;
+  content: PlanContent;
+  activeContent: PlanContent | null;
+  activeSince: LocalDate | null;
+}
+
+export type PlanChangeStatus = 'pending' | 'active' | 'past' | 'withdrawn' | 'superseded';
+
+/** 支援計画の変更履歴（決定67）。誰も書きかえ・削除できない（状態だけが進む） */
+export interface PlanChange extends BaseRecord {
+  personId: string;
+  planId: string;
+  savedBy: string; // User.id
+  reason: string;
+  before: PlanContent | null;
+  after: PlanContent;
+  fields: (keyof PlanContent)[]; // 変わった項目
+  signerMemberIds: string[]; // 合意をお願いした人（TeamMember.id、決定69）
+  status: PlanChangeStatus;
+  activeSince: LocalDate | null; // 実施中になった日（グラフの縦線、決定68）
+  closedBy: string | null; // 取り下げた人
+}
+
+/** 合意の記録（決定69）。まだ返事がない人は「未確認」（記録なし） */
+export interface PlanSignoff extends BaseRecord {
+  personId: string;
+  changeId: string;
+  memberId: string; // TeamMember.id
+  state: 'agreed' | 'opinion';
+  opinion: string;
+}
+
+// ---------- 身体拘束の記録（6.8、Phase 2） ----------
+
+/** 身体拘束の記録。取り消し・削除はできない（deletedAt を使わない）。修正は監査ログに残る */
+export interface RestraintLog extends BaseRecord {
+  personId: string;
+  startedAt: ISODateTime;
+  endedAt: ISODateTime;
+  localDate: LocalDate;
+  placeName: string | null;
+  activity: string;
+  situation: string; // 状況
+  checks: { urgency: boolean; nonAlternative: boolean; temporary: boolean }; // 3要件を確認したか
+  urgency: string; // 切迫性の根拠
+  nonAlternative: string; // 非代替性の根拠（何を試したか）
+  temporary: string; // 一時性の根拠
+  performer: string; // 実施者
+  decider: string; // 判断者（組織的判断）
+  method: string; // 方法
+  personState: string; // 本人の状態
+  familyReported: boolean;
+  familyReportNote: string;
+  review: string; // あとの組織での検討（追記）
+  recorderId: string;
+}
+
+// ---------- 支援会議メモ・申し送り（6.10、Phase 2） ----------
+
+/** 会議の日に保存したグラフ（あとで記録が増えても変わらない） */
+export interface ChartSnapshot {
+  title: string;
+  caption: string;
+  granularity: 'day' | 'week' | 'month';
+  unit: string;
+  fixedMin?: number;
+  fixedMax?: number;
+  dates: string[];
+  lines: { name: string; color: string; dashed: boolean; values: (number | null)[] }[];
+  phases: { date: string; label: string }[];
+  targets: { value: number; label: string; color: string }[];
+}
+
+export interface MeetingNote extends BaseRecord {
+  personId: string;
+  heldAt: ISODateTime;
+  place: string;
+  participantIds: string[]; // TeamMember.id
+  otherParticipants: string;
+  charts: ChartSnapshot[];
+  results: string; // 確かめた成果
+  decisions: string; // 決めたこと
+  nextReview: LocalDate | null;
+  planSnapshot: PlanContent | null; // その時点の支援計画
+  recorderId: string;
+}
+
+/** 申し送り（チーム画面）と、会議メモへのコメント */
+export interface Comment extends BaseRecord {
+  personId: string;
+  target: 'team' | 'meeting';
+  targetId: string | null;
+  text: string;
+  authorId: string; // User.id
+}
+
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'export';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {

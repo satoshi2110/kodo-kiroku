@@ -33,7 +33,7 @@ import {
   type TeamMember,
 } from './types';
 
-async function audit(
+export async function audit(
   personId: string | null,
   entity: AuditEntity,
   entityId: string,
@@ -45,7 +45,7 @@ async function audit(
   await db.auditLogs.add({ id: newId(), personId, entity, entityId, action, actorId, at: nowISO(), before, after });
 }
 
-function base(): BaseRecord {
+export function base(): BaseRecord {
   const t = nowISO();
   return { id: newId(), createdAt: t, updatedAt: t, deletedAt: null };
 }
@@ -62,7 +62,7 @@ export async function saveDevice(p: Partial<DeviceSetting>) {
 
 // ---------- 権限（画面の出し分け用） ----------
 
-const RANK: Record<Role, number> = { admin: 5, subadmin: 4, leader: 3, supporter: 2, viewer: 1 };
+export const RANK: Record<Role, number> = { admin: 5, subadmin: 4, leader: 3, supporter: 2, viewer: 1 };
 export const canRecord = (r?: Role) => !!r && RANK[r] >= RANK.supporter;
 export const canEditBehaviors = (r?: Role) => !!r && RANK[r] >= RANK.leader;
 /** 記録の取り消し・編集: 記録した本人と、管理者・副管理者・支援リーダー（6.3.5） */
@@ -90,11 +90,21 @@ export async function setupTeam(input: {
   userName: string;
   affiliation: Affiliation;
   personName: string;
+  birthMonth?: string | null;
+  belongs?: string;
+  cautions?: string;
 }): Promise<{ person: Person; userId: string }> {
   const dev = await getDevice();
   const t = nowISO();
   const userId = dev.userId ?? newId();
-  const person: Person = { ...base(), displayName: input.personName, birthMonth: null, notes: '' };
+  const person: Person = {
+    ...base(),
+    displayName: input.personName,
+    birthMonth: input.birthMonth || null,
+    notes: '',
+    belongs: input.belongs ?? '',
+    cautions: input.cautions ?? '',
+  };
   const member: TeamMember = {
     ...base(),
     personId: person.id,
@@ -128,6 +138,19 @@ export async function setupTeam(input: {
     await saveDevice({ userId, currentPersonId: person.id });
   });
   return { person, userId };
+}
+
+// ---------- 対象者（6.1） ----------
+
+/** 対象者のプロフィールを直せるのは管理者・副管理者・支援リーダー（6.9 の「対象者設定」） */
+export const canEditPerson = (r?: Role) => !!r && RANK[r] >= RANK.leader;
+
+export async function updatePerson(id: string, patch: Partial<Pick<Person, 'displayName' | 'birthMonth' | 'notes' | 'belongs' | 'cautions'>>, actorId: string) {
+  const before = await db.persons.get(id);
+  if (!before) return;
+  const after: Person = { ...before, ...patch, updatedAt: nowISO() };
+  await db.persons.put(after);
+  await audit(id, 'person', id, 'update', actorId, before, after);
 }
 
 // ---------- 行動定義（6.2） ----------
@@ -473,18 +496,36 @@ export const AI_LIMITS = {
   supporter: { day: 3, month: 30 },
 };
 
-export async function aiUsage(userId: string, role: Role | undefined) {
+/** チームの上限（決定60）。どの人の分もここに含まれる */
+export const AI_TEAM_LIMIT = { day: 30, month: 300 };
+
+/** 1回と数えるもの: 分析・提案・まとめのうち、結果が出たもの（見本の結果は数えない） */
+async function aiRuns(filter: { userId?: string; personId?: string }) {
+  const pick = <T extends { requestedBy: string; personId: string }>(x: T) =>
+    (!filter.userId || x.requestedBy === filter.userId) && (!filter.personId || x.personId === filter.personId);
+  const [a, s, m] = await Promise.all([
+    db.aiAnalyses.filter(pick).toArray(),
+    db.aiSuggestions.filter(pick).toArray(),
+    db.aiSummaries.filter(pick).toArray(),
+  ]);
+  return [...a, ...s, ...m].filter((x) => x.model !== 'mock' && (!('output' in x) || x.output !== null));
+}
+
+function countRuns(runs: { createdAt: string }[], limit: { day: number; month: number }) {
   const today = nowISO().slice(0, 10);
   const month = today.slice(0, 7);
-  const [a, s] = await Promise.all([
-    db.aiAnalyses.where('requestedBy').equals(userId).toArray(),
-    db.aiSuggestions.filter((x) => x.requestedBy === userId).toArray(),
-  ]);
-  const runs = [...a, ...s].filter((x) => x.model !== 'mock' && (!('output' in x) || x.output !== null));
-  const limit = canDecideAi(role) ? AI_LIMITS.lead : AI_LIMITS.supporter;
   const day = runs.filter((x) => x.createdAt.slice(0, 10) === today).length;
   const mon = runs.filter((x) => x.createdAt.slice(0, 7) === month).length;
   return { dayLeft: Math.max(0, limit.day - day), monthLeft: Math.max(0, limit.month - mon), limit };
+}
+
+export async function aiUsage(userId: string, role: Role | undefined) {
+  return countRuns(await aiRuns({ userId }), canDecideAi(role) ? AI_LIMITS.lead : AI_LIMITS.supporter);
+}
+
+/** チームの残り（月300回・1日30回）。ログインができるまでは、この端末で数えた分だけ */
+export async function aiTeamUsage(personId: string) {
+  return countRuns(await aiRuns({ personId }), AI_TEAM_LIMIT);
 }
 
 export async function getTeamSetting(personId: string): Promise<TeamSetting | undefined> {
@@ -495,7 +536,7 @@ export async function getTeamSetting(personId: string): Promise<TeamSetting | un
 export const canEditTeamSettings = (r?: Role) => !!r && RANK[r] >= RANK.subadmin;
 
 /** AI 以外のチームの設定を直す。変更は監査ログに残る */
-export async function updateTeamSetting(personId: string, patch: Partial<Pick<TeamSetting, 'shortSleepUnderHours' | 'deleteRequestedAt'>>, actorId: string) {
+export async function updateTeamSetting(personId: string, patch: Partial<Pick<TeamSetting, 'shortSleepUnderHours' | 'deleteRequestedAt' | 'restraintPeriod' | 'restraintCount'>>, actorId: string) {
   const before = (await db.teamSettings.get(personId)) ?? null;
   const after: TeamSetting = { aiEnabled: false, ...before, ...patch, personId, updatedAt: nowISO(), updatedBy: actorId };
   await db.teamSettings.put(after);
@@ -520,7 +561,8 @@ export const TEAM_DELETE_DAYS = 30;
 export async function purgeTeam(personId: string, actorId: string) {
   const tables = [
     db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
-    db.places, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.teamMembers, db.consents,
+    db.places, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
+    db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments,
   ];
   await db.transaction('rw', [...tables, db.teamSettings, db.persons, db.auditLogs, db.device], async () => {
     for (const t of tables) await t.where('personId').equals(personId).delete();

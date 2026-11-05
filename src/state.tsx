@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'r
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db/db';
 import { purgeTeam, saveDevice, TEAM_DELETE_DAYS } from './db/repo';
-import type { Behavior, Person, Place, TeamMember } from './db/types';
+import type { Behavior, Person, Place, RestraintPeriod, TeamMember } from './db/types';
 
 interface AppState {
   loading: boolean;
@@ -20,6 +20,8 @@ interface AppState {
   useLocation: boolean; // この端末で位置情報を使う
   shortSleepUnderHours: number | null; // 睡眠不足を「○時間未満」で判定する（null = いつもより2時間以上短い）
   deleteRequestedAt: string | null; // チームの削除の申し込み
+  restraintPeriod: RestraintPeriod | null; // 身体拘束の見直しをすすめる目安（決定64・74。初期値なし）
+  restraintCount: number | null;
   setCurrentPerson: (id: string) => Promise<void>;
 }
 
@@ -87,6 +89,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       useLocation: !!device?.useLocation,
       shortSleepUnderHours: teamSetting?.shortSleepUnderHours ?? null,
       deleteRequestedAt: teamSetting?.deleteRequestedAt ?? null,
+      restraintPeriod: teamSetting?.restraintPeriod ?? null,
+      restraintCount: teamSetting?.restraintCount ?? null,
       setCurrentPerson: (id) => saveDevice({ currentPersonId: id }),
     }),
     [base, userId, persons, person, behaviors, members, teamSetting, places, choice, device],

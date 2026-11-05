@@ -14,10 +14,15 @@ import {
   ANALYSIS_SCHEMA,
   MIN_ABC_RECORDS,
   SUGGESTION_SCHEMA,
+  SUMMARY_MAX_CHARS,
+  SUMMARY_SCHEMA,
   findBannedWords,
+  findSummaryBannedWords,
   quotedInputsOf,
+  quotedSummaryInputs,
   validateAnalysisInput,
   validateSuggestionInput,
+  validateSummaryInput,
   type AiRequest,
   type AiResponse,
 } from '../../src/ai/schema';
@@ -55,15 +60,22 @@ const SUGGEST_TASK = `支援者が採用した機能の仮説にもとづいて�
 - reinforcement: 代わりの行動や望ましい行動ができたときに、すぐ認める・望むものが得られるようにする方法。2〜3件。
 - すべて「候補」です。支援チームが話し合って決めます。`;
 
+const SUMMARIZE_TASK = `次は、ある行動の ABC記録を項目ごとに数えた集計です。これを、支援チームが読む短い文章（${SUMMARY_MAX_CHARS}字以内、3〜4文）にまとめてください。
+- 多いもの・目立つ組み合わせ・場面や状況要因の傾向を、件数を添えて書く。
+- 集計の項目名は「」で囲んでそのまま書く。
+- 行動の機能（はたらき）の見立てや、支援の方法・すすめ（〜しましょう、〜すべき）は書かない。それは別の「AI分析」が行う。
+- 集計にないことは書かない。`;
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // 同じサイトの画面からの呼び出しだけを受ける
   const origin = request.headers.get('Origin');
   if (origin && new URL(origin).host !== new URL(request.url).host) return json({ status: 'error', message: '呼び出し元が正しくありません' }, 403);
 
   const req = (await request.json().catch(() => null)) as AiRequest | null;
-  if (!req || (req.kind !== 'analyze' && req.kind !== 'suggest')) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
+  if (!req || (req.kind !== 'analyze' && req.kind !== 'suggest' && req.kind !== 'summarize')) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
 
-  const invalid = req.kind === 'analyze' ? validateAnalysisInput(req.input) : validateSuggestionInput(req.input);
+  const invalid =
+    req.kind === 'analyze' ? validateAnalysisInput(req.input) : req.kind === 'suggest' ? validateSuggestionInput(req.input) : validateSummaryInput(req.input);
   if (invalid) return json({ status: 'error', message: invalid }, 400);
   if (req.kind === 'analyze' && req.input.abcRecords.length < MIN_ABC_RECORDS) {
     return json({ status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` });
@@ -73,22 +85,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await takeDailyQuota(env))) return json({ status: 'error', message: '今日の AI の回数の上限に達しました。明日またお試しください。' }, 429);
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  const quoted = req.kind === 'analyze' ? quotedInputsOf(req.input) : [];
+  const quoted = req.kind === 'analyze' ? quotedInputsOf(req.input) : req.kind === 'summarize' ? quotedSummaryInputs(req.input) : [];
+  const schema = req.kind === 'analyze' ? ANALYSIS_SCHEMA : req.kind === 'suggest' ? SUGGESTION_SCHEMA : SUMMARY_SCHEMA;
+  const task = req.kind === 'analyze' ? ANALYZE_TASK : req.kind === 'suggest' ? SUGGEST_TASK : SUMMARIZE_TASK;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     let res;
     try {
       res = await client.beta.messages.create({
         model: MODEL,
-        max_tokens: 8000,
+        max_tokens: req.kind === 'summarize' ? 1500 : 8000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         system: PRINCIPLES,
-        output_config: { format: { type: 'json_schema', schema: req.kind === 'analyze' ? ANALYSIS_SCHEMA : SUGGESTION_SCHEMA } },
+        output_config: { format: { type: 'json_schema', schema } },
         messages: [
           {
             role: 'user',
-            content: `${req.kind === 'analyze' ? ANALYZE_TASK : SUGGEST_TASK}\n\n<records>\n${JSON.stringify(req.input)}\n</records>`,
+            content: `${task}\n\n<records>\n${JSON.stringify(req.input)}\n</records>`,
           },
         ],
       });
@@ -108,7 +122,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     } catch {
       continue;
     }
-    if (findBannedWords(output, quoted).length > 0) continue; // 禁止語があれば捨てて作り直す
+    // 禁止語があれば捨てて作り直す。まとめは機能の見立て・支援のすすめの言葉も禁止（決定72）
+    if (req.kind === 'summarize') {
+      const summary = (output as { summary?: unknown })?.summary;
+      if (typeof summary !== 'string' || summary.length > SUMMARY_MAX_CHARS * 1.2) continue;
+      if (findSummaryBannedWords(output, quoted).length > 0) continue;
+      return json({ status: 'ok', kind: 'summarize', output: { summary }, model: res.model });
+    }
+    if (findBannedWords(output, quoted).length > 0) continue;
 
     return json(
       req.kind === 'analyze'

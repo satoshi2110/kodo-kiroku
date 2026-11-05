@@ -15,13 +15,18 @@ const AiIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM18 15l.9 2.1 2.1.9-2.1.9L18 21l-.9-2.1-2.1-.9 2.1-.9z" /></svg>
 );
 
-/** Phase 1 のタブ: ホーム / グラフ / チーム（計画のタブは Phase 2、決定70）。AI「あり」のチームだけ AI のタブを出す（9章） */
+const PlanIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4" /></svg>
+);
+
+/** タブ: ホーム / グラフ / 計画（Phase 2 で現れる、決定70・83）/ チーム。AI「あり」のチームだけ AI のタブを出す（9章） */
 export default function BottomNav() {
   const { aiEnabled } = useApp();
   return (
-    <nav className="nav" aria-label="メイン" style={{ gridTemplateColumns: `repeat(${aiEnabled ? 4 : 3}, minmax(0, 1fr))` }}>
+    <nav className="nav" aria-label="メイン" style={{ gridTemplateColumns: `repeat(${aiEnabled ? 5 : 4}, minmax(0, 1fr))` }}>
       <NavLink to="/" end><HomeIcon />ホーム</NavLink>
       <NavLink to="/graph"><GraphIcon />グラフ</NavLink>
+      <NavLink to="/plan"><PlanIcon />計画</NavLink>
       <NavLink to="/team"><TeamIcon />チーム</NavLink>
       {aiEnabled && <NavLink to="/ai"><AiIcon />AI</NavLink>}
     </nav>

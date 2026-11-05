@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { AbcDetail, AiAnalysis, AiSuggestion, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, Person, TeamMember, User } from './types';
+import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, Person, TeamMember, User } from './types';
 
 /**
  * 端末内の保存（IndexedDB）。電波がなくても記録でき（6.3.6）、サーバー接続後は同期の元になる。
@@ -25,6 +25,13 @@ export class AppDB extends Dexie {
   places!: Table<Place, string>;
   reinforcers!: Table<Reinforcer, string>;
   reinforcerPhotos!: Table<ReinforcerPhoto, string>;
+  aiSummaries!: Table<AiSummary, string>;
+  supportPlans!: Table<SupportPlan, string>;
+  planChanges!: Table<PlanChange, string>;
+  planSignoffs!: Table<PlanSignoff, string>;
+  restraintLogs!: Table<RestraintLog, string>;
+  meetingNotes!: Table<MeetingNote, string>;
+  comments!: Table<Comment, string>;
 
   constructor() {
     super('kodo-kiroku-v1');
@@ -58,6 +65,16 @@ export class AppDB extends Dexie {
       places: 'id, personId',
       reinforcers: 'id, personId',
       reinforcerPhotos: 'id, personId',
+    });
+    // Phase 2・3 の画面（決定83）
+    this.version(7).stores({
+      aiSummaries: 'id, personId, requestedBy',
+      supportPlans: 'id, personId',
+      planChanges: 'id, personId, planId',
+      planSignoffs: 'id, personId, changeId',
+      restraintLogs: 'id, personId',
+      meetingNotes: 'id, personId',
+      comments: 'id, personId, [target+targetId]',
     });
   }
 }
