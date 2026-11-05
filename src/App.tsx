@@ -7,8 +7,9 @@ import Team from './pages/Team';
 import Setup from './pages/Setup';
 import BehaviorAdd from './pages/BehaviorAdd';
 import ABC from './pages/ABC';
+import ABCSummary from './pages/ABCSummary';
 
-const NO_NAV = ['/setup', '/behaviors/new'];
+const NO_NAV = ['/setup', '/behaviors/new', '/graph/abc'];
 const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/abc/');
 
 function Shell() {
@@ -24,6 +25,7 @@ function Shell() {
         <Route path="/behaviors/new" element={<BehaviorAdd />} />
         <Route path="/abc/:eventId" element={<ABC />} />
         <Route path="/graph" element={<Graph />} />
+        <Route path="/graph/abc" element={<ABCSummary />} />
         <Route path="/team" element={<Team />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

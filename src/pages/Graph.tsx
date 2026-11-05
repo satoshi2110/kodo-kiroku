@@ -4,6 +4,7 @@
  * 保存はせず、表示のたびに計算する。在席・観察時間の記録ができたら「いた日」の判定をそれに置きかえる。
  */
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
@@ -31,7 +32,7 @@ export default function Graph() {
 
   return (
     <div className="page">
-      <TopBar title="グラフ" sub={person.displayName} />
+      <TopBar title="グラフ" sub={person.displayName} right={<Link to="/graph/abc" className="btn btn--sm">ABC集計</Link>} />
       {(events ?? []).length === 0 && <p className="empty">記録がたまると、ここにグラフが出ます。</p>}
       {(events ?? []).length > 0 &&
         behaviors.map((b) => (

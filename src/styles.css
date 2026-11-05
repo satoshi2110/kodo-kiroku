@@ -220,3 +220,10 @@ h2.h { font-size: 16px; font-weight: 700; margin: 0; }
 .intensity-option--on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-ink); }
 .today-row--link { color: inherit; text-decoration: none; min-height: var(--tap); }
 .today-row__go { color: var(--text-3); font-size: 18px; }
+
+/* ABC集計の横棒 */
+.tally { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 14px; }
+.tally__name { overflow-wrap: anywhere; }
+.tally__bar { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.tally__bar span { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
+.tally__n { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
