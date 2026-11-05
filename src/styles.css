@@ -254,3 +254,15 @@ h2.h { font-size: 16px; font-weight: 700; margin: 0; }
 .obs-prompt--on { background: var(--primary); color: #fff; font-size: 20px; }
 .obs-btn { min-height: 72px; font-size: 18px; font-weight: 700; }
 .obs-btn--yes { border-color: var(--problem); color: var(--problem-ink); }
+
+/* 睡眠（6.3.4） */
+.time-select { min-height: var(--tap); min-width: 64px; padding: 0 8px; font-size: 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.sleep-row { display: grid; grid-template-columns: 40px 1fr 88px; align-items: center; gap: 8px; min-height: 40px; padding: 4px 6px; border: none; border-radius: 8px; background: none; text-align: left; font: inherit; color: inherit; }
+.sleep-row--on { background: var(--primary-soft); }
+.sleep-row__date { font-size: 13px; color: var(--text-2); }
+.sleep-row__track { height: 14px; border-radius: 7px; background: var(--surface-2); overflow: hidden; }
+.sleep-row__bar { display: block; height: 100%; background: var(--primary); }
+.sleep-row__bar--short { background: #ea580c; }
+.sleep-row__val { font-size: 13px; text-align: right; }
+.sleep-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-decoration: none; color: inherit; }
+.nowrap { white-space: nowrap; }

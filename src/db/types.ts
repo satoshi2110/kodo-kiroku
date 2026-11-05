@@ -109,6 +109,17 @@ export interface Observation extends BaseRecord {
   recorderId: string;
 }
 
+/** 睡眠ログ（6.3.4、決定36・37）。起きた日（その夜が明けた日）に1件。時刻は 'HH:MM' */
+export interface SleepLog extends BaseRecord {
+  personId: string;
+  wakeDate: LocalDate;
+  bedTime: string;
+  wakeTime: string;
+  wakings: number; // 中途覚醒の回数
+  note: string;
+  recorderId: string;
+}
+
 /** ABC記録の選択肢（6.3.2）。対象者ごとのテンプレートで、チーム内で共有する。削除は非表示だけで、過去の記録の値は残る */
 export type ChoiceKind = 'antecedent' | 'consequence' | 'setting';
 
@@ -189,8 +200,8 @@ export interface Consent extends BaseRecord {
   revokedAt: ISODateTime | null;
 }
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'restore';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'observation';
+export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'export';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'observation' | 'sleepLog';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {

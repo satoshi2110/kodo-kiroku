@@ -4,7 +4,9 @@
  */
 import { useState } from 'react';
 import { useApp } from '../state';
-import { setAiEnabled } from '../db/repo';
+import { canExport, logExport, setAiEnabled } from '../db/repo';
+import { buildCsv, downloadCsv, type CsvKind } from '../lib/csv';
+import { toLocalDate } from '../lib/date';
 import { AFFILIATION_LABEL, ROLE_LABEL } from '../db/types';
 import { TopBar } from '../components/ui';
 
@@ -14,6 +16,12 @@ export default function Team() {
   const [agreed, setAgreed] = useState(false);
   if (!person || !userId) return null;
   const isAdmin = me?.role === 'admin';
+
+  async function exportCsv(kind: CsvKind, label: string) {
+    if (!person || !userId) return;
+    downloadCsv(`${person.displayName}_${label}_${toLocalDate()}.csv`, await buildCsv(person, kind));
+    await logExport(person.id, kind, userId);
+  }
 
   async function turnOn() {
     if (!person || !userId) return;
@@ -76,6 +84,22 @@ export default function Team() {
             <button type="button" className="btn" onClick={() => setAiEnabled(person.id, false, userId)}>AI を「なし」に戻す</button>
           )}
           {!isAdmin && <p className="help">切りかえは管理者が行います。</p>}
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="card stack">
+          <span className="label">書き出し（CSV）</span>
+          <p className="help">Excel などで開けるファイルを、この端末に保存します。写真と場所の位置は入りません。</p>
+          {canExport(me?.role) ? (
+            <>
+              <button type="button" className="btn btn--outline" onClick={() => exportCsv('records', '記録とABC')}>記録とABC</button>
+              <button type="button" className="btn btn--outline" onClick={() => exportCsv('observations', 'インターバル')}>インターバル・時間サンプリング</button>
+              <button type="button" className="btn btn--outline" onClick={() => exportCsv('sleep', '睡眠')}>睡眠</button>
+            </>
+          ) : (
+            <p className="help">書き出しは、管理者・副管理者・支援リーダーが行います。</p>
+          )}
         </div>
       </div>
     </div>

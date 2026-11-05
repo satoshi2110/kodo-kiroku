@@ -24,6 +24,7 @@ import {
   type Event,
   type IntervalResult,
   type Observation,
+  type SleepLog,
   type Person,
   type Role,
   type TeamMember,
@@ -64,6 +65,17 @@ export const canEditBehaviors = (r?: Role) => !!r && RANK[r] >= RANK.leader;
 /** 記録の取り消し・編集: 記録した本人と、管理者・副管理者・支援リーダー（6.3.5） */
 export const canUndoEvent = (r: Role | undefined, e: Event, userId: string) =>
   !!r && (e.recorderId === userId ? canRecord(r) : RANK[r] >= RANK.leader);
+
+/** 睡眠の入力・変更: 管理者・副管理者と、「家族」の印か「睡眠の入力を許可」が付いた人（決定37） */
+export const canEditSleep = (m?: TeamMember) => !!m && (RANK[m.role] >= RANK.subadmin || m.familyMark || m.sleepInputAllowed);
+
+/** CSV の書き出し: 管理者・副管理者・支援リーダー（6.12） */
+export const canExport = (r?: Role) => !!r && RANK[r] >= RANK.leader;
+
+/** 書き出したことを監査ログに残す（管理者へのメールは、サーバーができてから） */
+export async function logExport(personId: string, kind: string, actorId: string) {
+  await audit(personId, 'person', personId, 'export', actorId, null, { kind });
+}
 
 // ---------- 初回セットアップ（7.1） ----------
 
@@ -216,6 +228,16 @@ export function observedRatio(list: Observation[]): number | null {
   const all = list.flatMap((o) => o.results);
   const seen = all.filter((r) => r !== 'missed').length;
   return seen ? Math.round((all.filter((r) => r === 'yes').length / seen) * 100) : null;
+}
+
+// ---------- 睡眠ログ（6.3.4） ----------
+
+/** 同じ夜（起きた日）に2件目を入れたときは上書きし、前の値は監査ログに残す */
+export async function saveSleep(input: Pick<SleepLog, 'personId' | 'wakeDate' | 'bedTime' | 'wakeTime' | 'wakings' | 'note'>, actorId: string) {
+  const before = (await db.sleepLogs.where('[personId+wakeDate]').equals([input.personId, input.wakeDate]).toArray()).find((l) => !l.deletedAt);
+  const after: SleepLog = before ? { ...before, ...input, recorderId: actorId, updatedAt: nowISO() } : { ...base(), ...input, recorderId: actorId };
+  await db.sleepLogs.put(after);
+  await audit(input.personId, 'sleepLog', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
 }
 
 // ---------- ABC記録（6.3.2） ----------

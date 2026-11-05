@@ -10,6 +10,7 @@ import { db } from '../db/db';
 import { addChoiceOption, canRecord, ensureChoiceOptions, hideChoiceOption, saveAbc } from '../db/repo';
 import { useApp } from '../state';
 import { formatDateTimeJa, formatDuration } from '../lib/date';
+import { isShortNight } from '../lib/sleep';
 import {
   AFFILIATION_LABEL,
   FUNCTION_LABEL,
@@ -20,8 +21,13 @@ import {
 } from '../db/types';
 import { Chip, KindBadge, TopBar } from '../components/ui';
 
-export default function ABC() {
+/** 別の記録の ABC に移ったら、画面ごと作り直す（前の記録の読み込み結果や入力を持ち越さない） */
+export default function ABCRoute() {
   const { eventId = '' } = useParams();
+  return <ABC key={eventId} eventId={eventId} />;
+}
+
+function ABC({ eventId }: { eventId: string }) {
   const nav = useNavigate();
   const { person, behaviors, members, me, userId } = useApp();
   const personId = person?.id ?? '';
@@ -33,6 +39,11 @@ export default function ABC() {
   );
   const options = useLiveQuery(
     async () => (personId ? (await db.choiceOptions.where('personId').equals(personId).toArray()).sort((a, b) => a.sortOrder - b.sortOrder) : []),
+    [personId],
+  );
+
+  const sleepLogs = useLiveQuery(
+    async () => (personId ? (await db.sleepLogs.where('personId').equals(personId).toArray()).filter((l) => !l.deletedAt) : []),
     [personId],
   );
 
@@ -54,22 +65,25 @@ export default function ABC() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // 読み込みが終わったら、前に書いた内容（なければ空）で始める
+  // 読み込みが終わったら、前に書いた内容（なければ空）で始める。
+  // 新しく書くとき、睡眠が短かった夜の起きた日なら、状況要因「睡眠不足」を最初から付ける（6.3.4。外せる）
   useEffect(() => {
-    if (form || !event || existing === undefined) return;
+    if (form || !event || existing === undefined || !options || !sleepLogs) return;
+    const shortSleep = options.find((o) => o.kind === 'setting' && o.name === '睡眠不足' && !o.hiddenAt);
+    const autoSetting = !existing && shortSleep && isShortNight(sleepLogs, event.localDate) ? [shortSleep.id] : [];
     setForm({
       antecedentIds: existing?.antecedentIds ?? [],
       antecedentNote: existing?.antecedentNote ?? '',
       consequenceIds: existing?.consequenceIds ?? [],
       consequenceNote: existing?.consequenceNote ?? '',
-      settingIds: existing?.settingIds ?? [],
+      settingIds: existing?.settingIds ?? autoSetting,
       involvedMemberIds: existing?.involvedMemberIds ?? (me ? [me.id] : []),
       funcGuess: existing?.funcGuess ?? null,
       note: existing?.note ?? '',
       intensity: event.intensity,
       activity: event.activity ?? '',
     });
-  }, [event, existing, form, me]);
+  }, [event, existing, form, me, options, sleepLogs]);
 
   if (event === undefined || !person || !userId) return null;
   if (!event || event.deletedAt) return <p className="empty">この記録は見つかりません（取り消された可能性があります）。</p>;

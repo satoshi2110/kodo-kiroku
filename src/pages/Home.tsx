@@ -7,16 +7,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { canEditBehaviors, canRecord, createEvent, observedRatio, undoLastEvent, updateEvent } from '../db/repo';
+import { canEditBehaviors, canEditSleep, canRecord, createEvent, observedRatio, undoLastEvent, updateEvent } from '../db/repo';
 import { useApp } from '../state';
 import { formatDuration, formatTime, toLocalDate } from '../lib/date';
 import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
 import { KindBadge, Sheet, TopBar } from '../components/ui';
+import { formatSleep, sleepMinutes } from '../lib/sleep';
 
 type Timer = { behaviorId: string; startedAt: number };
 
 export default function Home() {
-  const { person, behaviors, me, userId } = useApp();
+  const { person, behaviors, me, members, userId } = useApp();
   const today = toLocalDate();
   const personId = person?.id ?? '';
   const now = useNow(30_000);
@@ -44,6 +45,10 @@ export default function Home() {
       async () => (personId ? (await db.observations.where('[personId+localDate]').equals([personId, today]).toArray()).filter((o) => !o.deletedAt) : []),
       [personId, today],
     ) ?? [];
+  const lastNight = useLiveQuery(
+    async () => (personId ? (await db.sleepLogs.where('[personId+wakeDate]').equals([personId, today]).toArray()).find((l) => !l.deletedAt) ?? null : null),
+    [personId, today],
+  );
   const events = useMemo(() => [...(todayEvents ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [todayEvents]);
   const rows = useMemo(() => pairRows(behaviors), [behaviors]);
   if (!person || !userId) return null;
@@ -128,6 +133,23 @@ export default function Home() {
 
       {person.isSample && <p className="section sample-note">これは架空の「サンプル」です。自由に押して試せます。</p>}
       {!recordable && <p className="section help">閲覧者は記録を見るだけです。</p>}
+
+      <div className="section">
+        <Link to="/sleep" className="card sleep-card">
+          <span>
+            <span className="label">睡眠（昨夜）</span>{' '}
+            {lastNight ? (
+              <>
+                {lastNight.bedTime} → {lastNight.wakeTime} ・ {formatSleep(sleepMinutes(lastNight))}
+                <span className="muted"> ・ {members.find((m) => m.userId === lastNight.recorderId)?.displayName ?? ''} が入力</span>
+              </>
+            ) : (
+              <span className="muted">{canEditSleep(me) ? '睡眠を記録（任意）' : 'まだ記録がありません'}</span>
+            )}
+          </span>
+          <span className="btn btn--sm">{canEditSleep(me) ? '入力・変更' : '見る'}</span>
+        </Link>
+      </div>
 
       <div className="section stack">
         {rows.map((row) => (

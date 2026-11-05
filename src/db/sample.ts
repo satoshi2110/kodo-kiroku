@@ -6,7 +6,7 @@ import { db } from './db';
 import { newId } from '../lib/id';
 import { addDays, toLocalDate, toLocalISO, parseLocalDate } from '../lib/date';
 import { ensureChoiceOptions, getDevice, saveDevice } from './repo';
-import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type Observation, type Person, type TeamMember } from './types';
+import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type Observation, type SleepLog, type Person, type TeamMember } from './types';
 
 const DAYS = 21;
 
@@ -104,6 +104,7 @@ export async function createSampleTeam(): Promise<void> {
   const today = toLocalDate();
   const events: Event[] = [];
   const observations: Observation[] = [];
+  const sleeps: SleepLog[] = [];
   const details: AbcDetail[] = [];
   const at = (date: string, hour: number, min: number) => {
     const d = parseLocalDate(date);
@@ -168,6 +169,18 @@ export async function createSampleTeam(): Promise<void> {
     const cards = Math.max(0, Math.round((DAYS - i) * 0.25 + wave(i, 3) - (weekday ? 0 : 1)));
     for (let k = 0; k < cards; k++) events.push(ev(card, date, 10 + k, (k * 17) % 60, { activity: '個別課題' }));
     if (i % 2 === 0 || i < 6) events.push(ev(dress, date, 7, 30));
+    // 睡眠: ふだんは 21時台に寝て 6時半ごろ起きる。睡眠不足の日は夜中まで起きていた
+    const bedMin = shortSleep ? 23 * 60 + 40 : 21 * 60 + Math.round(wave(i, 5) * 6) * 5;
+    sleeps.push({
+      ...rec(),
+      personId: person.id,
+      wakeDate: date,
+      bedTime: `${String(Math.floor(bedMin / 60)).padStart(2, '0')}:${String(bedMin % 60).padStart(2, '0')}`,
+      wakeTime: shortSleep ? '05:30' : `06:${String(30 + Math.round(wave(i, 6) * 3) * 5).padStart(2, '0')}`,
+      wakings: shortSleep ? 2 : i % 4 === 0 ? 1 : 0,
+      note: shortSleep ? '夜中に何度か起きた' : '',
+      recorderId: userId,
+    });
     // 大きな声: 平日の個別課題で 5分（10秒 × 30区間）の観察。起きた区間の割合が少しずつ下がる
     if (weekday) {
       const rate = 0.45 - (DAYS - i) * 0.012 + (shortSleep ? 0.15 : 0);
@@ -188,8 +201,9 @@ export async function createSampleTeam(): Promise<void> {
     }
   }
 
-  await db.transaction('rw', [db.events, db.abcDetails, db.observations], async () => {
+  await db.transaction('rw', [db.events, db.abcDetails, db.observations, db.sleepLogs], async () => {
     await db.events.bulkAdd(events);
+    await db.sleepLogs.bulkAdd(sleeps);
     await db.observations.bulkAdd(observations);
     await db.abcDetails.bulkAdd(details);
   });
