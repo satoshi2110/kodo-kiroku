@@ -23,7 +23,7 @@
 
 ## 必ず守ること（安全）
 - チームごとのデータの分離は Supabase の行レベルセキュリティ（RLS）で強制する。画面で隠すだけにしない（決定45）。テーブルを作るたびに RLS と「他チームのデータを読めない・書けない」テストを付ける。
-- Supabase の service_role key は画面側のコードと `.env` の VITE_ 変数に絶対に入れない。Anthropic の API キーも画面側に置かず、サーバー側（いまは Cloudflare Pages Functions の暗号化された環境変数 `ANTHROPIC_API_KEY`。仕様書 9章【暫定】）に置く。
+- Supabase の service_role key は画面側のコードと `.env` の VITE_ 変数に絶対に入れない。Anthropic の API キーも画面側に置かず、サーバー側（Cloudflare Pages Functions の暗号化された環境変数 `ANTHROPIC_API_KEY`。仕様書 9章・決定84）に置く。
 - キーやパスワードはチャットに書かせない。`.env`（git に入れない）に発注者が自分で書く。見本は `.env.example`。
 - 支援者の現在地の緯度経度は保存も送信もしない。記録に残すのは場所の名前だけ（決定42）。
 - 記録は論理削除と監査ログ。拘束記録は取り消し・削除できない（6.8）。
