@@ -35,7 +35,7 @@ insert into behaviors (id, person_id, kind, name, method) values
   ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'problem', '行動2', 'frequency');
 
 insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id, updated_at) values
-  ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1', '2026-11-06T10:00:00+09:00'),
+  ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
   ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', now(), current_date, '00000000-0000-0000-0000-0000000000b1', now());
 
 insert into start_codes (code) values ('RLSTESTCODE1');
@@ -136,7 +136,7 @@ begin
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 
   -- 古い変更は捨てられる（後から届いた古い記録で上書きしない）
-  update events set count = 5, updated_at = '2026-11-06T09:00:00+09:00' where id = '40000000-0000-0000-0000-000000000001';
+  update events set count = 5, updated_at = now() - interval '2 hours' where id = '40000000-0000-0000-0000-000000000001';
   select count into n from events where id = '40000000-0000-0000-0000-000000000001';
   if n <> 1 then raise exception 'NG: 古い変更で記録が上書きされた'; end if;
 end $$;
