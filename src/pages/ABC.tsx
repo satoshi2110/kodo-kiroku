@@ -29,7 +29,7 @@ export default function ABCRoute() {
 
 function ABC({ eventId }: { eventId: string }) {
   const nav = useNavigate();
-  const { person, behaviors, members, me, userId } = useApp();
+  const { person, behaviors, members, me, userId, shortSleepUnderHours } = useApp();
   const personId = person?.id ?? '';
 
   const event = useLiveQuery(() => db.events.get(eventId), [eventId]);
@@ -70,7 +70,7 @@ function ABC({ eventId }: { eventId: string }) {
   useEffect(() => {
     if (form || !event || existing === undefined || !options || !sleepLogs) return;
     const shortSleep = options.find((o) => o.kind === 'setting' && o.name === '睡眠不足' && !o.hiddenAt);
-    const autoSetting = !existing && shortSleep && isShortNight(sleepLogs, event.localDate) ? [shortSleep.id] : [];
+    const autoSetting = !existing && shortSleep && isShortNight(sleepLogs, event.localDate, shortSleepUnderHours) ? [shortSleep.id] : [];
     setForm({
       antecedentIds: existing?.antecedentIds ?? [],
       antecedentNote: existing?.antecedentNote ?? '',

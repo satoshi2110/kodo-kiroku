@@ -25,6 +25,9 @@ import {
   type IntervalResult,
   type Observation,
   type SleepLog,
+  type NotObservedDay,
+  type Reinforcer,
+  type Place,
   type Person,
   type Role,
   type TeamMember,
@@ -139,10 +142,69 @@ export async function createBehavior(input: BehaviorInput, actorId: string): Pro
   return b;
 }
 
+/** 名前・定義・強度の基準などを直す。前の内容は監査ログに残る（定義の変更履歴） */
+export async function updateBehavior(id: string, patch: Partial<BehaviorInput>, actorId: string) {
+  const before = await db.behaviors.get(id);
+  if (!before) return;
+  const after: Behavior = { ...before, ...patch, updatedAt: nowISO() };
+  await db.behaviors.put(after);
+  await audit(after.personId, 'behavior', id, 'update', actorId, before, after);
+}
+
+/** 非表示（削除の既定）: ホーム・グラフ・集計から消えるが、記録は残り、元に戻せる */
+export async function setBehaviorHidden(id: string, hidden: boolean, actorId: string) {
+  const before = await db.behaviors.get(id);
+  if (!before) return;
+  const t = nowISO();
+  const after: Behavior = { ...before, hiddenAt: hidden ? t : null, updatedAt: t };
+  await db.behaviors.put(after);
+  await audit(after.personId, 'behavior', id, hidden ? 'update' : 'restore', actorId, before, after);
+}
+
+/** 記録ごと削除（管理者のみ、6.2）。論理削除で、何件消したかを監査ログに残す */
+export async function deleteBehaviorWithRecords(id: string, actorId: string) {
+  await db.transaction('rw', [db.behaviors, db.events, db.abcDetails, db.observations, db.notObservedDays, db.auditLogs], async () => {
+    const before = await db.behaviors.get(id);
+    if (!before) return;
+    const t = nowISO();
+    const gone = <T extends BaseRecord>(xs: T[]) => xs.map((x) => ({ ...x, deletedAt: t, updatedAt: t }));
+    const events = await db.events.where('behaviorId').equals(id).filter((e) => !e.deletedAt).toArray();
+    const eventIds = new Set(events.map((e) => e.id));
+    const abcs = await db.abcDetails.where('personId').equals(before.personId).filter((d) => !d.deletedAt && eventIds.has(d.eventId)).toArray();
+    const obs = await db.observations.where('behaviorId').equals(id).filter((o) => !o.deletedAt).toArray();
+    const marks = await db.notObservedDays.where('personId').equals(before.personId).filter((x) => !x.deletedAt && x.behaviorId === id).toArray();
+    await db.events.bulkPut(gone(events));
+    await db.abcDetails.bulkPut(gone(abcs));
+    await db.observations.bulkPut(gone(obs));
+    await db.notObservedDays.bulkPut(gone(marks));
+    const after: Behavior = { ...before, deletedAt: t, updatedAt: t };
+    await db.behaviors.put(after);
+    await audit(before.personId, 'behavior', id, 'delete', actorId, before, {
+      ...after,
+      deletedEvents: events.length,
+      deletedAbcDetails: abcs.length,
+      deletedObservations: obs.length,
+      deletedNotObservedDays: marks.length,
+    });
+  });
+}
+
+/** 行動ごとの記録の件数（一覧と削除の確認に出す） */
+export async function recordCounts(personId: string): Promise<Map<string, number>> {
+  const [events, obs] = await Promise.all([
+    db.events.where('personId').equals(personId).filter((e) => !e.deletedAt).toArray(),
+    db.observations.where('personId').equals(personId).filter((o) => !o.deletedAt).toArray(),
+  ]);
+  const m = new Map<string, number>();
+  for (const x of [...events, ...obs]) m.set(x.behaviorId, (m.get(x.behaviorId) ?? 0) + 1);
+  return m;
+}
+
 // ---------- 記録（6.3） ----------
 
 export async function createEvent(
-  input: Pick<Event, 'personId' | 'behaviorId'> & Partial<Pick<Event, 'count' | 'durationSec' | 'latencySec' | 'occurredAt'>>,
+  input: Pick<Event, 'personId' | 'behaviorId'> &
+    Partial<Pick<Event, 'count' | 'durationSec' | 'latencySec' | 'occurredAt' | 'intensity' | 'placeName' | 'backfilled'>>,
   actorId: string,
 ): Promise<Event> {
   const occurredAt = input.occurredAt ?? nowISO();
@@ -155,11 +217,11 @@ export async function createEvent(
     count: input.count ?? 1,
     durationSec: input.durationSec ?? null,
     latencySec: input.latencySec ?? null,
-    intensity: null,
-    placeName: null,
+    intensity: input.intensity ?? null,
+    placeName: input.placeName ?? null,
     activity: null,
     recorderId: actorId,
-    backfilled: false,
+    backfilled: input.backfilled ?? false,
   };
   await db.events.add(e);
   await audit(e.personId, 'event', e.id, 'create', actorId, null, e);
@@ -186,6 +248,24 @@ export async function undoLastEvent(personId: string, behaviorId: string, localD
   await db.events.put(after);
   await audit(personId, 'event', last.id, 'delete', actorId, last, after);
   return last;
+}
+
+/** 自動の 0 を「観察していなかった（未記録）」にする／0 に戻す（6.3.3）。どちらも履歴に残る */
+export async function setNotObserved(personId: string, behaviorId: string, localDate: string, notObserved: boolean, actorId: string) {
+  const current = (await db.notObservedDays.where('[personId+localDate]').equals([personId, localDate]).toArray()).find(
+    (x) => x.behaviorId === behaviorId && !x.deletedAt,
+  );
+  if (notObserved && !current) {
+    const rec: NotObservedDay = { ...base(), personId, behaviorId, localDate, recorderId: actorId };
+    await db.notObservedDays.add(rec);
+    await audit(personId, 'notObservedDay', rec.id, 'create', actorId, null, rec);
+  }
+  if (!notObserved && current) {
+    const t = nowISO();
+    const after = { ...current, deletedAt: t, updatedAt: t };
+    await db.notObservedDays.put(after);
+    await audit(personId, 'notObservedDay', current.id, 'delete', actorId, current, after);
+  }
 }
 
 // ---------- インターバル記録・時間サンプリング（6.3.1） ----------
@@ -238,6 +318,93 @@ export async function saveSleep(input: Pick<SleepLog, 'personId' | 'wakeDate' | 
   const after: SleepLog = before ? { ...before, ...input, recorderId: actorId, updatedAt: nowISO() } : { ...base(), ...input, recorderId: actorId };
   await db.sleepLogs.put(after);
   await audit(input.personId, 'sleepLog', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
+}
+
+// ---------- 場所（6.3.3） ----------
+
+/** 場所の追加・編集は支援者以上。削除は非表示で、過去の記録に付いた場所名は残る */
+export const canEditPlaces = canRecord;
+
+export type PlaceInput = Pick<Place, 'personId' | 'name' | 'kind' | 'lat' | 'lng' | 'radiusM'>;
+
+export async function savePlace(id: string | null, input: PlaceInput, actorId: string): Promise<Place> {
+  const before = id ? await db.places.get(id) : undefined;
+  const after: Place = before ? { ...before, ...input, updatedAt: nowISO() } : { ...base(), ...input, createdBy: actorId, hiddenAt: null };
+  await db.places.put(after);
+  await audit(after.personId, 'place', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
+  return after;
+}
+
+export async function hidePlace(id: string, actorId: string) {
+  const before = await db.places.get(id);
+  if (!before) return;
+  const t = nowISO();
+  const after: Place = { ...before, hiddenAt: t, updatedAt: t };
+  await db.places.put(after);
+  await audit(after.personId, 'place', id, 'update', actorId, before, after);
+}
+
+/** いまの場所を端末に覚える（Place.id / 'outside' / null = 未設定） */
+export async function setPlaceChoice(personId: string, choice: string | null) {
+  const dev = await getDevice();
+  const placeChoice = { ...(dev.placeChoice ?? {}) };
+  if (choice) placeChoice[personId] = choice;
+  else delete placeChoice[personId];
+  await saveDevice({ placeChoice });
+}
+
+// ---------- 強化子（好きなもの、6.14） ----------
+
+/** 強化子の追加・編集は支援者以上（6.9）。閲覧者は見るだけ */
+export const canEditReinforcers = canRecord;
+
+export type ReinforcerInput = Pick<Reinforcer, 'personId' | 'name' | 'category' | 'level' | 'usage'>;
+
+/** 追加・編集。photo: Blob は差しかえ、null は写真を消す、undefined はそのまま */
+export async function saveReinforcer(id: string | null, input: ReinforcerInput, photo: Blob | null | undefined, actorId: string): Promise<Reinforcer> {
+  return db.transaction('rw', [db.reinforcers, db.reinforcerPhotos, db.auditLogs], async () => {
+    const before = id ? await db.reinforcers.get(id) : undefined;
+    const hasPhoto = photo === undefined ? !!before?.hasPhoto : photo !== null;
+    const after: Reinforcer = before
+      ? { ...before, ...input, hasPhoto, updatedBy: actorId, updatedAt: nowISO() }
+      : { ...base(), ...input, hasPhoto, lastUsedAt: null, updatedBy: actorId, hiddenAt: null };
+    await db.reinforcers.put(after);
+    if (photo) await db.reinforcerPhotos.put({ id: after.id, personId: after.personId, blob: photo });
+    if (photo === null) await db.reinforcerPhotos.delete(after.id);
+    await audit(after.personId, 'reinforcer', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
+    return after;
+  });
+}
+
+/** ハマり度だけを直す（一覧の ● を押したとき） */
+export async function setReinforcerLevel(id: string, level: number, actorId: string) {
+  const before = await db.reinforcers.get(id);
+  if (!before) return;
+  const after: Reinforcer = { ...before, level, updatedBy: actorId, updatedAt: nowISO() };
+  await db.reinforcers.put(after);
+  await audit(after.personId, 'reinforcer', id, 'update', actorId, before, after);
+}
+
+/** 「今日使った」: いまハマっているものに数える */
+export async function markReinforcerUsed(id: string, actorId: string) {
+  const before = await db.reinforcers.get(id);
+  if (!before) return;
+  const after: Reinforcer = { ...before, lastUsedAt: nowISO(), updatedAt: nowISO() };
+  await db.reinforcers.put(after);
+  await audit(after.personId, 'reinforcer', id, 'update', actorId, before, after);
+}
+
+/** 削除: 強化子は論理削除し、写真は消す（6.14a） */
+export async function deleteReinforcer(id: string, actorId: string) {
+  await db.transaction('rw', [db.reinforcers, db.reinforcerPhotos, db.auditLogs], async () => {
+    const before = await db.reinforcers.get(id);
+    if (!before) return;
+    const t = nowISO();
+    const after: Reinforcer = { ...before, hasPhoto: false, deletedAt: t, updatedAt: t };
+    await db.reinforcers.put(after);
+    await db.reinforcerPhotos.delete(id);
+    await audit(before.personId, 'reinforcer', id, 'delete', actorId, before, after);
+  });
 }
 
 // ---------- ABC記録（6.3.2） ----------
@@ -324,11 +491,52 @@ export async function getTeamSetting(personId: string): Promise<TeamSetting | un
   return db.teamSettings.get(personId);
 }
 
+/** チームの設定を変えられるのは管理者・副管理者（ワイヤーフレーム 13） */
+export const canEditTeamSettings = (r?: Role) => !!r && RANK[r] >= RANK.subadmin;
+
+/** AI 以外のチームの設定を直す。変更は監査ログに残る */
+export async function updateTeamSetting(personId: string, patch: Partial<Pick<TeamSetting, 'shortSleepUnderHours' | 'deleteRequestedAt'>>, actorId: string) {
+  const before = (await db.teamSettings.get(personId)) ?? null;
+  const after: TeamSetting = { aiEnabled: false, ...before, ...patch, personId, updatedAt: nowISO(), updatedBy: actorId };
+  await db.teamSettings.put(after);
+  await audit(personId, 'teamSetting', personId, 'update', actorId, before, after);
+}
+
+/** メンバーの「家族」の印と「睡眠の入力を許可」（決定37）。付け外しは管理者 */
+export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed'>>, actorId: string) {
+  const before = await db.teamMembers.get(memberId);
+  if (!before) return;
+  const after: TeamMember = { ...before, ...patch, updatedAt: nowISO() };
+  await db.teamMembers.put(after);
+  await audit(before.personId, 'teamMember', memberId, 'update', actorId, before, after);
+}
+
+export const TEAM_DELETE_DAYS = 30;
+
+/**
+ * チームの削除（申し込みから30日たったら実行）。記録・写真・場所など対象者のデータを消す。
+ * 監査ログは追記だけで誰も消せない決まり（7.4.2 #6）なので残し、削除したことを書き足す。
+ */
+export async function purgeTeam(personId: string, actorId: string) {
+  const tables = [
+    db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
+    db.places, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.teamMembers, db.consents,
+  ];
+  await db.transaction('rw', [...tables, db.teamSettings, db.persons, db.auditLogs, db.device], async () => {
+    for (const t of tables) await t.where('personId').equals(personId).delete();
+    await db.teamSettings.delete(personId);
+    await db.persons.delete(personId);
+    await audit(personId, 'person', personId, 'delete', actorId, null, { purged: true });
+    const dev = await getDevice();
+    if (dev.currentPersonId === personId) await saveDevice({ currentPersonId: null });
+  });
+}
+
 /** AI の あり／なし を切りかえる（管理者のみ）。「あり」にするときは、送り先と仮名化の内容への同意を残す（9章） */
 export async function setAiEnabled(personId: string, enabled: boolean, actorId: string) {
   await db.transaction('rw', [db.teamSettings, db.consents, db.auditLogs], async () => {
     const before = (await db.teamSettings.get(personId)) ?? null;
-    const after: TeamSetting = { personId, aiEnabled: enabled, updatedAt: nowISO(), updatedBy: actorId };
+    const after: TeamSetting = { ...before, personId, aiEnabled: enabled, updatedAt: nowISO(), updatedBy: actorId };
     await db.teamSettings.put(after);
     await audit(personId, 'teamSetting', personId, 'update', actorId, before, after);
     if (enabled) {

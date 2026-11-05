@@ -16,7 +16,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 export default function Sleep() {
-  const { person, me, members, userId } = useApp();
+  const { person, me, members, userId, shortSleepUnderHours } = useApp();
   const personId = person?.id ?? '';
   const today = toLocalDate();
   const [wakeDate, setWakeDate] = useState(today);
@@ -107,7 +107,7 @@ export default function Sleep() {
           {week.map((d) => {
             const l = logs.find((x) => x.wakeDate === d);
             const min = l ? sleepMinutes(l) : 0;
-            const short = isShortNight(logs, d);
+            const short = isShortNight(logs, d, shortSleepUnderHours);
             return (
               <button key={d} type="button" className={`sleep-row${d === wakeDate ? ' sleep-row--on' : ''}`} onClick={() => setWakeDate(d)}>
                 <span className="sleep-row__date">{formatShortDate(d)}</span>
@@ -118,7 +118,7 @@ export default function Sleep() {
               </button>
             );
           })}
-          <p className="help">オレンジ: いつもより2時間以上短かった夜（記録が5夜分たまってから判定します）。その日の ABC記録には、状況要因「睡眠不足」が最初から付きます（外せます）。</p>
+          <p className="help">オレンジ: {shortSleepUnderHours ? `${shortSleepUnderHours}時間より短かった夜。` : 'いつもより2時間以上短かった夜（記録が5夜分たまってから判定します）。'}その日の ABC記録には、状況要因「睡眠不足」が最初から付きます（外せます）。</p>
         </div>
       </div>
     </div>

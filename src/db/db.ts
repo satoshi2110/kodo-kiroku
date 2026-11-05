@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { AbcDetail, AiAnalysis, AiSuggestion, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, DeviceSetting, Event, Person, TeamMember, User } from './types';
+import type { AbcDetail, AiAnalysis, AiSuggestion, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, Person, TeamMember, User } from './types';
 
 /**
  * 端末内の保存（IndexedDB）。電波がなくても記録でき（6.3.6）、サーバー接続後は同期の元になる。
@@ -21,6 +21,10 @@ export class AppDB extends Dexie {
   aiSuggestions!: Table<AiSuggestion, string>;
   observations!: Table<Observation, string>;
   sleepLogs!: Table<SleepLog, string>;
+  notObservedDays!: Table<NotObservedDay, string>;
+  places!: Table<Place, string>;
+  reinforcers!: Table<Reinforcer, string>;
+  reinforcerPhotos!: Table<ReinforcerPhoto, string>;
 
   constructor() {
     super('kodo-kiroku-v1');
@@ -48,6 +52,12 @@ export class AppDB extends Dexie {
     });
     this.version(5).stores({
       sleepLogs: 'id, personId, [personId+wakeDate]',
+    });
+    this.version(6).stores({
+      notObservedDays: 'id, personId, [personId+localDate]',
+      places: 'id, personId',
+      reinforcers: 'id, personId',
+      reinforcerPhotos: 'id, personId',
     });
   }
 }

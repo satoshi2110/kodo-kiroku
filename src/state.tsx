@@ -1,9 +1,9 @@
 /** アプリ全体の状態: この端末の人、いま見ている対象者、行動の一覧、自分の役割 */
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db/db';
-import { saveDevice } from './db/repo';
-import type { Behavior, Person, TeamMember } from './db/types';
+import { purgeTeam, saveDevice, TEAM_DELETE_DAYS } from './db/repo';
+import type { Behavior, Person, Place, TeamMember } from './db/types';
 
 interface AppState {
   loading: boolean;
@@ -14,6 +14,12 @@ interface AppState {
   me: TeamMember | undefined; // いまの対象者のチームでの自分
   members: TeamMember[];
   aiEnabled: boolean; // チームの設定で AI を「あり」にしているか（9章）
+  places: Place[]; // 非表示を除いた登録場所
+  place: Place | undefined; // いまの場所（未設定・登録場所の外なら undefined）
+  placeOutside: boolean; // 「登録場所の外」を選んでいる
+  useLocation: boolean; // この端末で位置情報を使う
+  shortSleepUnderHours: number | null; // 睡眠不足を「○時間未満」で判定する（null = いつもより2時間以上短い）
+  deleteRequestedAt: string | null; // チームの削除の申し込み
   setCurrentPerson: (id: string) => Promise<void>;
 }
 
@@ -43,10 +49,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [personId],
   );
   const teamSetting = useLiveQuery(async () => (personId ? ((await db.teamSettings.get(personId)) ?? null) : null), [personId]);
+  const places = useLiveQuery(
+    async () =>
+      personId
+        ? (await db.places.where('personId').equals(personId).toArray())
+            .filter((p) => !p.deletedAt && !p.hiddenAt)
+            .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        : [],
+    [personId],
+  );
+  const choice = personId ? device?.placeChoice?.[personId] : undefined;
   const members = useLiveQuery(
     async () => (personId ? (await db.teamMembers.where('personId').equals(personId).toArray()).filter((m) => !m.deletedAt) : []),
     [personId],
   );
+
+  // 削除を申し込んで30日たったチームは、開いたときに消す
+  const deleteAt = teamSetting?.deleteRequestedAt;
+  useEffect(() => {
+    if (!deleteAt || !personId || !userId) return;
+    if (Date.now() - new Date(deleteAt).getTime() >= TEAM_DELETE_DAYS * 86400_000) purgeTeam(personId, userId);
+  }, [deleteAt, personId, userId]);
 
   const value = useMemo<AppState>(
     () => ({
@@ -58,9 +81,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       me: members?.find((m) => m.userId === userId),
       members: members ?? [],
       aiEnabled: !!teamSetting?.aiEnabled,
+      places: places ?? [],
+      place: places?.find((p) => p.id === choice),
+      placeOutside: choice === 'outside',
+      useLocation: !!device?.useLocation,
+      shortSleepUnderHours: teamSetting?.shortSleepUnderHours ?? null,
+      deleteRequestedAt: teamSetting?.deleteRequestedAt ?? null,
       setCurrentPerson: (id) => saveDevice({ currentPersonId: id }),
     }),
-    [base, userId, persons, person, behaviors, members, teamSetting],
+    [base, userId, persons, person, behaviors, members, teamSetting, places, choice, device],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

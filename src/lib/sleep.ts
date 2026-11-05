@@ -1,6 +1,7 @@
 /**
  * 睡眠の計算（6.3.4）。保存はせず、表示のたびに計算する。
  * 「睡眠が短かった夜」: いつもの睡眠時間（その夜より前の2週間の中央値）より 2時間以上短い夜。5夜分たまるまでは判定しない。
+ * チームの設定で「○時間未満」に変えたときは、その時間より短い夜（中央値は使わない）。
  */
 import { addDays } from './date';
 import type { SleepLog } from '../db/types';
@@ -36,8 +37,9 @@ export function usualMinutes(logs: SleepLog[], wakeDate: string): number | null 
   return prev.length >= MIN_NIGHTS ? median(prev.map(sleepMinutes)) : null;
 }
 
-export function isShortNight(logs: SleepLog[], wakeDate: string): boolean {
+export function isShortNight(logs: SleepLog[], wakeDate: string, underHours?: number | null): boolean {
   const l = logs.find((x) => x.wakeDate === wakeDate);
+  if (l && underHours) return sleepMinutes(l) < underHours * 60;
   const usual = usualMinutes(logs, wakeDate);
   return !!l && usual != null && sleepMinutes(l) <= usual - SHORT_MIN;
 }

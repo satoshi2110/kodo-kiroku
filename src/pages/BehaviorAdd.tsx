@@ -80,12 +80,12 @@ export default function BehaviorAdd() {
       },
       userId,
     );
-    nav('/', { replace: true });
+    nav(fromSetup ? '/' : '/behaviors', { replace: true });
   }
 
   return (
     <div className="page page--no-nav">
-      <TopBar title="行動の追加" sub={`ステップ ${step} / 3`} back={fromSetup || step > 1 ? undefined : '/'} />
+      <TopBar title="行動の追加" sub={`ステップ ${step} / 3`} back={fromSetup || step > 1 ? undefined : '/behaviors'} />
 
       {step === 1 && (
         <div className="section stack">

@@ -7,17 +7,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { canEditBehaviors, canEditSleep, canRecord, createEvent, observedRatio, undoLastEvent, updateEvent } from '../db/repo';
+import { canEditSleep, canRecord, createEvent, observedRatio, setPlaceChoice, undoLastEvent, updateEvent } from '../db/repo';
+import { getPositionOnce, matchPlace } from '../lib/place';
 import { useApp } from '../state';
 import { formatDuration, formatTime, toLocalDate } from '../lib/date';
 import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
-import { KindBadge, Sheet, TopBar } from '../components/ui';
+import { Chip, KindBadge, Sheet, TopBar } from '../components/ui';
 import { formatSleep, sleepMinutes } from '../lib/sleep';
 
 type Timer = { behaviorId: string; startedAt: number };
 
 export default function Home() {
-  const { person, behaviors, me, members, userId } = useApp();
+  const { person, behaviors, me, members, userId, places, place, placeOutside, useLocation } = useApp();
   const today = toLocalDate();
   const personId = person?.id ?? '';
   const now = useNow(30_000);
@@ -51,6 +52,32 @@ export default function Home() {
   );
   const events = useMemo(() => [...(todayEvents ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [todayEvents]);
   const rows = useMemo(() => pairRows(behaviors), [behaviors]);
+  const [pickingPlace, setPickingPlace] = useState(false);
+
+  // 場所の自動判定（6.3.3）: 開いたときと前面に戻ったときに1回だけ位置を取り、端末の中で照らし合わせる
+  const placeRef = useRef({ places, placeId: place?.id });
+  placeRef.current = { places, placeId: place?.id };
+  useEffect(() => {
+    if (!useLocation || !personId) return;
+    let alive = true;
+    const detect = async () => {
+      const pos = await getPositionOnce();
+      if (!alive || !pos) return; // 取れなければ前の場所のまま
+      const { places: list, placeId } = placeRef.current;
+      const hit = matchPlace(list, pos);
+      await setPlaceChoice(personId, hit?.id ?? 'outside');
+      if (hit && hit.id !== placeId) notify(`場所を「${hit.name}」に切りかえました`);
+    };
+    detect();
+    const onVisible = () => document.visibilityState === 'visible' && detect();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useLocation, personId]);
+
   if (!person || !userId) return null;
   const recordable = canRecord(me?.role);
 
@@ -70,7 +97,7 @@ export default function Home() {
 
   async function record(b: Behavior, extra: Partial<Pick<Event, 'durationSec' | 'latencySec'>> = {}) {
     if (!person || !userId) return;
-    const e = await createEvent({ personId: person.id, behaviorId: b.id, ...extra }, userId);
+    const e = await createEvent({ personId: person.id, behaviorId: b.id, placeName: place?.name ?? null, ...extra }, userId);
     feedback(b);
     notify(
       b.method === 'duration' ? `「${b.name}」${formatDuration(extra.durationSec ?? 0)} を記録しました`
@@ -127,8 +154,20 @@ export default function Home() {
     <div className="page">
       <TopBar
         title={person.displayName}
-        sub={<>{formatTime(new Date(now).toISOString())} ・ 場所: 未設定</>}
-        right={canEditBehaviors(me?.role) ? <Link to="/behaviors/new" className="btn btn--sm">＋ 行動</Link> : undefined}
+        sub={
+          <>
+            {formatTime(new Date(now).toISOString())} ・{' '}
+            <button type="button" className="place-btn" onClick={() => setPickingPlace(true)}>
+              場所: {place ? place.name : placeOutside ? '登録場所の外' : '未設定'}
+            </button>
+          </>
+        }
+        right={
+          <>
+            <Link to="/reinforcers" className="btn btn--sm nowrap">好きなもの</Link>
+            <Link to="/behaviors" className="btn btn--sm nowrap">行動</Link>
+          </>
+        }
       />
 
       {person.isSample && <p className="section sample-note">これは架空の「サンプル」です。自由に押して試せます。</p>}
@@ -147,7 +186,7 @@ export default function Home() {
               <span className="muted">{canEditSleep(me) ? '睡眠を記録（任意）' : 'まだ記録がありません'}</span>
             )}
           </span>
-          <span className="btn btn--sm">{canEditSleep(me) ? '入力・変更' : '見る'}</span>
+          <span className="btn btn--sm nowrap">{canEditSleep(me) ? '入力・変更' : '見る'}</span>
         </Link>
       </div>
 
@@ -185,12 +224,32 @@ export default function Home() {
                 {e.durationSec != null ? formatDuration(e.durationSec) : e.latencySec != null ? `待ち ${formatDuration(e.latencySec)}` : `+${e.count}`}
                 {e.intensity != null && ` ・ 強度${e.intensity}`}
                 {abcIds.has(e.id) ? ' ・ ABC' : ''}
+                {e.backfilled ? ' ・ あとで入力' : ''}
               </span>
               <span className="today-row__go" aria-hidden="true">›</span>
             </Link>
           ))}
+          {recordable && (
+            <Link to="/backfill" className="btn btn--sm btn--block" style={{ marginTop: 8 }}>さかのぼって入力</Link>
+          )}
         </div>
       </div>
+
+      {pickingPlace && (
+        <Sheet title="いまの場所" onClose={() => setPickingPlace(false)}>
+          <div className="stack">
+            <div className="chips">
+              {places.map((p) => (
+                <Chip key={p.id} on={place?.id === p.id} onClick={() => { setPlaceChoice(person.id, p.id); setPickingPlace(false); }}>{p.name}</Chip>
+              ))}
+              <Chip on={placeOutside} onClick={() => { setPlaceChoice(person.id, 'outside'); setPickingPlace(false); }}>登録場所の外</Chip>
+            </div>
+            {places.length === 0 && <p className="help">まだ場所が登録されていません。</p>}
+            <p className="help">記録には、ここで選んだ場所の名前だけが付きます。</p>
+            <Link to="/places" className="btn btn--block">場所の登録・編集</Link>
+          </div>
+        </Sheet>
+      )}
 
       {toast && (
         <div className="toast" role="status">

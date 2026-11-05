@@ -6,7 +6,7 @@ import { db } from './db';
 import { newId } from '../lib/id';
 import { addDays, toLocalDate, toLocalISO, parseLocalDate } from '../lib/date';
 import { ensureChoiceOptions, getDevice, saveDevice } from './repo';
-import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type Observation, type SleepLog, type Person, type TeamMember } from './types';
+import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type Observation, type SleepLog, type Person, type Place, type Reinforcer, type TeamMember } from './types';
 
 const DAYS = 21;
 
@@ -86,7 +86,26 @@ export async function createSampleTeam(): Promise<void> {
     intervalSec: 10,
   };
 
-  await db.transaction('rw', [db.users, db.persons, db.teamMembers, db.behaviors, db.consents, db.device], async () => {
+  // 好きなもの（6.14）。写真はなし。1つは「以前好きだったもの」になるよう、更新を1か月前にする
+  const today0 = toLocalDate();
+  const reinf = (name: string, category: Reinforcer['category'], level: number, usage: string, daysAgo: number, by: string): Reinforcer => {
+    const at = toLocalISO(new Date(parseLocalDate(addDays(today0, -daysAgo)).getTime() + 18 * 3600_000));
+    return { ...rec(), createdAt: at, updatedAt: at, personId: person.id, name, category, level, usage, hasPhoto: false, lastUsedAt: null, updatedBy: by, hiddenAt: null };
+  };
+  const reinforcers = [
+    reinf('電車の図鑑（青い表紙）', 'thing', 5, '課題が終わったら5分見る。取り上げると大声になるので、終わりはタイマーで予告する。', 3, userId),
+    reinf('トランポリン', 'activity', 4, '休憩カードを出せたときの休憩に使う。午前の方が喜ぶ。', 1, staff.userId),
+    reinf('ぶどうのグミ', 'food', 3, '1日2個まで（家庭と施設で合わせて）。', 8, userId),
+    reinf('シャボン玉', 'activity', 2, '外で。風の強い日は目に入るので避ける。', 30, teacher.userId),
+  ];
+
+  // 場所（6.3.3）。見本なので位置は持たず、手で選ぶ場所にする
+  const place = (name: string, kind: Place['kind'], by: string): Place => ({ ...rec(), personId: person.id, name, kind, lat: null, lng: null, radiusM: 100, createdBy: by, hiddenAt: null });
+  const places = [place('自宅', 'home', userId), place('ひまわり園', 'facility', staff.userId), place('さくら特別支援学校', 'school', teacher.userId)];
+
+  await db.transaction('rw', [db.users, db.persons, db.teamMembers, db.behaviors, db.consents, db.device, db.reinforcers, db.places], async () => {
+    await db.reinforcers.bulkAdd(reinforcers);
+    await db.places.bulkAdd(places);
     if (!dev.userId) await db.users.add({ id: userId, createdAt: t, updatedAt: t, deletedAt: null, displayName: 'あなた（見本）' });
     await db.persons.add(person);
     await db.teamMembers.bulkAdd([me, staff, teacher]);
@@ -123,13 +142,17 @@ export async function createSampleTeam(): Promise<void> {
       durationSec: null,
       latencySec: null,
       intensity: null,
-      placeName: null,
+      // 平日の 9〜16時は施設、それ以外は自宅（見本）
+      placeName: parseLocalDate(date).getDay() % 6 !== 0 && hour >= 9 && hour < 16 ? 'ひまわり園' : '自宅',
       activity: null,
       recorderId: userId,
       backfilled: false,
       ...extra,
     };
   };
+
+  // 昨夜（今朝起きた分）の睡眠も入れて、ホームの睡眠カードがすぐ見えるようにする
+  sleeps.push({ ...rec(), personId: person.id, wakeDate: today, bedTime: '21:15', wakeTime: '06:35', wakings: 0, note: '', recorderId: userId });
 
   for (let i = DAYS; i >= 1; i--) {
     const date = addDays(today, -i);

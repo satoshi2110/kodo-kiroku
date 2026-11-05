@@ -120,6 +120,77 @@ export interface SleepLog extends BaseRecord {
   recorderId: string;
 }
 
+/**
+ * 「観察していなかった」日（6.3.3）。自動の 0 を付けない日として、行動ごと・日ごとに1件。
+ * 自動の 0 は保存せずにグラフで計算するので、ここに入った日だけ 0 を付けずに線を切る。
+ */
+export interface NotObservedDay extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  localDate: LocalDate;
+  recorderId: string;
+}
+
+/** 登録場所の種類（6.3.3） */
+export type PlaceKind = 'home' | 'school' | 'facility' | 'other';
+
+/**
+ * 登録場所（6.3.3、決定42・43）。建物・敷地ごとに1つ。中心と半径はチーム内だけで共有し、書き出しには入れない。
+ * 支援者の現在地は保存しない。端末の中でこの中心と半径に照らし合わせ、記録には場所の名前だけを残す。
+ * 中心がない場所（位置なしで登録）は、手で選ぶだけに使う。
+ */
+export interface Place extends BaseRecord {
+  personId: string;
+  name: string;
+  kind: PlaceKind;
+  lat: number | null;
+  lng: number | null;
+  radiusM: 50 | 100 | 200;
+  createdBy: string; // User.id
+  hiddenAt: ISODateTime | null;
+}
+
+export const PLACE_KIND_LABEL: Record<PlaceKind, string> = {
+  home: '自宅',
+  school: '学校',
+  facility: '施設',
+  other: 'その他',
+};
+
+/** 強化子（好きなもの）の種類（6.14） */
+export type ReinforcerCategory = 'thing' | 'activity' | 'food' | 'people' | 'sensory';
+
+/**
+ * 強化子（好きなもの、6.14）。写真は別の表（ReinforcerPhoto）に置き、監査ログには入れない。
+ * 「いまハマっている」は最近2週間に更新または使ったもの。
+ */
+export interface Reinforcer extends BaseRecord {
+  personId: string;
+  name: string;
+  category: ReinforcerCategory;
+  level: number; // ハマり度 1〜5
+  usage: string; // 使い方と注意
+  hasPhoto: boolean;
+  lastUsedAt: ISODateTime | null;
+  updatedBy: string; // User.id
+  hiddenAt: ISODateTime | null;
+}
+
+/** 強化子の写真。長辺 1280px に縮小し、描き直して Exif（撮影場所など）を落としたもの。強化子を削除すると消す */
+export interface ReinforcerPhoto {
+  id: string; // Reinforcer.id と同じ
+  personId: string;
+  blob: Blob;
+}
+
+export const REINFORCER_CATEGORY_LABEL: Record<ReinforcerCategory, string> = {
+  thing: '物',
+  activity: '活動',
+  food: '食べ物',
+  people: '人・関わり',
+  sensory: '感覚',
+};
+
 /** ABC記録の選択肢（6.3.2）。対象者ごとのテンプレートで、チーム内で共有する。削除は非表示だけで、過去の記録の値は残る */
 export type ChoiceKind = 'antecedent' | 'consequence' | 'setting';
 
@@ -153,10 +224,12 @@ export const DEFAULT_CHOICES: Record<ChoiceKind, string[]> = {
   setting: ['睡眠不足', '空腹', '服薬変更', '体調', '環境の変化'],
 };
 
-/** チームの設定（8章 TeamSetting）。いまは AI の あり／なし だけ。既定は なし（9章） */
+/** チームの設定（8章 TeamSetting）。AI の既定は なし（9章） */
 export interface TeamSetting {
   personId: string; // チーム = 対象者ごと
   aiEnabled: boolean;
+  shortSleepUnderHours?: number | null; // 睡眠不足の判定を「○時間未満」にする。null = いつもより2時間以上短い夜（初期設定）
+  deleteRequestedAt?: ISODateTime | null; // チームの削除を申し込んだ日時。30日たつと消える
   updatedAt: ISODateTime;
   updatedBy: string;
 }
@@ -201,7 +274,7 @@ export interface Consent extends BaseRecord {
 }
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'export';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'observation' | 'sleepLog';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {
@@ -221,6 +294,8 @@ export interface DeviceSetting {
   key: 'device';
   userId: string | null; // この端末でログインしている人
   currentPersonId: string | null;
+  useLocation?: boolean; // この端末で位置情報を使う（既定はオフ。6.3.3a）
+  placeChoice?: Record<string, string>; // 対象者ごとの、いまの場所（Place.id か 'outside'）
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

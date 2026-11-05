@@ -80,7 +80,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="row row--between">
           <h2 className="sheet__title">{title}</h2>
-          <button type="button" className="btn btn--sm" onClick={onClose}>閉じる</button>
+          <button type="button" className="btn btn--sm nowrap" onClick={onClose}>閉じる</button>
         </div>
         {children}
       </div>

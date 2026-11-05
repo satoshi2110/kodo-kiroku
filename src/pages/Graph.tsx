@@ -2,6 +2,7 @@
  * グラフ（6.4、ワイヤーフレーム 3）。行動ごとに、回数・時間・待ち時間と、強度を付けた行動は強度の平均を出す。
  * 自動0（決定19・21）: 回数と時間は、記録を付けた日（その対象者に何か記録がある日）に記録がなければ 0 として描く。
  * 保存はせず、表示のたびに計算する。在席・観察時間の記録ができたら「いた日」の判定をそれに置きかえる。
+ * 「さかのぼって入力」で「観察していなかった」にした日は 0 を付けず、線を切る。
  */
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -23,6 +24,14 @@ export default function Graph() {
   );
   const observations = useLiveQuery(
     async () => (personId ? (await db.observations.where('personId').equals(personId).toArray()).filter((o) => !o.deletedAt && o.results.length > 0) : []),
+    [personId],
+  );
+
+  const notObserved = useLiveQuery(
+    async () =>
+      personId
+        ? new Set((await db.notObservedDays.where('personId').equals(personId).toArray()).filter((x) => !x.deletedAt).map((x) => `${x.behaviorId}|${x.localDate}`))
+        : new Set<string>(),
     [personId],
   );
 
@@ -49,6 +58,7 @@ export default function Graph() {
             observations={(observations ?? []).filter((o) => o.behaviorId === b.id)}
             dates={dates}
             recordedDays={recordedDays}
+            notObserved={notObserved ?? new Set()}
           />
         ))}
     </div>
@@ -61,12 +71,14 @@ function BehaviorPanels({
   observations,
   dates,
   recordedDays,
+  notObserved,
 }: {
   b: Behavior;
   events: Event[];
   observations: Observation[];
   dates: string[];
   recordedDays: Set<string>;
+  notObserved: Set<string>;
 }) {
   const byDate = new Map<string, Event[]>();
   for (const e of events) byDate.set(e.localDate, [...(byDate.get(e.localDate) ?? []), e]);
@@ -77,7 +89,7 @@ function BehaviorPanels({
     values: dates.map((d) => {
       const list = byDate.get(d);
       if (list?.length) return fn(list);
-      return autoZero && recordedDays.has(d) ? 0 : null;
+      return autoZero && recordedDays.has(d) && !notObserved.has(`${b.id}|${d}`) ? 0 : null;
     }),
   });
   const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((s, v) => s + v, 0) / xs.length) * 10) / 10 : null);
