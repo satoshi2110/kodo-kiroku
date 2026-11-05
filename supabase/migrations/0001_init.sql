@@ -6,7 +6,8 @@
 -- 「Automatically expose new tables」を外して作ったプロジェクトなので、使ってよい操作は grant で1つずつ許す。
 -- anon（ログインしていない人）には何も許さない。
 
-create extension if not exists pgcrypto;
+-- Supabase では pgcrypto は extensions スキーマに入っている（gen_random_bytes は extensions. を付けて呼ぶ）
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------- 共通の決まり（同期するすべての表に付ける） ----------
 
@@ -168,7 +169,7 @@ create policy invites_select on invites for select using (role_at_least(person_i
 -- 読み違えにくい文字だけで 10 文字のコードを作る
 create function new_code() returns text
 language sql volatile set search_path = public as $$
-  select string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + (get_byte(gen_random_bytes(1), 0) % 32), 1), '')
+  select string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + (get_byte(extensions.gen_random_bytes(1), 0) % 32), 1), '')
   from generate_series(1, 10)
 $$;
 
