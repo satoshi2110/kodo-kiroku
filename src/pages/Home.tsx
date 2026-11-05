@@ -7,10 +7,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { canEditBehaviors, canRecord, createEvent, undoLastEvent, updateEvent } from '../db/repo';
+import { canEditBehaviors, canRecord, createEvent, observedRatio, undoLastEvent, updateEvent } from '../db/repo';
 import { useApp } from '../state';
 import { formatDuration, formatTime, toLocalDate } from '../lib/date';
-import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event } from '../db/types';
+import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
 import { KindBadge, Sheet, TopBar } from '../components/ui';
 
 type Timer = { behaviorId: string; startedAt: number };
@@ -39,6 +39,11 @@ export default function Home() {
       [personId],
     ) ?? [],
   );
+  const todayObs =
+    useLiveQuery(
+      async () => (personId ? (await db.observations.where('[personId+localDate]').equals([personId, today]).toArray()).filter((o) => !o.deletedAt) : []),
+      [personId, today],
+    ) ?? [];
   const events = useMemo(() => [...(todayEvents ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [todayEvents]);
   const rows = useMemo(() => pairRows(behaviors), [behaviors]);
   if (!person || !userId) return null;
@@ -74,6 +79,7 @@ export default function Home() {
   async function tap(b: Behavior) {
     if (!recordable) return;
     if (b.method === 'frequency') return record(b);
+    if (b.method === 'interval' || b.method === 'sampling') return nav(`/observe/${b.id}`);
     if (b.method === 'duration' || b.method === 'latency') {
       const t = timers[b.id];
       if (!t) {
@@ -120,6 +126,7 @@ export default function Home() {
         right={canEditBehaviors(me?.role) ? <Link to="/behaviors/new" className="btn btn--sm">＋ 行動</Link> : undefined}
       />
 
+      {person.isSample && <p className="section sample-note">これは架空の「サンプル」です。自由に押して試せます。</p>}
       {!recordable && <p className="section help">閲覧者は記録を見るだけです。</p>}
 
       <div className="section stack">
@@ -130,6 +137,7 @@ export default function Home() {
                 key={b.id}
                 b={b}
                 events={byBehavior(b.id)}
+                observations={todayObs.filter((o) => o.behaviorId === b.id)}
                 timer={timers[b.id]}
                 flash={flash?.id === b.id ? (flash.good ? 'good' : 'problem') : null}
                 disabled={!recordable}
@@ -190,6 +198,7 @@ export default function Home() {
 function BehaviorCard({
   b,
   events,
+  observations,
   timer,
   flash,
   disabled,
@@ -198,6 +207,7 @@ function BehaviorCard({
 }: {
   b: Behavior;
   events: Event[];
+  observations: Observation[];
   timer?: Timer;
   flash: 'good' | 'problem' | null;
   disabled: boolean;
@@ -215,18 +225,19 @@ function BehaviorCard({
   if (b.method === 'frequency') action = 'タップで +1';
   else if (b.method === 'duration') action = timer ? `終了（${formatDuration(running)}）` : '開始';
   else if (b.method === 'latency') action = timer ? `始まった（${formatDuration(running)}）` : '指示を出した';
-  else action = '観察の画面は次の段階で作ります';
+  else action = '観察を始める';
+  const ratio = observedRatio(observations);
 
   return (
     <div className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${flash ? ` bcard--flash-${flash}` : ''}`}>
-      <button type="button" className="bcard__tap" disabled={disabled || sessionType} onClick={onTap} aria-label={`${b.name}: ${action}`}>
+      <button type="button" className="bcard__tap" disabled={disabled} onClick={onTap} aria-label={`${b.name}: ${action}`}>
         <KindBadge kind={b.kind} />
         <span className="bcard__name">{b.name}</span>
         <span className="bcard__count">
           {b.method === 'frequency' && <>今日 <strong>{total}</strong> 回</>}
           {b.method === 'duration' && <>今日 <strong>{formatDuration(totalSec)}</strong></>}
           {b.method === 'latency' && <>{lastLatency != null ? <>最後 <strong>{formatDuration(lastLatency)}</strong></> : '今日はまだ'}</>}
-          {sessionType && METHOD_LABEL[b.method]}
+          {sessionType && (ratio != null ? <>今日 <strong>{ratio}</strong> %</> : METHOD_LABEL[b.method])}
         </span>
         <span className={`bcard__action${timer ? ' bcard__action--running' : ''}`}>{action}</span>
       </button>

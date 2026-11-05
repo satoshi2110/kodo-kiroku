@@ -17,13 +17,13 @@
 
 ## 作り方
 - 段階: Phase 1（記録・グラフ・共有）→ Phase 1b（AI、クレジット期限 2027-05-01 までに使う）→ Phase 2（支援計画・拘束記録・PDF・ストア配布）→ Phase 3（ABC集計の AI のまとめ）。
-- 技術: React + TypeScript + Vite の PWA（このフォルダの直下）。サーバーは Supabase Free（東京）、画面の公開は Cloudflare Pages（決定59）。AI は Anthropic API（Sonnet 5.5）をアダプタ層の内側からだけ呼ぶ。
+- 技術: React + TypeScript + Vite の PWA（このフォルダの直下）。サーバーは Supabase Free（東京）、画面の公開は Cloudflare Pages（決定59）。AI は Anthropic API（Sonnet 5.5）をアダプタ層の内側からだけ呼ぶ（サーバー側は `functions/api/ai.ts`）。
 - 小さく作って、1つできるごとにブラウザ（`.claude/launch.json` の dev、port 5173）で動きを確かめてから見せる。
 - 画面はスマホ幅 390px を基準に、主要ボタン 48px 以上、補助ボタン 24px（タップ範囲 32px）以上。
 
 ## 必ず守ること（安全）
 - チームごとのデータの分離は Supabase の行レベルセキュリティ（RLS）で強制する。画面で隠すだけにしない（決定45）。テーブルを作るたびに RLS と「他チームのデータを読めない・書けない」テストを付ける。
-- Supabase の service_role key は画面側のコードと `.env` の VITE_ 変数に絶対に入れない。Anthropic の API キーも画面側に置かず、サーバー側（Supabase Edge Functions の secret）に置く。
+- Supabase の service_role key は画面側のコードと `.env` の VITE_ 変数に絶対に入れない。Anthropic の API キーも画面側に置かず、サーバー側（いまは Cloudflare Pages Functions の暗号化された環境変数 `ANTHROPIC_API_KEY`。仕様書 9章【暫定】）に置く。
 - キーやパスワードはチャットに書かせない。`.env`（git に入れない）に発注者が自分で書く。見本は `.env.example`。
 - 支援者の現在地の緯度経度は保存も送信もしない。記録に残すのは場所の名前だけ（決定42）。
 - 記録は論理削除と監査ログ。拘束記録は取り消し・削除できない（6.8）。
@@ -31,7 +31,9 @@
 - AI に送るのは仮名化した記録だけ。写真は送らない。
 
 ## このフォルダにあるもの
-- `src/` などの直下のコードは、仕様書 v0.2 のころ（2026-11-03）に作った試作で、まだ git に入れていない。端末内（Dexie / IndexedDB）だけで動き、役割や測定方法が今の仕様と違う。作り直すときは今の仕様書に合わせ、使える部品だけ残す。
+- `src/` 今の仕様書に合わせて作り直したアプリ。いまは端末内（Dexie / IndexedDB）だけで動く。`legacy/` は最初の試作の残りで、使っていない。
+- `functions/` AI を呼ぶサーバー側の処理（Cloudflare Pages Functions）。
+- `README.md` 審査の人向けの試し方と公開のしかた。
 - `docs/` 仕様書とワイヤーフレーム。
 
 ## 進め方の約束

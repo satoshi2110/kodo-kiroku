@@ -1,0 +1,196 @@
+/**
+ * お試し用のサンプル（発注者回答 2026-11-05）。審査やお試しで、すぐにグラフ・ABC集計・AI分析を見られるようにする。
+ * 架空の対象者「サンプルさん」と、3週間分の記録を端末内にだけ作る。実在の人のデータではない。画面には「サンプル」と表示する。
+ */
+import { db } from './db';
+import { newId } from '../lib/id';
+import { addDays, toLocalDate, toLocalISO, parseLocalDate } from '../lib/date';
+import { ensureChoiceOptions, getDevice, saveDevice } from './repo';
+import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type Observation, type Person, type TeamMember } from './types';
+
+const DAYS = 21;
+
+export async function createSampleTeam(): Promise<void> {
+  const dev = await getDevice();
+  const t = toLocalISO();
+  const rec = () => ({ id: newId(), createdAt: t, updatedAt: t, deletedAt: null });
+  const userId = dev.userId ?? newId();
+
+  const person: Person = { ...rec(), displayName: 'サンプルさん', birthMonth: null, notes: '', isSample: true };
+  const member = (displayName: string, affiliation: TeamMember['affiliation'], role: TeamMember['role'], uid: string): TeamMember => ({
+    ...rec(),
+    personId: person.id,
+    userId: uid,
+    displayName,
+    affiliation,
+    role,
+    familyMark: affiliation === 'family',
+    sleepInputAllowed: false,
+  });
+  const me = member('あなた（見本）', 'family', 'admin', userId);
+  const staff = member('職員A（見本）', 'facility', 'leader', newId());
+  const teacher = member('先生B（見本）', 'school', 'supporter', newId());
+
+  const behavior = (b: Omit<Behavior, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'personId' | 'hiddenAt' | 'examples' | 'nonExamples' | 'intervalSec' | 'samplingMin'>): Behavior => ({
+    ...rec(),
+    personId: person.id,
+    examples: '',
+    nonExamples: '',
+    intervalSec: null,
+    samplingMin: null,
+    hiddenAt: null,
+    ...b,
+  });
+  const hit = behavior({
+    kind: 'problem',
+    name: '頭たたき',
+    definition: '手のひらやこぶしで自分の頭をたたく',
+    method: 'frequency',
+    intensity: { levels: 3, criteria: ['1〜2回で止まる・赤みなし', '3回以上続く・声かけで止まる・赤みあり', '声かけで止まらない・腫れや出血・安全確保が必要'] },
+    replacesBehaviorId: null,
+    func: null,
+    sortOrder: 0,
+  });
+  const card = behavior({
+    kind: 'alternative',
+    name: '休憩カードを渡す',
+    definition: '「やすみ」のカードを大人に渡す',
+    method: 'frequency',
+    intensity: null,
+    replacesBehaviorId: hit.id,
+    func: 'escape',
+    sortOrder: 1,
+  });
+  const dress = behavior({
+    kind: 'desirable',
+    name: '自分から着替える',
+    definition: '声かけなしで着替えを始める',
+    method: 'frequency',
+    intensity: null,
+    replacesBehaviorId: null,
+    func: null,
+    sortOrder: 2,
+  });
+
+  const voice: Behavior = {
+    ...behavior({
+      kind: 'problem',
+      name: '大きな声を出す',
+      definition: '会話の声より明らかに大きな声を1秒以上出す',
+      method: 'interval',
+      intensity: null,
+      replacesBehaviorId: null,
+      func: null,
+      sortOrder: 3,
+    }),
+    intervalSec: 10,
+  };
+
+  await db.transaction('rw', [db.users, db.persons, db.teamMembers, db.behaviors, db.consents, db.device], async () => {
+    if (!dev.userId) await db.users.add({ id: userId, createdAt: t, updatedAt: t, deletedAt: null, displayName: 'あなた（見本）' });
+    await db.persons.add(person);
+    await db.teamMembers.bulkAdd([me, staff, teacher]);
+    await db.behaviors.bulkAdd([hit, card, dress, voice]);
+    await db.consents.add({ ...rec(), personId: person.id, userId, kind: 'terms_privacy_sensitive', textVersion: CONSENT_TEXT_VERSION, revokedAt: null });
+    await saveDevice({ userId, currentPersonId: person.id });
+  });
+
+  await ensureChoiceOptions(person.id, userId);
+  const options = await db.choiceOptions.where('personId').equals(person.id).toArray();
+  const opt = (name: string) => options.find((o: ChoiceOption) => o.name === name)!.id;
+
+  // 決まった並びの「ゆらぎ」（毎回同じサンプルになるように乱数は使わない）
+  const wave = (i: number, k: number) => Math.abs(Math.sin(i * 1.7 + k * 0.9));
+  const today = toLocalDate();
+  const events: Event[] = [];
+  const observations: Observation[] = [];
+  const details: AbcDetail[] = [];
+  const at = (date: string, hour: number, min: number) => {
+    const d = parseLocalDate(date);
+    d.setHours(hour, min, 0, 0);
+    return toLocalISO(d);
+  };
+  const ev = (b: Behavior, date: string, hour: number, min: number, extra: Partial<Event> = {}): Event => {
+    const occurredAt = at(date, hour, min);
+    return {
+      ...rec(),
+      personId: person.id,
+      behaviorId: b.id,
+      occurredAt,
+      localDate: date,
+      count: 1,
+      durationSec: null,
+      latencySec: null,
+      intensity: null,
+      placeName: null,
+      activity: null,
+      recorderId: userId,
+      backfilled: false,
+      ...extra,
+    };
+  };
+
+  for (let i = DAYS; i >= 1; i--) {
+    const date = addDays(today, -i);
+    const day = parseLocalDate(date).getDay();
+    const weekday = day >= 1 && day <= 5;
+    const shortSleep = i % 5 === 2;
+    // 頭たたき: はじめは多く、休憩カードが増えるにつれて少しずつ減る
+    const hits = Math.max(1, Math.round(7 - (DAYS - i) * 0.18 + wave(i, 1) * 2 + (shortSleep ? 2 : 0) - (weekday ? 0 : 2)));
+    for (let k = 0; k < hits; k++) {
+      const escapeCase = weekday && k % 4 !== 3; // 平日の課題の時間に多い
+      const hour = escapeCase ? 10 + (k % 2) : 15 + (k % 3);
+      const e = ev(hit, date, hour, (k * 13 + i * 7) % 60, {
+        intensity: Math.min(3, 1 + Math.round(wave(i, k) * 1.4) + (shortSleep && k === 0 ? 1 : 0)),
+        activity: escapeCase ? '個別課題' : k % 2 ? '自由時間' : '食事',
+      });
+      events.push(e);
+      // ABC記録は2件に1件くらい
+      if ((k + i) % 2 === 0) {
+        const who = escapeCase ? (weekday && i % 3 === 0 ? teacher : staff) : me;
+        details.push({
+          ...rec(),
+          personId: person.id,
+          eventId: e.id,
+          antecedentIds: escapeCase ? [opt('課題提示')] : k % 2 ? [opt('注目がなくなった')] : [opt('待ち時間')],
+          antecedentNote: '',
+          consequenceIds: escapeCase ? [opt(k % 3 === 0 ? '注目した（声かけ・制止）' : '課題を取り除いた')] : k % 2 ? [opt('注目した（声かけ・制止）')] : [opt('活動を中止した')],
+          consequenceNote: '',
+          settingIds: shortSleep ? [opt('睡眠不足')] : [],
+          involvedMemberIds: [who.id],
+          funcGuess: escapeCase ? (k % 3 === 0 ? null : 'escape') : k % 2 ? 'attention' : null,
+          note: '',
+          recorderId: userId,
+        });
+      }
+    }
+    // 休憩カード: 少しずつ増える
+    const cards = Math.max(0, Math.round((DAYS - i) * 0.25 + wave(i, 3) - (weekday ? 0 : 1)));
+    for (let k = 0; k < cards; k++) events.push(ev(card, date, 10 + k, (k * 17) % 60, { activity: '個別課題' }));
+    if (i % 2 === 0 || i < 6) events.push(ev(dress, date, 7, 30));
+    // 大きな声: 平日の個別課題で 5分（10秒 × 30区間）の観察。起きた区間の割合が少しずつ下がる
+    if (weekday) {
+      const rate = 0.45 - (DAYS - i) * 0.012 + (shortSleep ? 0.15 : 0);
+      const results: IntervalResult[] = Array.from({ length: 30 }, (_, k) => (k === 17 ? 'missed' : wave(i, k) < rate ? 'yes' : 'no'));
+      const startedAt = at(date, 10, 30);
+      observations.push({
+        ...rec(),
+        personId: person.id,
+        behaviorId: voice.id,
+        method: 'interval',
+        intervalSec: 10,
+        startedAt,
+        endedAt: at(date, 10, 35),
+        localDate: date,
+        results,
+        recorderId: userId,
+      });
+    }
+  }
+
+  await db.transaction('rw', [db.events, db.abcDetails, db.observations], async () => {
+    await db.events.bulkAdd(events);
+    await db.observations.bulkAdd(observations);
+    await db.abcDetails.bulkAdd(details);
+  });
+}

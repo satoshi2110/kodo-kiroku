@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../state';
 import { setupTeam } from '../db/repo';
+import { createSampleTeam } from '../db/sample';
 import { AFFILIATION_LABEL, type Affiliation } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
 
@@ -20,6 +21,9 @@ export default function Setup() {
   const { person } = useApp();
   // 保存が反映されたら行動の追加へ。済んでいる端末で開いたときはホームへ
   if (person) return <Navigate to={saving ? '/behaviors/new?from=setup' : '/'} replace />;
+
+  // 作り終わると対象者ができ、上の Navigate でホームへ移る
+  const sample = () => createSampleTeam();
 
   async function save() {
     setSaving(true);
@@ -45,6 +49,11 @@ export default function Setup() {
             </label>
           </div>
           <button type="button" className="btn btn--primary btn--block" disabled={!agreed} onClick={() => setStep(2)}>次へ</button>
+          <div className="card stack">
+            <span className="card__title">お試し・審査用</span>
+            <p className="help">架空の対象者「サンプルさん」と3週間分の記録を、この端末の中に作ります。グラフ・ABC集計・AI分析をすぐに試せます。</p>
+            <button type="button" className="btn btn--outline btn--block" disabled={!agreed || saving} onClick={sample}>サンプルで試す</button>
+          </div>
         </div>
       )}
       {step === 2 && (

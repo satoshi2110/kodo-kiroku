@@ -9,6 +9,10 @@ import {
   CONSENT_TEXT_VERSION,
   DEFAULT_CHOICES,
   type AbcDetail,
+  type AiAnalysis,
+  type AiDecision,
+  type AiSuggestion,
+  type TeamSetting,
   type ChoiceKind,
   type ChoiceOption,
   type Affiliation,
@@ -18,6 +22,8 @@ import {
   type Behavior,
   type DeviceSetting,
   type Event,
+  type IntervalResult,
+  type Observation,
   type Person,
   type Role,
   type TeamMember,
@@ -170,6 +176,48 @@ export async function undoLastEvent(personId: string, behaviorId: string, localD
   return last;
 }
 
+// ---------- インターバル記録・時間サンプリング（6.3.1） ----------
+
+/** 観察を始める。区間の結果は区切りごとに保存するので、途中で閉じても答えた分は残る */
+export async function startObservation(b: Behavior, actorId: string): Promise<Observation> {
+  const t = nowISO();
+  const o: Observation = {
+    ...base(),
+    personId: b.personId,
+    behaviorId: b.id,
+    method: b.method === 'sampling' ? 'sampling' : 'interval',
+    intervalSec: b.method === 'sampling' ? (b.samplingMin ?? 5) * 60 : (b.intervalSec ?? 10),
+    startedAt: t,
+    endedAt: null,
+    localDate: localDateOf(t),
+    results: [],
+    recorderId: actorId,
+  };
+  await db.observations.add(o);
+  await audit(o.personId, 'observation', o.id, 'create', actorId, null, o);
+  return o;
+}
+
+export async function saveObservationResults(id: string, results: IntervalResult[]) {
+  await db.observations.update(id, { results, updatedAt: nowISO() });
+}
+
+export async function endObservation(id: string, results: IntervalResult[], actorId: string) {
+  const before = await db.observations.get(id);
+  if (!before) return;
+  const t = nowISO();
+  const after: Observation = { ...before, results, endedAt: t, updatedAt: t };
+  await db.observations.put(after);
+  await audit(after.personId, 'observation', id, 'update', actorId, before, after);
+}
+
+/** 観察した区間のうち、起きた区間の割合（%）。未観察は分母に入れない */
+export function observedRatio(list: Observation[]): number | null {
+  const all = list.flatMap((o) => o.results);
+  const seen = all.filter((r) => r !== 'missed').length;
+  return seen ? Math.round((all.filter((r) => r === 'yes').length / seen) * 100) : null;
+}
+
 // ---------- ABC記録（6.3.2） ----------
 
 /** 選択肢がまだない対象者に、初期テンプレートを入れる */
@@ -222,4 +270,79 @@ export async function saveAbc(event: Event, input: AbcInput, eventPatch: Partial
       await updateEvent(event.id, eventPatch, actorId);
     }
   });
+}
+
+// ---------- AI（6.5・6.6・9章） ----------
+
+/** 採否を決められるのは管理者・副管理者・支援リーダー。分析・提案は支援者も実行できる（決定63） */
+export const canDecideAi = (r?: Role) => !!r && RANK[r] >= RANK.leader;
+export const canRunAi = canRecord;
+
+/** 1人ごとの上限（決定63）。ログインができるまでは端末内の記録で数える */
+export const AI_LIMITS = {
+  lead: { day: 10, month: 100 },
+  supporter: { day: 3, month: 30 },
+};
+
+export async function aiUsage(userId: string, role: Role | undefined) {
+  const today = nowISO().slice(0, 10);
+  const month = today.slice(0, 7);
+  const [a, s] = await Promise.all([
+    db.aiAnalyses.where('requestedBy').equals(userId).toArray(),
+    db.aiSuggestions.filter((x) => x.requestedBy === userId).toArray(),
+  ]);
+  const runs = [...a, ...s].filter((x) => x.model !== 'mock' && (!('output' in x) || x.output !== null));
+  const limit = canDecideAi(role) ? AI_LIMITS.lead : AI_LIMITS.supporter;
+  const day = runs.filter((x) => x.createdAt.slice(0, 10) === today).length;
+  const mon = runs.filter((x) => x.createdAt.slice(0, 7) === month).length;
+  return { dayLeft: Math.max(0, limit.day - day), monthLeft: Math.max(0, limit.month - mon), limit };
+}
+
+export async function getTeamSetting(personId: string): Promise<TeamSetting | undefined> {
+  return db.teamSettings.get(personId);
+}
+
+/** AI の あり／なし を切りかえる（管理者のみ）。「あり」にするときは、送り先と仮名化の内容への同意を残す（9章） */
+export async function setAiEnabled(personId: string, enabled: boolean, actorId: string) {
+  await db.transaction('rw', [db.teamSettings, db.consents, db.auditLogs], async () => {
+    const before = (await db.teamSettings.get(personId)) ?? null;
+    const after: TeamSetting = { personId, aiEnabled: enabled, updatedAt: nowISO(), updatedBy: actorId };
+    await db.teamSettings.put(after);
+    await audit(personId, 'teamSetting', personId, 'update', actorId, before, after);
+    if (enabled) {
+      const consent = { ...base(), personId, userId: actorId, kind: 'ai_overseas' as const, textVersion: CONSENT_TEXT_VERSION, revokedAt: null };
+      await db.consents.add(consent);
+      await audit(personId, 'consent', consent.id, 'create', actorId, null, consent);
+    }
+  });
+}
+
+export async function saveAnalysis(a: Omit<AiAnalysis, keyof BaseRecord | 'decision' | 'decisionNote' | 'decidedBy' | 'decidedAt'>): Promise<AiAnalysis> {
+  const rec: AiAnalysis = { ...base(), ...a, decision: null, decisionNote: '', decidedBy: null, decidedAt: null };
+  await db.aiAnalyses.add(rec);
+  await audit(a.personId, 'aiAnalysis', rec.id, 'create', a.requestedBy, null, rec);
+  return rec;
+}
+
+export async function saveSuggestion(s: Omit<AiSuggestion, keyof BaseRecord | 'decision' | 'decisionNote' | 'decidedBy' | 'decidedAt'>): Promise<AiSuggestion> {
+  const rec: AiSuggestion = { ...base(), ...s, decision: null, decisionNote: '', decidedBy: null, decidedAt: null };
+  await db.aiSuggestions.add(rec);
+  await audit(s.personId, 'aiSuggestion', rec.id, 'create', s.requestedBy, null, rec);
+  return rec;
+}
+
+/** 採用 / 修正して採用 / 却下 を記録する。採用したものが「採用した仮説・案」になる（Phase 1b、4章） */
+export async function decideAi(table: 'aiAnalyses' | 'aiSuggestions', id: string, decision: AiDecision, note: string, actorId: string) {
+  const patch = { decision, decisionNote: note, decidedBy: actorId, decidedAt: nowISO(), updatedAt: nowISO() };
+  if (table === 'aiAnalyses') {
+    const before = await db.aiAnalyses.get(id);
+    if (!before) return;
+    await db.aiAnalyses.put({ ...before, ...patch });
+    await audit(before.personId, 'aiAnalysis', id, 'update', actorId, before, { ...before, ...patch });
+  } else {
+    const before = await db.aiSuggestions.get(id);
+    if (!before) return;
+    await db.aiSuggestions.put({ ...before, ...patch });
+    await audit(before.personId, 'aiSuggestion', id, 'update', actorId, before, { ...before, ...patch });
+  }
 }

@@ -13,6 +13,7 @@ interface AppState {
   behaviors: Behavior[]; // 非表示・削除を除き、並び順どおり
   me: TeamMember | undefined; // いまの対象者のチームでの自分
   members: TeamMember[];
+  aiEnabled: boolean; // チームの設定で AI を「あり」にしているか（9章）
   setCurrentPerson: (id: string) => Promise<void>;
 }
 
@@ -41,6 +42,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         : [],
     [personId],
   );
+  const teamSetting = useLiveQuery(async () => (personId ? ((await db.teamSettings.get(personId)) ?? null) : null), [personId]);
   const members = useLiveQuery(
     async () => (personId ? (await db.teamMembers.where('personId').equals(personId).toArray()).filter((m) => !m.deletedAt) : []),
     [personId],
@@ -55,9 +57,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       behaviors: behaviors ?? [],
       me: members?.find((m) => m.userId === userId),
       members: members ?? [],
+      aiEnabled: !!teamSetting?.aiEnabled,
       setCurrentPerson: (id) => saveDevice({ currentPersonId: id }),
     }),
-    [base, userId, persons, person, behaviors, members],
+    [base, userId, persons, person, behaviors, members, teamSetting],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

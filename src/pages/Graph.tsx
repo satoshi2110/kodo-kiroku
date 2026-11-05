@@ -9,7 +9,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
 import { dateRange, formatDuration, toLocalDate } from '../lib/date';
-import { METHOD_LABEL, type Behavior, type Event } from '../db/types';
+import { METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
+import { observedRatio } from '../db/repo';
 import { KindBadge, TopBar } from '../components/ui';
 import LineChart, { type Series } from '../components/LineChart';
 
@@ -20,29 +21,53 @@ export default function Graph() {
     async () => (personId ? (await db.events.where('personId').equals(personId).toArray()).filter((e) => !e.deletedAt) : []),
     [personId],
   );
+  const observations = useLiveQuery(
+    async () => (personId ? (await db.observations.where('personId').equals(personId).toArray()).filter((o) => !o.deletedAt && o.results.length > 0) : []),
+    [personId],
+  );
 
   const today = toLocalDate();
   const { dates, recordedDays } = useMemo(() => {
-    const list = events ?? [];
-    const first = list.reduce((m, e) => (e.localDate < m ? e.localDate : m), today);
-    return { dates: dateRange(first, today), recordedDays: new Set(list.map((e) => e.localDate)) };
-  }, [events, today]);
+    const days = [...(events ?? []), ...(observations ?? [])].map((x) => x.localDate);
+    const first = days.reduce((m, d) => (d < m ? d : m), today);
+    return { dates: dateRange(first, today), recordedDays: new Set(days) };
+  }, [events, observations, today]);
+  const empty = (events ?? []).length === 0 && (observations ?? []).length === 0;
 
   if (!person) return null;
 
   return (
     <div className="page">
       <TopBar title="グラフ" sub={person.displayName} right={<Link to="/graph/abc" className="btn btn--sm">ABC集計</Link>} />
-      {(events ?? []).length === 0 && <p className="empty">記録がたまると、ここにグラフが出ます。</p>}
-      {(events ?? []).length > 0 &&
+      {empty && <p className="empty">記録がたまると、ここにグラフが出ます。</p>}
+      {!empty &&
         behaviors.map((b) => (
-          <BehaviorPanels key={b.id} b={b} events={(events ?? []).filter((e) => e.behaviorId === b.id)} dates={dates} recordedDays={recordedDays} />
+          <BehaviorPanels
+            key={b.id}
+            b={b}
+            events={(events ?? []).filter((e) => e.behaviorId === b.id)}
+            observations={(observations ?? []).filter((o) => o.behaviorId === b.id)}
+            dates={dates}
+            recordedDays={recordedDays}
+          />
         ))}
     </div>
   );
 }
 
-function BehaviorPanels({ b, events, dates, recordedDays }: { b: Behavior; events: Event[]; dates: string[]; recordedDays: Set<string> }) {
+function BehaviorPanels({
+  b,
+  events,
+  observations,
+  dates,
+  recordedDays,
+}: {
+  b: Behavior;
+  events: Event[];
+  observations: Observation[];
+  dates: string[];
+  recordedDays: Set<string>;
+}) {
   const byDate = new Map<string, Event[]>();
   for (const e of events) byDate.set(e.localDate, [...(byDate.get(e.localDate) ?? []), e]);
   const color = b.kind === 'problem' ? 'var(--problem)' : 'var(--primary)';
@@ -67,6 +92,13 @@ function BehaviorPanels({ b, events, dates, recordedDays }: { b: Behavior; event
   if (b.method === 'latency')
     main = { series: perDay((l) => avg(l.flatMap((e) => (e.latencySec != null ? [e.latencySec] : []))), false), unit: '待ち時間（秒・平均）', format: (v) => formatDuration(Math.round(v)) };
 
+  // インターバル・時間サンプリング: 観察した区間のうち起きた区間の割合。自動0は付けない（決定31）
+  if (b.method === 'interval' || b.method === 'sampling')
+    main = {
+      series: { dates, values: dates.map((d) => observedRatio(observations.filter((o) => o.localDate === d))) },
+      unit: '起きた区間の割合（%）',
+    };
+
   const intensity = b.intensity
     ? { series: perDay((l) => avg(l.flatMap((e) => (e.intensity != null ? [e.intensity] : []))), false), max: b.intensity.levels }
     : null;
@@ -79,10 +111,14 @@ function BehaviorPanels({ b, events, dates, recordedDays }: { b: Behavior; event
           <strong>{b.name}</strong>
           <span className="muted">{METHOD_LABEL[b.method]}</span>
         </div>
-        {main ? (
-          <LineChart series={main.series} unit={main.unit} color={color} format={main.format} />
-        ) : (
-          <p className="help">この測り方のグラフは、観察の画面と一緒に次の段階で作ります。</p>
+        {main && (
+          <LineChart
+            series={main.series}
+            unit={main.unit}
+            color={color}
+            format={main.format}
+            fixedMax={b.method === 'interval' || b.method === 'sampling' ? 100 : undefined}
+          />
         )}
         {intensity && (
           <>

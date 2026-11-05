@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { AbcDetail, AuditLog, Behavior, ChoiceOption, Consent, DeviceSetting, Event, Person, TeamMember, User } from './types';
+import type { AbcDetail, AiAnalysis, AiSuggestion, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, DeviceSetting, Event, Person, TeamMember, User } from './types';
 
 /**
  * 端末内の保存（IndexedDB）。電波がなくても記録でき（6.3.6）、サーバー接続後は同期の元になる。
@@ -16,6 +16,10 @@ export class AppDB extends Dexie {
   device!: Table<DeviceSetting, string>;
   choiceOptions!: Table<ChoiceOption, string>;
   abcDetails!: Table<AbcDetail, string>;
+  teamSettings!: Table<TeamSetting, string>;
+  aiAnalyses!: Table<AiAnalysis, string>;
+  aiSuggestions!: Table<AiSuggestion, string>;
+  observations!: Table<Observation, string>;
 
   constructor() {
     super('kodo-kiroku-v1');
@@ -32,6 +36,14 @@ export class AppDB extends Dexie {
     this.version(2).stores({
       choiceOptions: 'id, personId',
       abcDetails: 'id, personId, eventId',
+    });
+    this.version(3).stores({
+      teamSettings: 'personId',
+      aiAnalyses: 'id, personId, requestedBy',
+      aiSuggestions: 'id, personId, analysisId',
+    });
+    this.version(4).stores({
+      observations: 'id, personId, behaviorId, [personId+localDate]',
     });
   }
 }

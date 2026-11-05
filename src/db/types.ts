@@ -39,6 +39,7 @@ export interface Person extends BaseRecord {
   displayName: string;
   birthMonth: string | null; // YYYY-MM
   notes: string;
+  isSample?: boolean; // お試し用のサンプル（端末内だけ）
 }
 
 export interface TeamMember extends BaseRecord {
@@ -90,6 +91,24 @@ export interface Event extends BaseRecord {
   backfilled: boolean; // さかのぼって入力した記録
 }
 
+/**
+ * インターバル記録・時間サンプリングの観察（6.3.1、決定28）。区間ごとの結果を順に持つ。
+ * 'missed' は画面を消した・ほかのアプリに切り替えた・答えなかった区間（未観察）で、○× を推測で埋めない。
+ */
+export type IntervalResult = 'yes' | 'no' | 'missed';
+
+export interface Observation extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  method: 'interval' | 'sampling';
+  intervalSec: number; // 区間の長さ（時間サンプリングも秒で持つ）
+  startedAt: ISODateTime;
+  endedAt: ISODateTime | null; // null = 観察中
+  localDate: LocalDate;
+  results: IntervalResult[];
+  recorderId: string;
+}
+
 /** ABC記録の選択肢（6.3.2）。対象者ごとのテンプレートで、チーム内で共有する。削除は非表示だけで、過去の記録の値は残る */
 export type ChoiceKind = 'antecedent' | 'consequence' | 'setting';
 
@@ -123,6 +142,44 @@ export const DEFAULT_CHOICES: Record<ChoiceKind, string[]> = {
   setting: ['睡眠不足', '空腹', '服薬変更', '体調', '環境の変化'],
 };
 
+/** チームの設定（8章 TeamSetting）。いまは AI の あり／なし だけ。既定は なし（9章） */
+export interface TeamSetting {
+  personId: string; // チーム = 対象者ごと
+  aiEnabled: boolean;
+  updatedAt: ISODateTime;
+  updatedBy: string;
+}
+
+export type AiDecision = 'adopted' | 'modified' | 'rejected';
+
+/** AI の機能仮説（6.5）。送った内容・受け取った内容・採否を残す */
+export interface AiAnalysis extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  requestedBy: string; // User.id
+  input: import('../ai/schema').AnalysisInput;
+  output: import('../ai/schema').AnalysisOutput | null; // null = データ不足など
+  message: string | null;
+  model: string | null; // 'mock' は見本の結果
+  decision: AiDecision | null;
+  decisionNote: string; // 修正して採用したときの内容
+  decidedBy: string | null;
+  decidedAt: ISODateTime | null;
+}
+
+/** AI の提案（6.6）。採用した仮説から作る */
+export interface AiSuggestion extends BaseRecord {
+  personId: string;
+  analysisId: string;
+  requestedBy: string;
+  output: import('../ai/schema').SuggestionOutput;
+  model: string;
+  decision: AiDecision | null;
+  decisionNote: string;
+  decidedBy: string | null;
+  decidedAt: ISODateTime | null;
+}
+
 /** 同意の記録（7.5）。示した文面の版を残す */
 export interface Consent extends BaseRecord {
   personId: string | null;
@@ -133,7 +190,7 @@ export interface Consent extends BaseRecord {
 }
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'observation';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {
