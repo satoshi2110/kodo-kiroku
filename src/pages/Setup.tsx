@@ -1,14 +1,21 @@
 /**
  * 初回セットアップ（7.1、ワイヤーフレーム 16）。5つのステップ:
  * 1 同意 → 2 あなたと対象者（呼び名は必須、ほかは任意）→ 3 行動を1つ（行動の追加の画面）→ 4 場所（あとでも可。場所の画面）→ 5 最初の記録（ホームで案内）。
- * 開始コードの確認（決定44）はサーバーができてから。「わたしのいつもの時間」は観察時間の推定を作るときに足す。
+ * サーバーにつながる設定があるとき（ログインしている）は、運営が発行した開始コードを確かめてチームを作る（決定44）。
+ * 招待された人は、ここで招待コードを入れて参加し、管理者・副管理者・支援リーダーの承認を待つ（7.4.2 #3）。
+ * 「わたしのいつもの時間」は観察時間の推定を作るときに足す。
  */
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useApp } from '../state';
-import { setupTeam } from '../db/repo';
+import { db } from '../db/db';
+import { saveDevice, setupTeam } from '../db/repo';
+import { supabase } from '../server/supabase';
+import { runSync } from '../server/sync';
+import { signOut } from '../server/session';
 import { createSampleTeam } from '../db/sample';
-import { AFFILIATION_LABEL, type Affiliation } from '../db/types';
+import { AFFILIATION_LABEL, CONSENT_TEXT_VERSION, type Affiliation } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
 
 export default function Setup() {
@@ -21,7 +28,14 @@ export default function Setup() {
   const [belongs, setBelongs] = useState('');
   const [cautions, setCautions] = useState('');
   const [saving, setSaving] = useState(false);
-  const { person } = useApp();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const { person, userId } = useApp();
+  // 招待で参加して、承認を待っているチーム
+  const waiting = useLiveQuery(
+    async () => (userId ? (await db.teamMembers.where('userId').equals(userId).toArray()).filter((m) => m.approvedAt === null && !m.deletedAt) : []),
+    [userId],
+  );
   // 保存が反映されたら行動の追加へ。済んでいる端末で開いたときはホームへ
   if (person) return <Navigate to={saving ? '/behaviors/new?from=setup' : '/'} replace />;
 
@@ -30,6 +44,28 @@ export default function Setup() {
 
   async function save() {
     setSaving(true);
+    setError(null);
+    if (supabase) {
+      // 開始コードを確かめて、サーバーにチームを作る。できたら受け取って開く
+      const { data, error } = await supabase.rpc('create_team', {
+        p_code: code,
+        p_person_name: personName.trim(),
+        p_birth_month: birthMonth || null,
+        p_belongs: belongs.trim(),
+        p_cautions: cautions.trim(),
+        p_member_name: userName.trim(),
+        p_affiliation: affiliation,
+        p_consent_version: CONSENT_TEXT_VERSION,
+      });
+      if (error) {
+        setError(error.message);
+        setSaving(false);
+        return;
+      }
+      await runSync();
+      await saveDevice({ currentPersonId: data as string });
+      return;
+    }
     await setupTeam({
       userName: userName.trim(),
       affiliation,
@@ -48,6 +84,17 @@ export default function Setup() {
           <li key={t} className={i + 1 === step ? 'steps__on' : i + 1 < step ? 'steps__done' : ''}>{i + 1} {t}</li>
         ))}
       </ol>
+      {(waiting ?? []).length > 0 && (
+        <div className="section">
+          <div className="card stack">
+            <span className="card__title">承認を待っています</span>
+            <p className="help">
+              招待コードで参加しました。管理者・副管理者・支援リーダーが承認すると、記録が見られるようになります。
+            </p>
+            <button type="button" className="btn btn--outline btn--block" onClick={() => runSync()}>もう一度確かめる</button>
+          </div>
+        </div>
+      )}
       {step === 1 && (
         <div className="section stack">
           <div className="card stack">
@@ -63,7 +110,14 @@ export default function Setup() {
               <span className="label">内容を読み、同意します</span>
             </label>
           </div>
-          <button type="button" className="btn btn--primary btn--block" disabled={!agreed} onClick={() => setStep(2)}>次へ</button>
+          <button type="button" className="btn btn--primary btn--block" disabled={!agreed} onClick={() => setStep(2)}>
+            {supabase ? '新しいチームを作る（開始コードのある方）' : '次へ'}
+          </button>
+          {supabase && (
+            <button type="button" className="btn btn--outline btn--block" disabled={!agreed} onClick={() => setStep(9)}>
+              招待コードで参加する
+            </button>
+          )}
           <div className="card stack">
             <span className="card__title">お試し・審査用</span>
             <p className="help">架空の対象者「サンプルさん」と3週間分の記録を、この端末の中に作ります。グラフ・ABC集計・AI分析をすぐに試せます。</p>
@@ -71,9 +125,19 @@ export default function Setup() {
           </div>
         </div>
       )}
+      {step === 9 && <Join userName={userName} setUserName={setUserName} affiliation={affiliation} setAffiliation={setAffiliation} onBack={() => setStep(1)} />}
       {step === 2 && (
         <div className="section stack">
           <div className="card stack">
+            {supabase && (
+              <>
+                <label className="field">
+                  開始コード（運営から受け取ったもの）
+                  <input value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="off" />
+                </label>
+                <p className="help">開始コードは1つで1チーム（対象者1人）。発行から30日で使えなくなります。</p>
+              </>
+            )}
             <label className="field">
               あなたの呼び名（チームの人に表示されます）
               <input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="例: 母" />
@@ -103,14 +167,76 @@ export default function Setup() {
             </label>
             <p className="help">登録したあなたが、このチームの管理者になります。好きなもの（強化子）は、あとで写真付きで登録できます。</p>
           </div>
+          {error && <p className="ai-error" role="alert">{error}</p>}
           <div className="grid-2">
             <button type="button" className="btn" onClick={() => setStep(1)}>戻る</button>
-            <button type="button" className="btn btn--primary" disabled={!userName.trim() || !personName.trim() || saving} onClick={save}>
+            <button type="button" className="btn btn--primary" disabled={!userName.trim() || !personName.trim() || (!!supabase && !code.trim()) || saving} onClick={save}>
               次へ: 行動を1つ決める
             </button>
           </div>
         </div>
       )}
+      {supabase && (
+        <div className="section">
+          <button type="button" className="btn btn--block" onClick={() => signOut()}>ログアウト</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 招待コードで参加する（ワイヤーフレーム 12「招待リンクから開いたとき」） */
+function Join(props: {
+  userName: string;
+  setUserName: (v: string) => void;
+  affiliation: Affiliation;
+  setAffiliation: (a: Affiliation) => void;
+  onBack: () => void;
+}) {
+  const [invite, setInvite] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function join() {
+    if (!supabase) return;
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.rpc('join_team', {
+      p_code: invite,
+      p_member_name: props.userName.trim(),
+      p_affiliation: props.affiliation,
+      p_consent_version: CONSENT_TEXT_VERSION,
+    });
+    if (error) setError(error.message);
+    else {
+      await runSync();
+      props.onBack();
+    }
+    setBusy(false);
+  }
+  return (
+    <div className="section stack">
+      <div className="card stack">
+        <label className="field">
+          招待コード（招待した人から受け取ったもの）
+          <input value={invite} onChange={(e) => setInvite(e.target.value)} autoCapitalize="characters" autoComplete="off" />
+        </label>
+        <label className="field">
+          あなたの呼び名（チームの人に表示されます）
+          <input value={props.userName} onChange={(e) => props.setUserName(e.target.value)} placeholder="例: 〇〇先生" />
+        </label>
+        <span className="label">あなたの所属</span>
+        <div className="chips">
+          {(Object.keys(AFFILIATION_LABEL) as Affiliation[]).map((a) => (
+            <Chip key={a} on={props.affiliation === a} onClick={() => props.setAffiliation(a)}>{AFFILIATION_LABEL[a]}</Chip>
+          ))}
+        </div>
+        <p className="help">参加したあと、管理者か支援リーダーが承認すると記録が見られます。役割は招待した人が決めています。</p>
+        {error && <p className="ai-error" role="alert">{error}</p>}
+      </div>
+      <div className="grid-2">
+        <button type="button" className="btn" onClick={props.onBack}>戻る</button>
+        <button type="button" className="btn btn--primary" disabled={!invite.trim() || !props.userName.trim() || busy} onClick={join}>参加する</button>
+      </div>
     </div>
   );
 }

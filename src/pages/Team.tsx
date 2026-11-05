@@ -1,17 +1,21 @@
 /**
  * チーム（6.9、ワイヤーフレーム 4）。対象者のプロフィール、メンバーの一覧と「家族」の印・睡眠の入力の許可（決定37）、申し送り（6.10）。
  * AI・睡眠不足の判定・書き出し・チームの削除は「チームの設定」にある。
- * 招待・承認・役割の変更は、サーバー（Supabase）とログインができてから足す。申し送りも、いまはこの端末の中だけ。
+ * サーバーにつながる設定があるときは、招待コードを作り、参加した人を承認できる（決定44、7.4.2 #3）。役割の変更はこのあと足す。
+ * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
  */
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
-import { canRecord, setMemberFlags } from '../db/repo';
+import { canInvite, canRecord, setMemberFlags } from '../db/repo';
+import { supabase } from '../server/supabase';
+import { syncStatus, unsentCount } from '../server/sync';
+import { signOut } from '../server/session';
 import { addComment, removeComment } from '../db/phase2';
-import { formatDateTimeJa } from '../lib/date';
-import { AFFILIATION_LABEL, ROLE_LABEL, type TeamMember } from '../db/types';
+import { formatDateTimeJa, nowISO } from '../lib/date';
+import { AFFILIATION_LABEL, ROLE_LABEL, type Role, type TeamMember } from '../db/types';
 import { Sheet, TopBar } from '../components/ui';
 
 export default function Team() {
@@ -70,14 +74,22 @@ export default function Team() {
               </span>
               <span className="row">
                 <span className="badge badge--role">{ROLE_LABEL[m.role]}</span>
-                {isAdmin && <button type="button" className="btn btn--sm" onClick={() => setEditing(m)}>変更</button>}
+                {m.approvedAt === null && <span className="badge badge--problem">承認待ち</span>}
+                {m.approvedAt === null && canInvite(me?.role) && (m.role !== 'subadmin' || isAdmin) && (
+                  <button type="button" className="btn btn--sm" onClick={() => setMemberFlags(m.id, { approvedAt: nowISO() }, userId)}>承認する</button>
+                )}
+                {isAdmin && m.approvedAt !== null && <button type="button" className="btn btn--sm" onClick={() => setEditing(m)}>変更</button>}
               </span>
             </div>
           ))}
         </div>
-        <p className="help">
-          ほかの人の招待は、サーバーとログインの準備ができてから使えるようになります。「家族」の印の人は睡眠も入力できます。
-        </p>
+        {supabase && canInvite(me?.role) ? (
+          <Invite personId={person.id} isAdmin={isAdmin} />
+        ) : (
+          <p className="help">
+            {supabase ? '' : 'ほかの人の招待は、サーバーとログインの準備ができてから使えるようになります。'}「家族」の印の人は睡眠も入力できます。
+          </p>
+        )}
       </div>
 
       <div className="section">
@@ -118,6 +130,8 @@ export default function Team() {
         </Link>
       </div>
 
+      {supabase && <Account />}
+
       {current && (
         <Sheet title={`${current.displayName}（${ROLE_LABEL[current.role]}）`} onClose={() => setEditing(null)}>
           <div className="stack">
@@ -135,6 +149,65 @@ export default function Team() {
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+/** 招待コードを作る。コードは使い切りで7日間有効【暫定】。メールでの招待はこのあと足す */
+function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
+  const [role, setRole] = useState<Role>('supporter');
+  const [code, setCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const roles: Role[] = isAdmin ? ['subadmin', 'leader', 'supporter', 'viewer'] : ['leader', 'supporter', 'viewer'];
+  async function make() {
+    setError(null);
+    const { data, error } = await supabase!.rpc('create_invite', { p_person: personId, p_role: role });
+    if (error) setError(error.message);
+    else setCode(data as string);
+  }
+  return (
+    <div className="card stack" style={{ marginTop: 8 }}>
+      <h2 className="card__title" style={{ margin: 0 }}>招待する</h2>
+      <label className="field">
+        役割
+        <select value={role} onChange={(e) => { setRole(e.target.value as Role); setCode(null); }}>
+          {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+        </select>
+      </label>
+      <button type="button" className="btn btn--outline btn--block" onClick={make}>招待コードを作る</button>
+      {code && (
+        <p className="notice-inline" role="status">
+          招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}として参加。7日間・1回だけ使えます）
+        </p>
+      )}
+      {error && <p className="ai-error" role="alert">{error}</p>}
+      <p className="help">相手に直接伝えてください。相手は「はじめて使う」でアカウントを作り、このコードを入れます。参加したあと、ここで承認すると記録が見られます。</p>
+    </div>
+  );
+}
+
+/** サーバーとの同期の状態とログアウト */
+function Account() {
+  const st = useSyncExternalStore(syncStatus.subscribe, syncStatus.get);
+  async function logout() {
+    const n = await unsentCount();
+    const msg = n
+      ? `まだサーバーに送れていない変更が ${n} 件あります。ログアウトすると、この端末から消えます。ログアウトしますか？`
+      : 'ログアウトしますか？ この端末から、このチームのデータを消します（サーバーには残ります）。';
+    if (window.confirm(msg)) await signOut();
+  }
+  return (
+    <div className="section">
+      <div className="card stack">
+        <h2 className="card__title" style={{ margin: 0 }}>サーバーとの同期</h2>
+        <span className="muted">
+          {st.running ? '同期しています…' : st.lastAt ? `最後に同期: ${formatDateTimeJa(st.lastAt)}` : 'まだ同期していません'}
+          {st.pending > 0 && ` ・ 送れていない変更 ${st.pending} 件`}
+        </span>
+        {st.error && <p className="ai-error" role="alert">{st.error}</p>}
+        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・行動・記録です。ABC記録・睡眠などは、この端末の中だけです（順に足します）。</p>
+        <button type="button" className="btn btn--block" onClick={logout}>ログアウト</button>
+      </div>
     </div>
   );
 }

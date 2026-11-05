@@ -32,7 +32,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const base = useLiveQuery(async () => {
     const device = (await db.device.get('device')) ?? null;
     if (!device?.userId) return { device, persons: [] as Person[] };
-    const mine = (await db.teamMembers.where('userId').equals(device.userId).toArray()).filter((m) => !m.deletedAt);
+    // 承認を待っている・停止されたチームは開かない（サーバーのチームだけにある印）
+    const mine = (await db.teamMembers.where('userId').equals(device.userId).toArray()).filter((m) => !m.deletedAt && m.approvedAt !== null && !m.suspendedAt);
     const persons = (await db.persons.bulkGet(mine.map((m) => m.personId))).filter((p): p is Person => !!p && !p.deletedAt);
     return { device, persons };
   }, []);

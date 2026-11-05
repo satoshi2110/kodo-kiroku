@@ -544,7 +544,10 @@ export async function updateTeamSetting(personId: string, patch: Partial<Pick<Te
 }
 
 /** メンバーの「家族」の印と「睡眠の入力を許可」（決定37）。付け外しは管理者 */
-export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed'>>, actorId: string) {
+/** 招待・承認ができるのは 管理者・副管理者・支援リーダー（6.9 の「招待・権限」） */
+export const canInvite = (r?: Role) => !!r && RANK[r] >= RANK.leader;
+
+export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt'>>, actorId: string) {
   const before = await db.teamMembers.get(memberId);
   if (!before) return;
   const after: TeamMember = { ...before, ...patch, updatedAt: nowISO() };

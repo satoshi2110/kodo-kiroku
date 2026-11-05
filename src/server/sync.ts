@@ -1,0 +1,260 @@
+/**
+ * 端末とサーバーの同期（6.3.6、7.3）。記録はまず端末に保存し（電波がなくても記録できる）、あとでサーバーに送る。
+ * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
+ * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
+ * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
+ * いまは 対象者・メンバー・行動・記録・監査ログ だけ。ほかの表は順に足す。
+ */
+import Dexie, { type Table } from 'dexie';
+import { db } from '../db/db';
+import { toLocalISO } from '../lib/date';
+import { supabase } from './supabase';
+
+type Row = Record<string, unknown> & { id: string; updatedAt?: string; personId?: string };
+
+interface SyncTable {
+  local: Table<any, string>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  remote: string;
+  team: (r: Row) => string | undefined; // どのチーム（対象者）の行か
+  insert: boolean; // 端末から新しく作ってよいか（対象者とメンバーはサーバーの関数でだけ作る）
+}
+
+/** 送る順番（行動の前に対象者、記録の前に行動） */
+const TABLES: SyncTable[] = [
+  { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
+  { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
+  { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
+  { local: db.events, remote: 'events', team: (r) => r.personId, insert: true },
+];
+
+// ---------- 変更の印 ----------
+
+/** サーバーから受け取った内容を書くときの transaction には印を付け、変更の印（_dirty）を付けない */
+const REMOTE = '__remote';
+const isRemote = (tx: unknown) => !!(tx as Record<string, unknown> | undefined)?.[REMOTE] || !!(Dexie.currentTransaction as unknown as Record<string, unknown> | null)?.[REMOTE];
+
+let installed = false;
+export function installSyncHooks() {
+  if (installed || !supabase) return;
+  installed = true;
+  for (const t of [...TABLES.map((x) => x.local), db.auditLogs]) {
+    t.hook('creating', function (_pk, obj, tx) {
+      if (!isRemote(tx)) (obj as unknown as Row)._dirty = 1;
+      scheduleSync();
+    });
+    t.hook('updating', function (mods, _pk, _obj, tx) {
+      if (isRemote(tx) || '_dirty' in (mods as object)) return undefined;
+      scheduleSync();
+      return { _dirty: 1 };
+    });
+  }
+}
+
+async function remoteWrite(tables: Table[], fn: () => Promise<void>) {
+  await db.transaction('rw', tables, async (tx) => {
+    (tx as unknown as Record<string, unknown>)[REMOTE] = true;
+    await fn();
+  });
+}
+
+// ---------- 形の変換（端末は camelCase、サーバーは snake_case） ----------
+
+const snake = (k: string) => k.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
+const camel = (k: string) => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+const TS = /^\d{4}-\d{2}-\d{2}T/;
+
+function toRemote(r: Row): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (k.startsWith('_') || k === 'isSample' || v === undefined) continue;
+    out[snake(k)] = v;
+  }
+  return out;
+}
+
+function fromRemote(r: Record<string, unknown>): Row {
+  const out: Record<string, unknown> = { _dirty: 0, _srv: 1 };
+  for (const [k, v] of Object.entries(r)) {
+    if (k === 'server_at') continue;
+    // 時刻は端末の書き方（+09:00 付き）にそろえる。並べ替えを文字列でしている画面があるため
+    out[camel(k)] = typeof v === 'string' && TS.test(v) ? toLocalISO(new Date(v)) : v;
+  }
+  return out as Row;
+}
+
+const newer = (a?: string, b?: string) => !!a && (!b || new Date(a).getTime() > new Date(b).getTime());
+
+// ---------- 状態（画面に出す） ----------
+
+export interface SyncStatus {
+  running: boolean;
+  lastAt: string | null; // 最後にうまく同期できた時刻
+  error: string | null;
+  pending: number; // まだ送れていない行の数
+}
+let status: SyncStatus = { running: false, lastAt: null, error: null, pending: 0 };
+const listeners = new Set<() => void>();
+function setStatus(p: Partial<SyncStatus>) {
+  status = { ...status, ...p };
+  listeners.forEach((f) => f());
+}
+export const syncStatus = {
+  get: () => status,
+  subscribe: (f: () => void) => {
+    listeners.add(f);
+    return () => listeners.delete(f);
+  },
+};
+
+// ---------- 送る ----------
+
+/** サーバーのチームの id（サーバーから受け取った対象者） */
+async function serverTeams(): Promise<Set<string>> {
+  return new Set((await db.persons.toArray()).filter((p) => (p as unknown as Row)._srv === 1).map((p) => p.id));
+}
+
+async function markSent(t: Table<any, string>, rows: Row[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  await remoteWrite([t], async () => {
+    for (const r of rows) {
+      const cur = (await t.get(r.id)) as Row | undefined;
+      // 送っている間に書きかえられていたら、印を残して次に送る
+      if (cur && cur.updatedAt === r.updatedAt) await t.update(r.id, { _dirty: 0, _srv: 1 });
+    }
+  });
+}
+
+async function push(uid: string, teams: Set<string>): Promise<string[]> {
+  const sb = supabase!;
+  const errors: string[] = [];
+  for (const s of TABLES) {
+    const rows = (await s.local.filter((r: Row) => r._dirty === 1 && teams.has(s.team(r) ?? '')).toArray()) as Row[];
+    if (!rows.length) continue;
+    const fresh = s.insert ? rows.filter((r) => r._srv !== 1) : [];
+    const known = rows.filter((r) => !fresh.includes(r));
+    const sent: Row[] = [];
+    if (fresh.length) {
+      const { error } = await sb.from(s.remote).insert(fresh.map(toRemote));
+      if (!error) sent.push(...fresh);
+      else known.push(...fresh); // すでにサーバーにある（前に送ったが返事が届かなかった）などは1件ずつ書きかえる
+    }
+    for (const r of known) {
+      const body = toRemote(r);
+      delete body.id;
+      const { data, error } = await sb.from(s.remote).update(body).eq('id', r.id).select('id');
+      if (!error && data && data.length) sent.push(r);
+      else if (!error && s.insert && r._srv !== 1) {
+        const ins = await sb.from(s.remote).insert(toRemote(r));
+        if (!ins.error) sent.push(r);
+        else errors.push(`${s.remote}: ${ins.error.message}`);
+      } else if (!error) {
+        // 権限がない・古い変更として捨てられた。端末の内容はサーバーから取り直す
+        sent.push(r);
+      } else errors.push(`${s.remote}: ${error.message}`);
+    }
+    await markSent(s.local, sent);
+  }
+  // 監査ログ（追記のみ）。自分の操作で、サーバーのチームのものだけ
+  const logs = (await db.auditLogs.filter((r) => (r as unknown as Row)._dirty === 1).toArray()) as unknown as Row[];
+  const mine = logs.filter((r) => r.actorId === uid && (r.personId == null || teams.has(r.personId)));
+  if (mine.length) {
+    const { error } = await supabase!.from('audit_logs').upsert(mine.map(toRemote), { onConflict: 'id', ignoreDuplicates: true });
+    if (!error) await markSent(db.auditLogs, mine.map((r) => ({ ...r, updatedAt: undefined })));
+    else errors.push(`audit_logs: ${error.message}`);
+  }
+  return errors;
+}
+
+// ---------- 受け取る ----------
+
+async function pull(): Promise<string[]> {
+  const sb = supabase!;
+  const errors: string[] = [];
+  const dev = await db.device.get('device');
+  const since = { ...(dev?.syncSince ?? {}) };
+  for (const s of TABLES) {
+    // 同じ時刻に書かれた行を取りこぼさないよう、5分さかのぼって取り直す（同じ行は上書きされるだけ）
+    let from = since[s.remote] ? new Date(new Date(since[s.remote]).getTime() - 5 * 60_000).toISOString() : '1970-01-01T00:00:00Z';
+    for (;;) {
+      const { data, error } = await sb.from(s.remote).select('*').gt('server_at', from).order('server_at').limit(500);
+      if (error) {
+        errors.push(`${s.remote}: ${error.message}`);
+        break;
+      }
+      if (!data.length) break;
+      await remoteWrite([s.local], async () => {
+        for (const r of data) {
+          const local = (await s.local.get(r.id as string)) as Row | undefined;
+          const incoming = fromRemote(r);
+          // 端末でもっと新しく書きかえていて、まだ送れていないときは端末の内容を残す
+          if (local && local._dirty === 1 && newer(local.updatedAt, incoming.updatedAt as string)) continue;
+          await s.local.put(incoming);
+        }
+      });
+      const last = data[data.length - 1].server_at as string;
+      since[s.remote] = last;
+      from = last;
+      if (data.length < 500) break;
+    }
+  }
+  await db.device.update('device', { syncSince: since });
+  return errors;
+}
+
+// ---------- まとめて ----------
+
+let timer: ReturnType<typeof setTimeout> | null = null;
+let running: Promise<void> | null = null;
+
+export function scheduleSync(delay = 1500) {
+  if (!supabase) return;
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => void runSync(), delay);
+}
+
+export async function runSync(): Promise<void> {
+  if (!supabase) return;
+  if (running) return running;
+  running = (async () => {
+    const { data } = await supabase!.auth.getSession();
+    const uid = data.session?.user.id;
+    if (!uid) return;
+    if (!navigator.onLine) {
+      setStatus({ error: '電波がありません。つながったら送ります' });
+      return;
+    }
+    setStatus({ running: true });
+    try {
+      const errors = [...(await pull())];
+      errors.push(...(await push(uid, await serverTeams())));
+      const pending = await unsentCount();
+      setStatus({ running: false, lastAt: new Date().toISOString(), error: errors.length ? errors.join(' / ') : null, pending });
+    } catch (e) {
+      setStatus({ running: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  })().finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+/** ログアウトしたとき: サーバーのチームのデータをこの端末から消す（端末の紛失・共用への備え、7.4.2 #1）。サンプルは残す */
+export async function clearServerData() {
+  const teams = await serverTeams();
+  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.choiceOptions, db.abcDetails, db.teamSettings, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.observations, db.sleepLogs, db.notObservedDays, db.places, db.reinforcers, db.reinforcerPhotos, db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments, db.consents, db.device];
+  await db.transaction('rw', all, async () => {
+    for (const t of all) {
+      if (t === db.device) continue;
+      if (t === db.persons) await t.where('id').anyOf([...teams]).delete();
+      else await t.filter((r: Row) => teams.has(r.personId ?? '')).delete();
+    }
+    await db.device.update('device', { userId: null, currentPersonId: null, syncSince: {} });
+  });
+}
+
+/** まだサーバーに送れていない行の数（ログアウトの前に知らせる） */
+export async function unsentCount(): Promise<number> {
+  const teams = await serverTeams();
+  let n = 0;
+  for (const s of TABLES) n += await s.local.filter((r: Row) => r._dirty === 1 && teams.has(s.team(r) ?? '')).count();
+  return n;
+}

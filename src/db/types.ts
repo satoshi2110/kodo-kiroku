@@ -52,6 +52,8 @@ export interface TeamMember extends BaseRecord {
   role: Role;
   familyMark: boolean; // 「家族」の印（睡眠の入力に使う、決定37）
   sleepInputAllowed: boolean;
+  approvedAt?: ISODateTime | null; // サーバーのチームだけ。null = 招待を受けて承認を待っている（7.4.2 #3）
+  suspendedAt?: ISODateTime | null; // サーバーのチームだけ。停止（退職・卒業など）
 }
 
 /** 強度（付加項目）。段階ごとに観察できる基準を書く（決定23） */
@@ -453,6 +455,7 @@ export interface DeviceSetting {
   currentPersonId: string | null;
   useLocation?: boolean; // この端末で位置情報を使う（既定はオフ。6.3.3a）
   placeChoice?: Record<string, string>; // 対象者ごとの、いまの場所（Place.id か 'outside'）
+  syncSince?: Record<string, string>; // 表ごとに、サーバーから最後に受け取った時刻（server_at）
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {
