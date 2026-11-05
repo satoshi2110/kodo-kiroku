@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>身体拘束の記録</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button,input,textarea{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 1470px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="Main.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">身体拘束の記録 ・ Aさん</span>
+      <span style="font-size: 12px; color: #5b6472">緊急やむを得ない場合だけ ・ 今月 2件目</span>
+    </div>
+  </div>
+  <div style="margin: 10px 16px 0; padding: 10px 12px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; font-size: 13px; line-height: 1.5; color: #7f1d1d">身体拘束は<strong>治療や支援の方法ではありません</strong>。本人や周りの人の命や体を守るため、ほかに方法がないときだけ、できるだけ短く行います。この記録は、行ったことを後から確かめ、減らしていくためのものです。</div>
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px">
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">いつ・どこで・何が起きたか</span>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px">
+        <input type="text" value="11/3" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328; background: #ffffff">
+        <input type="text" value="開始 10:42" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328; background: #ffffff">
+        <input type="text" value="終了 10:47" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328; background: #ffffff">
+      </div>
+      <span style="font-size: 12px; color: #3b4452">5分間 ・ 施設 ・ 個別課題</span>
+      <textarea style="width: 100%; box-sizing: border-box; min-height: 56px; padding: 8px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #1f2328; background: #ffffff; resize: none">頭たたきが止まらず（強度3）、額から出血。声かけと休憩カードの提示では収まらなかった。</textarea>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">3つの要件（すべて必要）</span>
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid #d9dce1; border-radius: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 13px; font-weight: 700">切迫性</span><span style="font-size: 12px; color: #166534; font-weight: 600">✓ 確認した</span></div>
+        <span style="font-size: 12px; color: #5b6472">本人や他の人の命・体が危険にさらされる可能性が著しく高かったか</span>
+        <textarea style="width: 100%; box-sizing: border-box; min-height: 56px; padding: 8px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #1f2328; background: #ffffff; resize: none">出血があり、続けると重いけがになるおそれがあった。</textarea>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid #d9dce1; border-radius: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 13px; font-weight: 700">非代替性</span><span style="font-size: 12px; color: #166534; font-weight: 600">✓ 確認した</span></div>
+        <span style="font-size: 12px; color: #5b6472">拘束のほかに方法がなかったか（何を試したか）</span>
+        <textarea style="width: 100%; box-sizing: border-box; min-height: 56px; padding: 8px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #1f2328; background: #ffffff; resize: none">声かけ、休憩カード、場所の移動、クッションの使用を試したが止まらなかった。</textarea>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid #d9dce1; border-radius: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center"><span style="font-size: 13px; font-weight: 700">一時性</span><span style="font-size: 12px; color: #166534; font-weight: 600">✓ 確認した</span></div>
+        <span style="font-size: 12px; color: #5b6472">必要な最小限の時間だったか</span>
+        <textarea style="width: 100%; box-sizing: border-box; min-height: 56px; padding: 8px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #1f2328; background: #ffffff; resize: none">手を軽く押さえる方法で5分。落ち着いたのを確かめてすぐにやめた。</textarea>
+      </div>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">誰が行い、誰が判断したか</span>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px">
+        <input type="text" value="実施: 佐藤・高橋" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328; background: #ffffff">
+        <input type="text" value="判断: 山田（サビ管）" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328; background: #ffffff">
+      </div>
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">方法と本人の状態</span>
+      <textarea style="width: 100%; box-sizing: border-box; min-height: 56px; padding: 8px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #1f2328; background: #ffffff; resize: none">両手首を軽く押さえた。終了後は額の手当て。10:55 には落ち着いて水を飲めた。</textarea>
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">家族への報告</span>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap"><button style="min-height: 36px; padding: 0 12px; border-radius: 999px; border: 2px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600">報告した（母・電話 11:30）</button><button style="min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">まだ</button></div>
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">あとの組織での検討（記録後に追記）</span>
+      <textarea style="width: 100%; box-sizing: border-box; min-height: 56px; padding: 8px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #1f2328; background: #ffffff; resize: none" placeholder="例: 11/5 の会議で、課題の量と予告のしかたを見直すことにした"></textarea>
+    </section>
+
+    <div style="padding: 10px 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 10px; font-size: 12px; line-height: 1.5; color: #7c2d12">今月2件目です。チームで決めた目安（このチームは「1か月に3件を超えたら」。初期値はなく、管理者・副管理者がチームの設定で決める）を超えると、支援計画の見直しをおすすめします（6.8）。強度3や拘束の記録が入っても、すぐの通知は出しません（決定52）。</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 16px; background: #ffffff; border-top: 1px solid #d9dce1">
+      <button style="min-height: 48px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 15px; font-weight: 600">保存</button>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">保存すると記録者と日時が付き、修正の履歴が残ります。消すことはできません。AI には回数だけが使われ、方法としては提案されません。</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1470}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

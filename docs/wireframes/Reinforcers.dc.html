@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>強化子 好きなものリスト</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="Main.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">強化子（好きなもの） ・ Aさん</span>
+      <span style="font-size: 12px; color: #5b6472">いまハマっているもの 3件 ・ 以前好きだったもの 5件</span>
+    </div>
+    <button style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: none; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600">+ 追加</button>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px">
+
+    <span style="font-size: 12px; font-weight: 600; color: #1e40af">いまハマっているもの（最近2週間）</span>
+
+    <div style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 10px; display: flex; gap: 10px">
+      <div style="width: 72px; height: 72px; border-radius: 8px; background: #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0" role="img" aria-label="電車の図鑑の写真">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8a94a3" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 15l-5-5-8 8"/></svg>
+        <span style="font-size: 10px; color: #8a94a3">写真</span>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 6px">
+          <span style="font-size: 15px; font-weight: 700">電車の図鑑（青い表紙）</span>
+          <span style="font-size: 10px; font-weight: 600; color: #3b4452; border: 1px solid #c7cbd1; padding: 1px 6px; border-radius: 999px">物</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5b6472">
+          <span style="color: #c2410c; font-weight: 700; letter-spacing: 1px">●●●●●</span><span>いま一番</span><span>・</span><span>母 10/30 更新</span>
+        </div>
+        <span style="font-size: 12px; color: #3b4452; line-height: 1.4">課題が終わったら5分見る。取り上げると大声になるので、終わりはタイマーで予告。</span>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 10px; display: flex; gap: 10px">
+      <div style="width: 72px; height: 72px; border-radius: 8px; background: #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0" role="img" aria-label="トランポリンの写真">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8a94a3" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 15l-5-5-8 8"/></svg>
+        <span style="font-size: 10px; color: #8a94a3">写真</span>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 6px">
+          <span style="font-size: 15px; font-weight: 700">トランポリン</span>
+          <span style="font-size: 10px; font-weight: 600; color: #3b4452; border: 1px solid #c7cbd1; padding: 1px 6px; border-radius: 999px">活動</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5b6472">
+          <span style="color: #c2410c; font-weight: 700; letter-spacing: 1px">●●●●<span style="color: #d9dce1">●</span></span><span>・</span><span>施設 山田 11/1 更新</span>
+        </div>
+        <span style="font-size: 12px; color: #3b4452; line-height: 1.4">休憩カードを出せたときの休憩に使用。午前の方が喜ぶ。</span>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 10px; display: flex; gap: 10px">
+      <div style="width: 72px; height: 72px; border-radius: 8px; background: #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0" role="img" aria-label="ぶどうグミの写真">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8a94a3" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 15l-5-5-8 8"/></svg>
+        <span style="font-size: 10px; color: #8a94a3">写真</span>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 6px">
+          <span style="font-size: 15px; font-weight: 700">ぶどうのグミ</span>
+          <span style="font-size: 10px; font-weight: 600; color: #3b4452; border: 1px solid #c7cbd1; padding: 1px 6px; border-radius: 999px">食べ物</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5b6472">
+          <span style="color: #c2410c; font-weight: 700; letter-spacing: 1px">●●●<span style="color: #d9dce1">●●</span></span><span>・</span><span>母 10/25 更新</span>
+        </div>
+        <span style="font-size: 12px; color: #3b4452; line-height: 1.4">1日2個まで（家庭と施設で合わせて）。</span>
+      </div>
+    </div>
+
+    <a href="#" style="font-size: 13px; text-decoration: none; min-height: 44px; display: flex; align-items: center">以前好きだったものを見る（5件）</a>
+
+    <div style="padding: 10px 12px; background: #e8eefc; border-radius: 10px; font-size: 11px; line-height: 1.5; color: #1e40af">写真は「物・活動・場所」を撮ってください。本人や他の人の顔は写さない方針です（撮る前に確認してください）。写真はチーム内だけで見られ、エクスポートには含まれません。</div>
+  </div>
+
+  <div style="padding: 10px 16px 14px; background: #ffffff; border-top: 1px solid #d9dce1; display: flex; gap: 10px">
+    <button style="flex: 1; min-height: 48px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      写真を撮って追加
+    </button>
+    <button style="min-height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 14px; font-weight: 600">写真なしで追加</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

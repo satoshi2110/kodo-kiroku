@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>通知の設定</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button,input,textarea{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="TeamSettings.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">通知の設定</span>
+      <span style="font-size: 12px; color: #5b6472">自分のスマホに届く知らせ（ストア版のアプリ）</span>
+    </div>
+  </div>
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px">
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; gap: 2px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">アプリの通知</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px">記録のリマインド</span><span style="font-size: 12px; color: #5b6472">毎日 17:30 ・ その日の記録がないときだけ</span></span><span role="switch" aria-checked="true" style="width: 48px; height: 28px; border-radius: 999px; background: #1d4ed8; display: flex; align-items: center; padding: 3px; box-sizing: border-box; flex-shrink: 0; justify-content: flex-end"><span style="width: 22px; height: 22px; border-radius: 50%; background: #ffffff"></span></span></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px">支援計画の見直し日</span><span style="font-size: 12px; color: #5b6472">前の日の朝 9:00</span></span><span role="switch" aria-checked="true" style="width: 48px; height: 28px; border-radius: 999px; background: #1d4ed8; display: flex; align-items: center; padding: 3px; box-sizing: border-box; flex-shrink: 0; justify-content: flex-end"><span style="width: 22px; height: 22px; border-radius: 50%; background: #ffffff"></span></span></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px">コメント・@ で呼ばれたとき</span><span style="font-size: 12px; color: #5b6472">すぐに</span></span><span role="switch" aria-checked="true" style="width: 48px; height: 28px; border-radius: 999px; background: #1d4ed8; display: flex; align-items: center; padding: 3px; box-sizing: border-box; flex-shrink: 0; justify-content: flex-end"><span style="width: 22px; height: 22px; border-radius: 50%; background: #ffffff"></span></span></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px">支援会議メモができたとき</span><span style="font-size: 12px; color: #5b6472">参加した会議だけ</span></span><span role="switch" aria-checked="false" style="width: 48px; height: 28px; border-radius: 999px; background: #c7cbd1; display: flex; align-items: center; padding: 3px; box-sizing: border-box; flex-shrink: 0; justify-content: flex-start"><span style="width: 22px; height: 22px; border-radius: 50%; background: #ffffff"></span></span></div>
+    </section>
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; gap: 4px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">メールで届くもの（変えられません）</span>
+      <span style="font-size: 13px; line-height: 1.7">招待、新しい端末からのログイン、パスワードの再設定、管理者の引き継ぎ、書き出しの実行（管理者）、異常なアクセス（管理者）</span>
+    </section>
+    <div style="padding: 10px 12px; background: #f1f2f4; border-radius: 10px; font-size: 12px; line-height: 1.5; color: #3b4452">強度3や身体拘束の記録が入っても、すぐの通知は出しません（決定52）。睡眠の入力も催促しません。</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

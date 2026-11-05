@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>さかのぼって入力</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="Main.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">さかのぼって入力</span>
+      <span style="font-size: 12px; color: #5b6472">あとから記録を足す・自動の 0 を直す</span>
+    </div>
+  </div>
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px">
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">記録を足す</span>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+        <input type="text" value="11/3（月）" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 15px; color: #1f2328; background: #ffffff">
+        <input type="text" value="15:20" style="width: 100%; box-sizing: border-box; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 15px; color: #1f2328; background: #ffffff">
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 2px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600; text-align: left">頭たたき</button>
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">休憩カードを渡す</button>
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">大声</button>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <span style="font-size: 13px">回数</span>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid #c7cbd1; background: #ffffff; font-size: 16px" aria-label="1回減らす">−</button>
+          <span style="font-size: 18px; font-weight: 700; min-width: 24px; text-align: center">2</span>
+          <button style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid #c7cbd1; background: #ffffff; font-size: 16px" aria-label="1回増やす">＋</button>
+        </div>
+      </div>
+      <div style="display: flex; gap: 6px">
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 2px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600; text-align: left">施設</button><button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">自宅</button><button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">学校</button><button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">その他</button>
+      </div>
+      <input type="text" placeholder="メモ（文字か音声で）" style="min-height: 44px; padding: 0 12px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 15px; color: #1f2328; background: #ffffff; font-size: 13px">
+      <button style="min-height: 48px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 15px; font-weight: 600">保存</button>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">あとから入れた記録には「あとで入力」の印と入力した日時が付き、履歴に残ります。</span>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">自動で 0 になった日（頻度・持続時間だけ）</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px">
+        <span>11/2（日） 頭たたき <strong>0回</strong> <span style="font-size: 11px; color: #5b6472; border: 1px solid #c7cbd1; border-radius: 999px; padding: 1px 6px">自動</span></span>
+        <button style="min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">観察していなかった</button>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px">
+        <span>11/2（日） 大声 <strong>0分</strong> <span style="font-size: 11px; color: #5b6472; border: 1px solid #c7cbd1; border-radius: 999px; padding: 1px 6px">自動</span></span>
+        <button style="min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">観察していなかった</button>
+      </div>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">「観察していなかった」を押すと未記録に戻り、グラフの線が切れます。</span>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

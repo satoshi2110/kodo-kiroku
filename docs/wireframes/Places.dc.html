@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>場所の登録</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 1140px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="Main.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">場所 ・ Aさん</span>
+      <span style="font-size: 12px; color: #5b6472">記録に自動で付く場所です。チームで共有します</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px">
+
+    <span style="font-size: 12px; font-weight: 600; color: #3b4452">登録した場所（3件）</span>
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 8px; border-radius: 10px; border: 1px solid #1d4ed8; background: #f1f5ff">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2" aria-hidden="true"><path d="M12 22s7-7.5 7-12a7 7 0 10-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600">施設<span style="font-size: 10px; font-weight: 600; color: #3b4452; border: 1px solid #c7cbd1; padding: 1px 6px; border-radius: 999px">施設</span><span style="font-size: 10px; font-weight: 700; color: #ffffff; background: #1d4ed8; padding: 2px 6px; border-radius: 999px">いまここ</span></span>
+          <span style="font-size: 11px; color: #5b6472; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">半径 100m ・ 山田 が登録</span>
+        </div>
+        <span style="font-size: 12px; color: #1d4ed8">編集</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 8px; border-radius: 10px; border: 1px solid #e5e7eb; background: #ffffff">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a94a3" stroke-width="2" aria-hidden="true"><path d="M12 22s7-7.5 7-12a7 7 0 10-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600">自宅<span style="font-size: 10px; font-weight: 600; color: #3b4452; border: 1px solid #c7cbd1; padding: 1px 6px; border-radius: 999px">自宅</span></span>
+          <span style="font-size: 11px; color: #5b6472; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">半径 100m ・ 母 が登録 ・ 住所は表示しません</span>
+        </div>
+        <span style="font-size: 12px; color: #1d4ed8">編集</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 8px; border-radius: 10px; border: 1px solid #e5e7eb; background: #ffffff">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a94a3" stroke-width="2" aria-hidden="true"><path d="M12 22s7-7.5 7-12a7 7 0 10-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0">
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600">学校<span style="font-size: 10px; font-weight: 600; color: #3b4452; border: 1px solid #c7cbd1; padding: 1px 6px; border-radius: 999px">学校</span></span>
+          <span style="font-size: 11px; color: #5b6472; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">半径 150m ・ 鈴木先生 が登録</span>
+        </div>
+        <span style="font-size: 12px; color: #1d4ed8">編集</span>
+      </div>
+    </section>
+
+    <div style="display: flex; gap: 8px">
+      <button style="flex: 1; min-height: 48px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" aria-hidden="true"><path d="M12 22s7-7.5 7-12a7 7 0 10-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>いまここを登録</button>
+      <button style="min-height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 14px; font-weight: 600">住所で探す</button>
+    </div>
+
+    <section style="background: #ffffff; border: 1px solid #1d4ed8; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px" aria-label="いまここを登録 の入力">
+      <span style="font-size: 13px; font-weight: 600; color: #1e40af">新しい場所（いまここ）</span>
+      <div style="position: relative; height: 110px; border-radius: 8px; background: #e9edf2; overflow: hidden" role="img" aria-label="地図。いまいる位置を中心に半径100mの円">
+        <div style="position: absolute; left: 0; right: 0; top: 52px; height: 6px; background: #ffffff"></div>
+        <div style="position: absolute; top: 0; bottom: 0; left: 120px; width: 6px; background: #ffffff"></div>
+        <div style="position: absolute; left: 50%; top: 50%; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(29,78,216,0.12); border: 2px solid #1d4ed8"></div>
+        <div style="position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #1d4ed8; border: 2px solid #ffffff"></div>
+        <span style="position: absolute; right: 6px; bottom: 4px; font-size: 10px; color: #5b6472">ピンは指で動かせます</span>
+      </div>
+      <input type="text" value="放課後等デイサービス" aria-label="場所の名前" style="min-height: 40px; padding: 0 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px">
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap"><span style="font-size: 12px; color: #5b6472; width: 36px">種類</span><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452; font-weight: 400">自宅</button><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452; font-weight: 400">学校</button><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; font-size: 12px; color: #1e40af; font-weight: 600">施設</button><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452; font-weight: 400">その他</button></div>
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap"><span style="font-size: 12px; color: #5b6472; width: 36px">半径</span><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452; font-weight: 400">50m</button><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; font-size: 12px; color: #1e40af; font-weight: 600">100m</button><button style="min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452; font-weight: 400">200m</button></div>
+      <span style="font-size: 11px; color: #5b6472; line-height: 1.5">施設・自宅・学校のように建物ごとに1つ登録します。作業室・食堂などの違いは、記録の「活動」で残します。</span>
+      <button style="min-height: 44px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600">保存</button>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 13px; font-weight: 600">わたしのいつもの時間（観察時間の目安）</span>
+        <span style="font-size: 12px; color: #1d4ed8">編集</span>
+      </div>
+      <span style="font-size: 12px; color: #3b4452">平日 9:00〜16:00 ・ 施設</span>
+      <span style="font-size: 11px; color: #5b6472; line-height: 1.5">記録した人ごとの設定です。この時間を観察時間として「1時間あたりの回数」を出します。開始・終了ボタンを押す必要はありません。</span>
+    </section>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 12px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px">
+      <span style="font-size: 13px">この端末で位置情報を使う</span>
+      <span style="width: 44px; height: 26px; border-radius: 13px; background: #1d4ed8; position: relative; display: inline-block" role="switch" aria-checked="true" aria-label="この端末で位置情報を使う"><span style="position: absolute; right: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #ffffff"></span></span>
+    </div>
+
+    <div style="padding: 8px 12px; background: #e8eefc; border-radius: 10px; font-size: 11px; line-height: 1.5; color: #1e40af">あなたがいまどこにいるか（現在地）は、この端末の中で登録した場所と照らし合わせるだけで、保存も送信もしません。チームで共有するのは、登録した場所の名前・中心・半径だけです。</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1140}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

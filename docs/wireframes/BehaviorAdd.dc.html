@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>行動の追加 測定方法ナビ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="BehaviorList.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">行動を追加</span>
+      <span style="font-size: 12px; color: #5b6472">ステップ 2 / 3 ・ 測定方法を決める</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 16px 0">
+    <div style="display: flex; flex-direction: column; gap: 4px"><div style="height: 4px; background: #1d4ed8; border-radius: 2px"></div><span style="font-size: 11px; color: #1e40af; font-weight: 600">1 種類と名前</span></div>
+    <div style="display: flex; flex-direction: column; gap: 4px"><div style="height: 4px; background: #1d4ed8; border-radius: 2px"></div><span style="font-size: 11px; color: #1e40af; font-weight: 600">2 測定方法</span></div>
+    <div style="display: flex; flex-direction: column; gap: 4px"><div style="height: 4px; background: #d9dce1; border-radius: 2px"></div><span style="font-size: 11px; color: #5b6472">3 確認</span></div>
+  </div>
+
+  <div style="margin: 10px 16px 0; padding: 8px 12px; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 10px; display: flex; align-items: center; gap: 8px">
+    <span style="font-size: 11px; font-weight: 600; color: #9a3412; background: #ffedd5; padding: 2px 8px; border-radius: 999px">問題行動</span>
+    <span style="font-size: 14px; font-weight: 600">頭たたき</span>
+    <span style="font-size: 12px; color: #5b6472; margin-left: auto">定義: 手のひらで側頭部を叩く</span>
+  </div>
+
+  <section style="margin: 12px 16px 0; background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">測定方法ナビ ・ 質問 3 / 4</span>
+      <div style="width: 120px; height: 6px; background: #e5e7eb; border-radius: 999px; overflow: hidden"><div style="width: 75%; height: 6px; background: #1d4ed8"></div></div>
+    </div>
+    <p style="margin: 0; font-size: 17px; font-weight: 700; line-height: 1.5">その行動は「始まり」と「終わり」がはっきりしていて、1回、2回と数えやすいですか？</p>
+    <p style="margin: 0; font-size: 13px; color: #5b6472; line-height: 1.5">例: 叩く、手を挙げる、特定の言葉を発する など</p>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <button style="min-height: 56px; border-radius: 12px; border: 1px solid #c7cbd1; background: #ffffff; color: #1f2328; font-size: 16px; font-weight: 700">いいえ</button>
+      <button style="min-height: 56px; border-radius: 12px; border: none; background: #1d4ed8; color: #ffffff; font-size: 16px; font-weight: 700">はい</button>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 12px">
+      <a href="#" style="text-decoration: none">前の質問に戻る</a>
+      <a href="#manual" style="text-decoration: none">質問に答えずに自分で選ぶ</a>
+    </div>
+  </section>
+
+  <section style="margin: 12px 16px 0; background: #e8eefc; border: 1px solid #1d4ed8; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-size: 12px; font-weight: 600; color: #1e40af">「はい」と答えた場合に表示 ・ おすすめの測定方法</span>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span style="width: 40px; height: 40px; border-radius: 10px; background: #1d4ed8; display: flex; align-items: center; justify-content: center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 17px; font-weight: 700; color: #1e40af">頻度（回数を数える）</span>
+        <span style="font-size: 12px; color: #3b4452">事象記録法</span>
+      </div>
+    </div>
+    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #1f2328">行動が起きるたびにホームの大きなボタンをタップして回数を記録します。観察時間を記録すると「1時間あたりの回数」も出せます。</p>
+    <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px">
+      <input type="checkbox" checked style="width: 22px; height: 22px">
+      強度（3段階）も一緒に記録する
+    </label>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <button style="min-height: 48px; border-radius: 10px; border: 1px solid #1d4ed8; background: #ffffff; color: #1d4ed8; font-size: 14px; font-weight: 600">もう一度答える</button>
+      <button style="min-height: 48px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600">この方法にする</button>
+    </div>
+  </section>
+
+  <section id="manual" style="margin: 12px 16px 0; display: flex; flex-direction: column; gap: 6px">
+    <span style="font-size: 12px; font-weight: 600; color: #5b6472">自分で選ぶ（ナビの質問に対応）</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">潜時（始まるまでの時間）</button>
+      <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">持続時間（続いた長さ）</button>
+      <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 12px; font-weight: 600">頻度（回数）</button>
+      <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">インターバル（短い区間ごとに有無）</button>
+      <button style="min-height: 36px; padding: 0 10px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 12px; color: #3b4452">時間サンプリング（決まった時刻に有無）</button>
+    </div>
+  </section>
+
+  <div style="flex: 1"></div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px 16px 14px; background: #ffffff; border-top: 1px solid #d9dce1">
+    <button style="min-height: 48px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 14px; font-weight: 600">戻る</button>
+    <button style="min-height: 48px; border-radius: 10px; border: none; background: #8a94a3; color: #ffffff; font-size: 14px; font-weight: 600">次へ（確認）</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

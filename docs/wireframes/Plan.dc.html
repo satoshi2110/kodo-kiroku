@@ -14,12 +14,12 @@ a{color:#1d4ed8}a:hover{color:#1e3a8a}
 button{font-family:inherit}
 </style>
 </helmet>
-<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+<div style="width: 390px; height: 1100px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
 
   <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
     <div style="display: flex; flex-direction: column; gap: 2px">
       <span style="font-size: 18px; font-weight: 700">支援計画 ・ Aさん</span>
-      <span style="font-size: 12px; color: #5b6472">v3 ・ 2026/10/28 開始 ・ 次回見直し 11/25</span>
+      <span style="font-size: 12px; color: #5b6472">実施中 ・ 10/28 から ・ 次回見直し 11/25 ・ <a href="PlanHistory.dc.html" style="text-decoration: none">履歴</a></span>
     </div>
     <button style="min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 13px; color: #3b4452">編集</button>
   </div>
@@ -36,6 +36,10 @@ button{font-family:inherit}
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
         <span style="font-size: 11px; font-weight: 600; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">代替行動</span>
         <span style="font-size: 15px; font-weight: 600">休憩カードを渡す</span>
+      </div>
+      <div style="display: flex; gap: 6px; padding: 8px 10px; background: #f4f5f7; border-radius: 8px; font-size: 12px; line-height: 1.5; color: #3b4452">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>
+        <span><strong>ヒント（回避）:</strong> 「休みたい」「手伝って」と伝える方法を教えましょう。問題行動と同じ目的を、より簡単な行動で満たせるようにします。</span>
       </div>
     </section>
 
@@ -74,11 +78,11 @@ button{font-family:inherit}
     <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
       <span style="font-size: 12px; font-weight: 600; color: #5b6472">合意（社会的妥当性）</span>
       <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
-        <div style="display: flex; justify-content: space-between"><span>母（オーナー）</span><span style="color: #1e40af; font-weight: 600">合意 10/27</span></div>
-        <div style="display: flex; justify-content: space-between"><span>施設 山田（管理者）</span><span style="color: #1e40af; font-weight: 600">合意 10/27</span></div>
+        <div style="display: flex; justify-content: space-between"><span>母（管理者）</span><span style="color: #1e40af; font-weight: 600">合意 10/27</span></div>
+        <div style="display: flex; justify-content: space-between"><span>施設 山田（支援リーダー）</span><span style="color: #1e40af; font-weight: 600">合意 10/27</span></div>
         <div style="display: flex; justify-content: space-between"><span>学校 鈴木先生</span><span style="color: #9a3412; font-weight: 600">未確認</span></div>
       </div>
-      <button style="min-height: 44px; border-radius: 8px; border: 1px solid #1d4ed8; background: #ffffff; color: #1d4ed8; font-size: 14px; font-weight: 600">確認を依頼する</button>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px"><button style="min-height: 44px; border-radius: 8px; border: 1px solid #1d4ed8; background: #ffffff; color: #1d4ed8; font-size: 14px; font-weight: 600">確認を依頼する</button><a href="PlanSignoff.dc.html" style="min-height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 14px; display: flex; align-items: center; justify-content: center; text-decoration: none">合意の画面</a></div>
     </section>
   </div>
 
@@ -96,7 +100,7 @@ button{font-family:inherit}
   </nav>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1100}}'>
 class Component extends DCLogic {
   renderVals() { return {}; }
 }

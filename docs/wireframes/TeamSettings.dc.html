@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>チームの設定</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 1100px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden">
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="Main.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">チームの設定 ・ Aさん</span>
+      <span style="font-size: 12px; color: #5b6472">変更できるのは管理者（母）と副管理者（父）</span>
+    </div>
+  </div>
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px">
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">多要素認証（パスワードのほかにスマホで本人確認）</span>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">全員必須</button>
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 2px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600; text-align: left">支援リーダー以上は必須（初期設定）</button>
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px; text-align: left">任意</button>
+      </div>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">例外: 佐藤（支援員）は必須 ・ 管理者と副管理者は外せません</span>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="font-size: 12px; font-weight: 600; color: #5b6472">AI を使う</span>
+        <span style="font-size: 12px; font-weight: 600; color: #ffffff; background: #1d4ed8; border-radius: 999px; padding: 4px 10px">あり</span>
+      </div>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">送り先: Anthropic（米国）。氏名・施設名は置きかえて送り、写真は送りません。同意: 母 11/4（同意文 第1版）</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px"><span>今月のチームの残り</span><span style="color: #3b4452; font-weight: 600">214回 / 300回</span></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px"><span>1人の上限（支援リーダー以上）</span><span style="color: #3b4452; font-weight: 600">月100回・1日10回</span></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px"><span>1人の上限（支援者）</span><span style="color: #3b4452; font-weight: 600">月30回・1日3回</span></div>
+      <a href="#" style="font-size: 13px">同意を取り消して「なし」に戻す</a>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">睡眠不足の判定</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px"><span>いつもより短い夜</span><span style="color: #3b4452; font-weight: 600">2時間以上（初期設定）</span></div>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">「○時間未満」に変えることもできます。</span>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">身体拘束の記録で見直しをすすめる目安（Phase 2）</span>
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px">
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 14px">1か月 ▾</button>
+        <span>に</span>
+        <button style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid #c7cbd1; background: #ffffff; font-size: 16px" aria-label="1件減らす">−</button>
+        <span style="font-size: 18px; font-weight: 700; min-width: 24px; text-align: center">3</span>
+        <button style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid #c7cbd1; background: #ffffff; font-size: 16px" aria-label="1件増やす">＋</button>
+        <span>件を超えたら</span>
+      </div>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">期間（1週間・1か月・3か月）と件数（0件から）を自由に決められます。0件にすると、1件でも記録されたら見直しをすすめます。変更は監査ログに残ります。</span>
+    </section>
+
+    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #5b6472">データ</span>
+      <button style="min-height: 44px; border-radius: 10px; border: 1px solid #1d4ed8; background: #ffffff; color: #1d4ed8; font-size: 14px; font-weight: 600">CSV で書き出す</button>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">書き出せるのは管理者・副管理者・支援リーダー。書き出すと管理者にメールが届きます。写真と住所は含みません。試用中はサーバーのバックアップがないため、月1回の書き出しをおすすめします。</span>
+      <button style="min-height: 44px; border-radius: 10px; border: 1px solid #b91c1c; background: #ffffff; color: #b91c1c; font-size: 14px; font-weight: 600">チームを削除する（管理者のみ）</button>
+      <span style="font-size: 12px; color: #5b6472; line-height: 1.5">申し込みから30日間は取り消せます。そのあと記録・写真・場所はすべて消えます。</span>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

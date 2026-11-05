@@ -22,25 +22,30 @@ button,input,textarea{font-family:inherit}
     </a>
     <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
       <span style="font-size: 16px; font-weight: 600">ABC記録</span>
-      <span style="font-size: 12px; color: #5b6472">11/3 10:42 ・ 頭たたき ・ 強度2</span>
+      <span style="font-size: 12px; color: #5b6472">11/3 10:42 ・ 施設 ・ 頭たたき</span>
     </div>
     <button style="min-height: 44px; padding: 0 14px; border-radius: 8px; border: none; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600">保存</button>
   </div>
 
-  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px">
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px">
 
-    <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+    <section style="background: #ffffff; border: 1px solid #1d4ed8; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
       <div style="display: flex; align-items: baseline; gap: 8px">
         <span style="font-size: 20px; font-weight: 700; color: #1d4ed8">A</span>
         <span style="font-size: 14px; font-weight: 600">直前に起きていたこと（先行事象）</span>
+        <a href="#" style="margin-left: auto; font-size: 12px; text-decoration: none; font-weight: 600">完了</a>
       </div>
+      <span style="font-size: 11px; color: #5b6472">編集モード: × で選択肢を削除、下の欄で追加。削除しても過去の記録は残ります</span>
       <div style="display: flex; flex-wrap: wrap; gap: 8px">
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600">課題を提示した</button>
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">要求を断った</button>
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">活動の切り替え</button>
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">待ち時間</button>
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">騒音</button>
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px dashed #8a94a3; background: #ffffff; color: #3b4452; font-size: 13px">+ 追加</button>
+        <span style="display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 6px 0 12px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600">課題を提示した<button style="width: 28px; height: 28px; border-radius: 50%; border: none; background: #ffffff; color: #1e40af; font-size: 14px" aria-label="課題を提示した を削除">×</button></span>
+        <span style="display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 6px 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">要求を断った<button style="width: 28px; height: 28px; border-radius: 50%; border: none; background: #f4f5f7; color: #3b4452; font-size: 14px" aria-label="要求を断った を削除">×</button></span>
+        <span style="display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 6px 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">活動の切り替え<button style="width: 28px; height: 28px; border-radius: 50%; border: none; background: #f4f5f7; color: #3b4452; font-size: 14px" aria-label="活動の切り替え を削除">×</button></span>
+        <span style="display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 6px 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">待ち時間<button style="width: 28px; height: 28px; border-radius: 50%; border: none; background: #f4f5f7; color: #3b4452; font-size: 14px" aria-label="待ち時間 を削除">×</button></span>
+        <span style="display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 6px 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">騒音<button style="width: 28px; height: 28px; border-radius: 50%; border: none; background: #f4f5f7; color: #3b4452; font-size: 14px" aria-label="騒音 を削除">×</button></span>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <input type="text" placeholder="新しい選択肢（例: 人が近づいた）" style="flex: 1; min-height: 40px; padding: 0 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328">
+        <button style="min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #1d4ed8; background: #ffffff; color: #1d4ed8; font-size: 14px; font-weight: 600">追加</button>
       </div>
       <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5b6472">自由記述
         <input type="text" value="プリント課題を机に置いた直後" style="min-height: 40px; padding: 0 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 14px; color: #1f2328">
@@ -50,18 +55,31 @@ button,input,textarea{font-family:inherit}
     <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
       <div style="display: flex; align-items: baseline; gap: 8px">
         <span style="font-size: 20px; font-weight: 700; color: #1d4ed8">B</span>
-        <span style="font-size: 14px; font-weight: 600">行動</span>
+        <span style="font-size: 14px; font-weight: 600">行動: 頭たたき（手のひらで側頭部）</span>
       </div>
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
-        <span style="font-size: 15px">頭たたき（手のひらで側頭部）</span>
-        <div style="display: flex; gap: 6px" role="group" aria-label="強度">
-          <button style="width: 40px; height: 40px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 14px">1</button>
-          <button style="width: 40px; height: 40px; border-radius: 8px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 14px; font-weight: 700">2</button>
-          <button style="width: 40px; height: 40px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff; font-size: 14px">3</button>
-        </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 13px; font-weight: 600">強度（この行動の基準）</span>
+        <a href="BehaviorList.dc.html" style="font-size: 12px; text-decoration: none">基準を編集</a>
       </div>
-      <div style="display: flex; gap: 8px; font-size: 13px; color: #5b6472">
-        <span>持続: 約40秒</span><span>・</span><span>場所: 作業室</span><span>・</span><span>活動: 個別課題</span>
+      <div style="display: flex; flex-direction: column; gap: 6px" role="radiogroup" aria-label="強度">
+        <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px">
+          <input type="radio" name="intensity" style="width: 20px; height: 20px">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">1</span>
+          <span style="display: flex; flex-direction: column; gap: 1px"><strong>軽微</strong><span style="color: #5b6472">1〜2回叩いて止まる。赤みなし。声かけ不要</span></span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid #1d4ed8; background: #e8eefc; border-radius: 8px; font-size: 13px">
+          <input type="radio" name="intensity" checked style="width: 20px; height: 20px">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: #1d4ed8; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">2</span>
+          <span style="display: flex; flex-direction: column; gap: 1px"><strong>中</strong><span style="color: #3b4452">3回以上続く。声かけ・誘導で止まる。赤みあり</span></span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid #c7cbd1; border-radius: 8px; font-size: 13px">
+          <input type="radio" name="intensity" style="width: 20px; height: 20px">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px">3</span>
+          <span style="display: flex; flex-direction: column; gap: 1px"><strong>重</strong><span style="color: #5b6472">声かけで止まらない。腫れ・出血、または安全確保が必要</span></span>
+        </label>
+      </div>
+      <div style="display: flex; gap: 8px; font-size: 12px; color: #5b6472">
+        <span>持続: 約40秒</span><span>・</span><span>活動: 個別課題</span><span>・</span><span>関わった人: 山田</span>
       </div>
     </section>
 
@@ -69,6 +87,7 @@ button,input,textarea{font-family:inherit}
       <div style="display: flex; align-items: baseline; gap: 8px">
         <span style="font-size: 20px; font-weight: 700; color: #1d4ed8">C</span>
         <span style="font-size: 14px; font-weight: 600">その後どうなったか（結果）</span>
+        <a href="#" style="margin-left: auto; font-size: 12px; text-decoration: none">編集</a>
       </div>
       <div style="display: flex; flex-wrap: wrap; gap: 8px">
         <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600">課題を取り除いた</button>
@@ -80,12 +99,15 @@ button,input,textarea{font-family:inherit}
     </section>
 
     <section style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
-      <span style="font-size: 14px; font-weight: 600">状況要因（その日の体調・環境）</span>
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <span style="font-size: 14px; font-weight: 600">状況要因（その日の体調・環境）</span>
+        <a href="#" style="margin-left: auto; font-size: 12px; text-decoration: none">編集</a>
+      </div>
       <div style="display: flex; flex-wrap: wrap; gap: 8px">
         <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #1d4ed8; background: #e8eefc; color: #1e40af; font-size: 13px; font-weight: 600">睡眠不足</button>
         <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">空腹</button>
         <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">服薬変更</button>
-        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #c7cbd1; background: #ffffff; color: #3b4452; font-size: 13px">体調不良</button>
+        <button style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px dashed #8a94a3; background: #ffffff; color: #3b4452; font-size: 13px">+ 追加</button>
       </div>
     </section>
 

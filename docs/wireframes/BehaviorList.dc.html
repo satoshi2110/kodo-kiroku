@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>行動の一覧と削除</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#1f2328}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f5f7; display: flex; flex-direction: column; overflow: hidden; position: relative">
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px; background: #ffffff; border-bottom: 1px solid #d9dce1">
+    <a href="Main.dc.html" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none" aria-label="戻る">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2328" stroke-width="2" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span style="font-size: 16px; font-weight: 600">記録する行動 ・ Aさん</span>
+      <span style="font-size: 12px; color: #5b6472">4件 ・ 非表示 1件</span>
+    </div>
+    <a href="BehaviorAdd.dc.html" style="min-height: 44px; padding: 0 14px; border-radius: 8px; background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; display: flex; align-items: center">+ 追加</a>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px">
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #9a3412">問題行動</span>
+      <div style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 15px; font-weight: 600">頭たたき</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <span style="font-size: 11px; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">頻度</span>
+            <span style="font-size: 11px; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">強度 3段階</span>
+            <span style="font-size: 11px; color: #5b6472">記録 184件</span>
+          </div>
+        </div>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="頭たたきを編集"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="頭たたきを削除"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>
+      </div>
+      <div style="background: #ffffff; border: 1px solid #1d4ed8; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 15px; font-weight: 600">大声</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <span style="font-size: 11px; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">持続時間</span>
+            <span style="font-size: 11px; color: #5b6472">記録 12件</span>
+          </div>
+        </div>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="大声を編集"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #1d4ed8; background: #e8eefc" aria-label="大声を削除"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #1e40af">代替行動</span>
+      <div style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 15px; font-weight: 600">休憩カードを渡す</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <span style="font-size: 11px; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">頻度</span>
+            <span style="font-size: 11px; color: #5b6472">頭たたきの代替 ・ 記録 61件</span>
+          </div>
+        </div>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="休憩カードを渡すを編集"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="休憩カードを渡すを削除"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 12px; font-weight: 600; color: #1e40af">望ましい行動</span>
+      <div style="background: #ffffff; border: 1px solid #c7cbd1; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 15px; font-weight: 600">着席して課題</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <span style="font-size: 11px; color: #1e40af; background: #dbe4ff; padding: 2px 8px; border-radius: 999px">時間サンプリング 5分</span>
+            <span style="font-size: 11px; color: #5b6472">記録 40件</span>
+          </div>
+        </div>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="着席して課題を編集"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+        <button style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #c7cbd1; background: #ffffff" aria-label="着席して課題を削除"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b4452" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>
+      </div>
+    </section>
+
+    <a href="#" style="font-size: 13px; text-decoration: none; min-height: 44px; display: flex; align-items: center">非表示にした行動を見る（1件）</a>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-top: 1px solid #d9dce1; border-radius: 16px 16px 0 0; padding: 16px 16px 20px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-size: 16px; font-weight: 700">「大声」を削除しますか？</span>
+    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #3b4452">記録が 12件 あります。「非表示」にするとホームとグラフから消えますが、記録は残り、いつでも元に戻せます。</p>
+    <button style="min-height: 48px; border-radius: 10px; border: none; background: #1d4ed8; color: #ffffff; font-size: 15px; font-weight: 600">非表示にする（記録は残す）</button>
+    <button style="min-height: 48px; border-radius: 10px; border: 1px solid #c2410c; background: #ffffff; color: #9a3412; font-size: 15px; font-weight: 600">記録ごと削除する（管理者＝保護者のみ）</button>
+    <span style="font-size: 11px; color: #5b6472; line-height: 1.5">施設・学校の職員には「記録ごと削除」は表示されません。削除しても「誰が・いつ・何件消したか」は監査ログに残ります。</span>
+    <button style="min-height: 44px; border-radius: 10px; border: none; background: none; color: #3b4452; font-size: 14px">キャンセル</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
