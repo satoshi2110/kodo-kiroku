@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0009）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0010）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -1017,6 +1017,56 @@ do $$ begin
   if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'team_day' then
     raise exception 'NG: チームの1日30回を超えて AI を使えた';
   end if;
+end $$;
+reset role;
+
+-- ---------- 監査ログを データベースが自分で残す（7.4.1、0010） ----------
+-- 管理者（A）: 記録を作る・送り直す・取り消す・元に戻すと、そのたびに残る。送り直しでは増えない。自分では by_server の行を書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int; t timestamptz := now() + interval '1 minute';
+begin
+  insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id, updated_at)
+    values ('4a000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1', t);
+  select count(*) into n from audit_logs where entity_id = '4a000000-0000-0000-0000-000000000001' and by_server
+    and entity = 'events' and action = 'create' and actor_id = '00000000-0000-0000-0000-0000000000a1' and before is null and after ->> 'recorder_id' = '00000000-0000-0000-0000-0000000000a1';
+  if n <> 1 then raise exception 'NG: 記録を作ったのに監査ログが残らない'; end if;
+  -- 同期で同じ内容を送り直す
+  update events set updated_at = t where id = '4a000000-0000-0000-0000-000000000001';
+  select count(*) into n from audit_logs where entity_id = '4a000000-0000-0000-0000-000000000001' and by_server;
+  if n <> 1 then raise exception 'NG: 同じ内容の送り直しで監査ログが増えた（% 件）', n; end if;
+  update events set deleted_at = now(), updated_at = t + interval '1 second' where id = '4a000000-0000-0000-0000-000000000001';
+  update events set deleted_at = null, updated_at = t + interval '2 seconds' where id = '4a000000-0000-0000-0000-000000000001';
+  select count(*) into n from audit_logs where entity_id = '4a000000-0000-0000-0000-000000000001' and by_server
+    and ((action = 'delete' and before ->> 'deleted_at' is null and after ->> 'deleted_at' is not null) or (action = 'restore' and after ->> 'deleted_at' is null));
+  if n <> 2 then raise exception 'NG: 取り消し・元に戻すが監査ログに残らない'; end if;
+  -- 好きなものの写真は、中身を監査ログに入れない
+  insert into reinforcers (id, person_id, name, category, level) values ('4a000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '監査用', 'thing', 3);
+  insert into reinforcer_photos (id, person_id, data) values ('4a000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'data:image/jpeg;base64,/9j/AAAA');
+  select count(*) into n from audit_logs where entity_id = '4a000000-0000-0000-0000-000000000002' and entity = 'reinforcer_photos' and by_server and not (after ? 'data');
+  if n <> 1 then raise exception 'NG: 写真の監査ログがない、または写真の中身が入った'; end if;
+  begin
+    insert into audit_logs (id, person_id, entity, entity_id, action, actor_id, by_server)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'events', gen_random_uuid(), 'create', '00000000-0000-0000-0000-0000000000a1', true);
+    raise exception 'NG: 端末から by_server の監査ログを書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update audit_logs set action = 'update' where entity_id = '4a000000-0000-0000-0000-000000000001';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 監査ログを書きかえられた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- チーム2 の管理者（B）には、チーム1 の監査ログが見えない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from audit_logs where entity_id = '4a000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: ほかのチームの監査ログが見えた'; end if;
 end $$;
 reset role;
 
