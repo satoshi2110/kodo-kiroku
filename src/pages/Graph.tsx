@@ -5,13 +5,14 @@
  * - 縦に並んだパネルは一緒に横スクロールする（決定73）
  * - 条件変更（支援計画が実施中になった日）は縦の点線、達成基準は横の点線（Phase 2）
  * - 表示する行動と睡眠時間のパネルを選べる
+ * - 頻度は「回数」と「1時間あたり」を切りかえる（6.4.1）。既定は回数（【暫定】）
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../state';
 import { canExport } from '../db/repo';
 import { formatShortDate } from '../lib/date';
-import { allDates, useRecordSet, type Granularity } from '../lib/series';
+import { allDates, canRate, useRecordSet, type Granularity } from '../lib/series';
 import { buildGroups, groupTitle, sleepPanel, type PanelSpec } from '../lib/panels';
 import { usePlanData } from '../lib/usePlan';
 import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
@@ -25,13 +26,15 @@ export default function Graph() {
   const [g, setG] = useState<Granularity>('day');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [showSleep, setShowSleep] = useState(false);
+  const [rate, setRate] = useState(false);
   const sync = useNewSync();
   if (!person || !rs) return null;
 
   const empty = rs.events.length === 0 && rs.observations.length === 0;
   const days = allDates(rs);
   const shown = behaviors.filter((b) => !hidden.has(b.id));
-  const groups = buildGroups(shown, rs, days, g, planData?.plan?.activeContent ?? null);
+  const hasFreq = shown.some(canRate);
+  const groups = buildGroups(shown, rs, days, g, planData?.plan?.activeContent ?? null, rate && hasFreq);
   const phases = planData?.phases ?? [];
   const toggle = (id: string) => setHidden((h) => {
     const n = new Set(h);
@@ -62,6 +65,22 @@ export default function Graph() {
                 { value: 'month', label: '月' },
               ]}
             />
+            {hasFreq && (
+              <Segmented
+                label="頻度の見かた"
+                value={rate ? 'rate' : 'count'}
+                onChange={(v) => setRate(v === 'rate')}
+                options={[
+                  { value: 'count', label: '回数' },
+                  { value: 'rate', label: '1時間あたり' },
+                ]}
+              />
+            )}
+            {rate && hasFreq && (
+              <p className="help">
+                1時間あたり = その日の回数 ÷ 観察していた時間（推定）。観察していた時間は、記録した人の<Link to="/places">「わたしのいつもの時間」</Link>、登録がなければその人のその日の最初の記録から最後の記録まで。何人かいるときは、重なった時間を1回だけ数えます。30分に満たない日は出しません。達成基準は1日の回数で決めているので、横の点線は出しません。
+              </p>
+            )}
             {phases.length > 0 && (
               <p className="help">縦の点線 = 条件の変更（{phases.map((p) => `${formatShortDate(p.date)} ${p.label}`).join('、')}）。横の点線 = 支援計画の達成基準。</p>
             )}
@@ -120,6 +139,7 @@ function Panel({ p, g, phases, title }: { p: PanelSpec; g: Granularity; phases: 
         unit={p.unit}
         granularity={g}
         format={p.format}
+        tickFormat={p.tickFormat}
         fixedMax={p.fixedMax}
         fixedMin={p.fixedMin}
         phases={phases}

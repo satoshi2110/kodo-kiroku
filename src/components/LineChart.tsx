@@ -66,6 +66,7 @@ export default function LineChart({
   unit,
   granularity = 'day',
   format = (v) => String(v),
+  tickFormat = format,
   fixedMax,
   fixedMin = 0,
   phases = [],
@@ -77,6 +78,7 @@ export default function LineChart({
   unit: string;
   granularity?: Granularity;
   format?: (v: number) => string;
+  tickFormat?: (v: number) => string; // 縦軸の目盛り（なければ format）
   fixedMax?: number;
   fixedMin?: number;
   phases?: Phase[];
@@ -247,7 +249,7 @@ export default function LineChart({
         {unit}
       </text>
       {ticks.map((t) => (
-        <text key={t} x={AXIS_W - 6} y={y(t) + 4} textAnchor="end" className="chart__tick">{format(t)}</text>
+        <text key={t} x={AXIS_W - 6} y={y(t) + 4} textAnchor="end" className="chart__tick">{tickFormat(t)}</text>
       ))}
     </>
   );
@@ -294,7 +296,8 @@ function niceScale(maxVal: number): { min: number; max: number; ticks: number[] 
   if (maxVal <= 0) return { min: 0, max: 4, ticks: [0, 1, 2, 3, 4] };
   const raw = maxVal / 4;
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw)!;
+  // 値は小数1けたまでなので、目盛りも 0.1 より細かくしない
+  const step = Math.max(0.1, [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw)!);
   const stepInt = step < 1 && Number.isInteger(maxVal) ? 1 : step;
   const max = Math.ceil(maxVal / stepInt) * stepInt;
   const ticks: number[] = [];

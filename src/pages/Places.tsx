@@ -2,16 +2,25 @@
  * 場所の登録（6.3.3、画面一覧 5、ワイヤーフレーム 11）。ホーム上部の場所ボタンから開く。
  * 「いまここを登録」は、この端末の位置を1回だけ取って中心にする。住所検索と地図は、地図サービスを決めてから足す。
  * 自宅は住所を一覧に出さない（いまは住所を持たない）。削除は非表示で、過去の記録に付いた場所名は残る。
+ * 「わたしのいつもの時間」は記録者ごとの勤務・在宅時間の目安で、グラフの「1時間あたりの回数」の観察時間の推定に使う。
+ * チームの全員の分を見られ、直せるのは自分の分だけ。
  */
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { canEditPlaces, hidePlace, savePlace, saveDevice, setPlaceChoice } from '../db/repo';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
+import { canEditPlaces, deleteSchedule, hidePlace, latestSchedules, savePlace, saveDevice, saveSchedule, setPlaceChoice, type ScheduleInput } from '../db/repo';
 import { useApp } from '../state';
 import { getPositionOnce, matchPlace, type Pos } from '../lib/place';
-import { PLACE_KIND_LABEL, type Place, type PlaceKind } from '../db/types';
+import { PLACE_KIND_LABEL, WEEKDAY_LABEL, type Place, type PlaceKind, type UserSchedule } from '../db/types';
 import { Chip, Sheet, TopBar } from '../components/ui';
 
 type Form = { id: string | null; name: string; kind: PlaceKind; radiusM: Place['radiusM']; pos: Pos | null };
+
+/** 月曜から並べる */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const scheduleText = (s: Pick<UserSchedule, 'weekdays' | 'startTime' | 'endTime' | 'placeName'>) =>
+  `${WEEK_ORDER.filter((d) => s.weekdays.includes(d)).map((d) => WEEKDAY_LABEL[d]).join('・')} ${s.startTime}〜${s.endTime}${s.placeName ? ` ・ ${s.placeName}` : ''}`;
 
 export default function Places() {
   const { person, me, members, userId, places, place, useLocation } = useApp();
@@ -21,6 +30,11 @@ export default function Places() {
   const [explaining, setExplaining] = useState(false);
   const [explained, setExplained] = useState(false);
   const fromSetup = useSearchParams()[0].get('from') === 'setup';
+  const [sched, setSched] = useState<ScheduleInput | null>(null);
+  const schedules = useLiveQuery(
+    async () => (person ? latestSchedules(await db.userSchedules.where('personId').equals(person.id).toArray()) : []),
+    [person?.id],
+  );
 
   if (!person || !userId) return null;
   const editable = canEditPlaces(me?.role);
@@ -48,6 +62,23 @@ export default function Places() {
     await hidePlace(form.id, userId);
     if (place?.id === form.id) await setPlaceChoice(person.id, null);
     setForm(null);
+  }
+
+  const mySchedule = schedules?.find((x) => x.userId === userId);
+  const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const schedValid = !!sched && sched.weekdays.length > 0 && HHMM.test(sched.startTime) && HHMM.test(sched.endTime) && sched.endTime > sched.startTime;
+
+  async function saveSched() {
+    if (!sched || !person || !userId || !schedValid) return;
+    await saveSchedule(person.id, sched, userId);
+    setSched(null);
+  }
+
+  async function removeSched() {
+    if (!mySchedule || !userId) return;
+    if (!window.confirm('いつもの時間を消しますか？ グラフの1時間あたりの回数は、記録の最初から最後までで推定します。')) return;
+    await deleteSchedule(mySchedule.id, userId);
+    setSched(null);
   }
 
   async function toggleLocation(on: boolean) {
@@ -110,6 +141,34 @@ export default function Places() {
       )}
 
       <div className="section">
+        <div className="card">
+          <h2 className="card__title">わたしのいつもの時間</h2>
+          <p className="help">
+            ふだん対象者と一緒にいる曜日と時間です（例: 平日 9:00〜16:00 は施設）。グラフの「1時間あたりの回数」で、観察していた時間の目安に使います。記録を付けた日だけに使い、登録がない人は、その日の最初の記録から最後の記録までで推定します。
+          </p>
+          {(schedules ?? []).map((x) => (
+            <div key={x.id} className="row row--between today-row">
+              <span className="stack" style={{ gap: 4, flex: 1, minWidth: 0 }}>
+                <strong>{nameOf(x.userId)}{x.userId === userId && '（わたし）'}</strong>
+                <span className="muted">{scheduleText(x)}</span>
+              </span>
+              {x.userId === userId && editable && (
+                <button type="button" className="btn btn--sm" onClick={() => setSched({ weekdays: x.weekdays, startTime: x.startTime, endTime: x.endTime, placeName: x.placeName })}>
+                  編集
+                </button>
+              )}
+            </div>
+          ))}
+          {schedules?.length === 0 && <p className="muted">まだだれも登録していません。</p>}
+          {editable && !mySchedule && (
+            <button type="button" className="btn btn--block" onClick={() => setSched({ weekdays: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '16:00', placeName: places[0]?.name ?? null })}>
+              わたしのいつもの時間を登録
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="section">
         <div className="card stack">
           <label className="row row--between">
             <span className="label">この端末で位置情報を使う</span>
@@ -152,6 +211,50 @@ export default function Places() {
               位置情報を使う
             </button>
             <button type="button" className="btn btn--block" onClick={() => setExplaining(false)}>使わない</button>
+          </div>
+        </Sheet>
+      )}
+
+      {sched && (
+        <Sheet title="わたしのいつもの時間" onClose={() => setSched(null)}>
+          <div className="stack">
+            <span className="label">曜日</span>
+            <div className="chips">
+              {WEEK_ORDER.map((d) => (
+                <Chip
+                  key={d}
+                  on={sched.weekdays.includes(d)}
+                  onClick={() => setSched({ ...sched, weekdays: sched.weekdays.includes(d) ? sched.weekdays.filter((x) => x !== d) : [...sched.weekdays, d].sort() })}
+                >
+                  {WEEKDAY_LABEL[d]}
+                </Chip>
+              ))}
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <label className="field" style={{ flex: 1 }}>
+                はじめ
+                <input type="time" value={sched.startTime} onChange={(e) => setSched({ ...sched, startTime: e.target.value })} />
+              </label>
+              <label className="field" style={{ flex: 1 }}>
+                おわり
+                <input type="time" value={sched.endTime} onChange={(e) => setSched({ ...sched, endTime: e.target.value })} />
+              </label>
+            </div>
+            {places.length > 0 && (
+              <>
+                <span className="label">場所（なくてもよい）</span>
+                <div className="chips">
+                  <Chip on={sched.placeName == null} onClick={() => setSched({ ...sched, placeName: null })}>決めない</Chip>
+                  {places.map((p) => (
+                    <Chip key={p.id} on={sched.placeName === p.name} onClick={() => setSched({ ...sched, placeName: p.name })}>{p.name}</Chip>
+                  ))}
+                </div>
+              </>
+            )}
+            {sched.weekdays.length === 0 && <p className="help" role="status">曜日を1つ以上選んでください。</p>}
+            {sched.weekdays.length > 0 && sched.endTime <= sched.startTime && <p className="help" role="status">おわりは、はじめより後にしてください（夜をまたぐ時間は、まだ登録できません）。</p>}
+            <button type="button" className="btn btn--primary btn--block" disabled={!schedValid} onClick={saveSched}>保存</button>
+            {mySchedule && <button type="button" className="btn btn--danger btn--block" onClick={removeSched}>消す</button>}
           </div>
         </Sheet>
       )}

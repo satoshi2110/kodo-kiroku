@@ -154,6 +154,21 @@ export interface Place extends BaseRecord {
   hiddenAt: ISODateTime | null;
 }
 
+/**
+ * わたしのいつもの時間（6.3.3、データモデル UserSchedule）。記録者ごとの勤務・在宅時間の目安で、観察時間の推定に使う。
+ * 1人につき対象者ごとに1つ。直せるのは本人だけで、チームのほかの人は見るだけ。やめるときは論理削除。
+ */
+export interface UserSchedule extends BaseRecord {
+  personId: string;
+  userId: string; // User.id（= ログインの id）
+  weekdays: number[]; // 0 = 日曜 〜 6 = 土曜
+  startTime: string; // 'HH:MM'
+  endTime: string; // 'HH:MM'（開始より後。日をまたぐ時間はまだ扱わない）
+  placeName: string | null;
+}
+
+export const WEEKDAY_LABEL = ['日', '月', '火', '水', '木', '金', '土'];
+
 export const PLACE_KIND_LABEL: Record<PlaceKind, string> = {
   home: '自宅',
   school: '学校',
@@ -438,7 +453,7 @@ export interface Comment extends BaseRecord {
 }
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'export';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment' | 'userSchedule';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {

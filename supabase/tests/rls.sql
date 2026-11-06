@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0005）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0006）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -104,6 +104,11 @@ insert into reinforcer_photos (id, person_id, data) values
 insert into observations (id, person_id, behavior_id, method, interval_sec, started_at, local_date, results, recorder_id, updated_at) values
   ('88000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'interval', 10, now(), current_date, '["yes","no"]', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
   ('88000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 'interval', 10, now(), current_date, '["no"]', '00000000-0000-0000-0000-0000000000b1', now());
+-- わたしのいつもの時間（6.3.3）: A と L はチーム1、B はチーム2
+insert into user_schedules (id, person_id, user_id, weekdays, start_time, end_time, updated_at) values
+  ('89000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', '{1,2,3,4,5}', '09:00', '16:00', now() - interval '1 hour'),
+  ('89000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', '{0,6}', '10:00', '18:00', now()),
+  ('89000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', '{1,3}', '13:00', '17:00', now() - interval '1 hour');
 
 insert into start_codes (code) values ('RLSTESTCODE1');
 
@@ -477,6 +482,37 @@ begin
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: A がチーム2 のインターバル記録を書きかえた'; end if;
 
+  -- いつもの時間: 自分のチームの分（A と L）だけ見える。直せるのは自分の分だけ
+  select count(*) into n from user_schedules;
+  if n <> 2 then raise exception 'NG: A に見えるいつもの時間が自分のチームの2件ではない'; end if;
+  begin
+    insert into user_schedules (id, person_id, user_id, weekdays, start_time, end_time)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000a1', '{1}', '09:00', '10:00');
+    raise exception 'NG: A がチーム2 にいつもの時間を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update user_schedules set start_time = '08:00', updated_at = now() where id = '89000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 のいつもの時間を書きかえた'; end if;
+  update user_schedules set start_time = '08:00', updated_at = now() where id = '89000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 管理者が同じチームのほかの人（L）のいつもの時間を書きかえた'; end if;
+  begin
+    insert into user_schedules (id, person_id, user_id, weekdays, start_time, end_time)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', '{1}', '09:00', '10:00');
+    raise exception 'NG: A がほかの人（L）の名前でいつもの時間を作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into user_schedules (id, person_id, user_id, weekdays, start_time, end_time)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', '{1}', '16:00', '09:00');
+    raise exception 'NG: おわりがはじめより前のいつもの時間を保存できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update user_schedules set end_time = '17:00', updated_at = now() where id = '89000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 自分のいつもの時間を直せない'; end if;
+  delete from user_schedules where id = '89000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: いつもの時間を本当に消せた（論理削除だけのはず）'; end if;
+
   -- 写真は JPEG の文字だけ。それ以外の形は受け付けない
   begin
     insert into reinforcer_photos (id, person_id, data)
@@ -528,6 +564,8 @@ begin
   if n <> 0 then raise exception 'NG: 承認待ちの人に好きなものが見えた'; end if;
   select count(*) into n from observations;
   if n <> 0 then raise exception 'NG: 承認待ちの人にインターバル記録が見えた'; end if;
+  select count(*) into n from user_schedules;
+  if n <> 0 then raise exception 'NG: 承認待ちの人にいつもの時間が見えた'; end if;
   select count(*) into n from choice_options;
   if n <> 0 then raise exception 'NG: 承認待ちの人にABCの選択肢が見えた'; end if;
   select count(*) into n from team_members;
@@ -558,6 +596,8 @@ begin
   if n <> 0 then raise exception 'NG: 停止中の人に申し送りが見えた'; end if;
   select count(*) into n from reinforcer_photos;
   if n <> 0 then raise exception 'NG: 停止中の人に好きなものの写真が見えた'; end if;
+  select count(*) into n from user_schedules;
+  if n <> 0 then raise exception 'NG: 停止中の人にいつもの時間が見えた'; end if;
 end $$;
 reset role;
 
@@ -644,6 +684,13 @@ begin
   update events set count = 7, updated_at = now() where id = '40000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者が記録を書きかえた'; end if;
+  select count(*) into n from user_schedules;
+  if n <> 2 then raise exception 'NG: 閲覧者に自分のチームのいつもの時間が見えない'; end if;
+  begin
+    insert into user_schedules (id, person_id, user_id, weekdays, start_time, end_time)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000d1', '{1}', '09:00', '10:00');
+    raise exception 'NG: 閲覧者がいつもの時間を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 end $$;
 reset role;
 
@@ -733,6 +780,14 @@ begin
   begin
     update observations set recorder_id = '00000000-0000-0000-0000-0000000000c1', updated_at = now() + interval '3 seconds' where id = '88000000-0000-0000-0000-000000000001';
     raise exception 'NG: インターバル記録の記録者を変えられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  -- いつもの時間: 自分の分は直せる。持ち主は変えられない
+  update user_schedules set weekdays = '{1,3,5}', updated_at = now() where id = '89000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが自分のいつもの時間を直せない'; end if;
+  begin
+    update user_schedules set user_id = '00000000-0000-0000-0000-0000000000a1', updated_at = now() + interval '1 second' where id = '89000000-0000-0000-0000-000000000003';
+    raise exception 'NG: いつもの時間の持ち主を変えられた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   -- 支援者としての招待はできる。コードは次の J のテストで使う
   code := create_invite('10000000-0000-0000-0000-000000000001', 'supporter');

@@ -4,9 +4,10 @@
  * - 同じ測り方なら1つのパネルに重ね、違う測り方なら上下に並べて日付をそろえる
  * - 強度を付けた行動は、強度のパネルを別に出す（決定24）
  * - 達成基準（実施中の支援計画）は横線、条件変更は縦線
+ * - rate = 頻度を1時間あたりの回数で見る（6.4.1）。達成基準は1日の回数で決めているので、そのときは横線を出さない
  */
 import { METHOD_LABEL, type Behavior, type PlanContent } from '../db/types';
-import { bucketize, dailyIntensity, dailyMain, dailySleepHours, mainFormat, mainUnit, type Granularity, type RecordSet } from './series';
+import { bucketize, canRate, dailyIntensity, dailyMain, dailyRate, dailySleepHours, mainFormat, mainUnit, type Granularity, type RecordSet } from './series';
 import type { ChartLine, Phase, Target } from '../components/LineChart';
 
 /** 色覚の多様性に配慮した色（オレンジと青）。印刷でも線の形（実線・点線）で区別できる */
@@ -20,6 +21,7 @@ export interface PanelSpec {
   lines: ChartLine[];
   unit: string;
   format: (v: number) => string;
+  tickFormat?: (v: number) => string;
   fixedMax?: number;
   fixedMin?: number;
   targets: Target[];
@@ -54,6 +56,7 @@ export function buildGroups(
   days: string[],
   g: Granularity,
   plan: PlanContent | null,
+  rate = false,
 ): GroupSpec[] {
   return groupBehaviors(behaviors).map((members) => {
     let good = 0;
@@ -73,21 +76,23 @@ export function buildGroups(
         });
     const main = (list: Behavior[]): PanelSpec => {
       const b0 = list[0];
-      const series = list.map((b) => bucketize(days, dailyMain(b, days, rs), g));
+      const perHour = rate && canRate(b0);
+      const series = list.map((b) => bucketize(days, (perHour ? dailyRate : dailyMain)(b, days, rs), g));
       const ratio = b0.method === 'interval' || b0.method === 'sampling';
       return {
         key: `main-${list.map((b) => b.id).join('-')}`,
         caption: list.length > 1 ? `${METHOD_LABEL[b0.method]}` : `${b0.name} ・ ${METHOD_LABEL[b0.method]}`,
         dates: series[0].dates,
         lines: list.map((b, i) => line(b, series[i].values)),
-        unit: mainUnit(b0, g),
-        format: mainFormat(b0),
+        unit: mainUnit(b0, g, rate),
+        format: mainFormat(b0, rate),
+        tickFormat: perHour ? (v) => String(v) : undefined, // 「回/時」は縦軸の名前に書いてある
         fixedMax: ratio ? 100 : undefined,
-        targets: targetsFor(list),
+        targets: perHour ? [] : targetsFor(list),
       };
     };
     const panels: PanelSpec[] = [];
-    const sameMethod = members.every((b) => b.method === members[0].method && mainUnit(b, g) === mainUnit(members[0], g));
+    const sameMethod = members.every((b) => b.method === members[0].method && mainUnit(b, g, rate) === mainUnit(members[0], g, rate));
     if (sameMethod) panels.push(main(members));
     else for (const b of members) panels.push(main([b]));
     for (const b of members.filter((x) => x.intensity)) {

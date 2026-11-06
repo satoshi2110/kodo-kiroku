@@ -28,6 +28,7 @@ import {
   type NotObservedDay,
   type Reinforcer,
   type Place,
+  type UserSchedule,
   type Person,
   type Role,
   type TeamMember,
@@ -383,6 +384,42 @@ export async function hidePlace(id: string, actorId: string) {
   await audit(after.personId, 'place', id, 'update', actorId, before, after);
 }
 
+// ---------- わたしのいつもの時間（6.3.3） ----------
+
+export type ScheduleInput = Pick<UserSchedule, 'weekdays' | 'startTime' | 'endTime' | 'placeName'>;
+
+/** 対象者ごとの、各メンバーのいつもの時間（1人1つ。2台で作って2つになったときは新しいほう） */
+export function latestSchedules(list: UserSchedule[]): UserSchedule[] {
+  const m = new Map<string, UserSchedule>();
+  for (const s of list) {
+    if (s.deletedAt) continue;
+    const cur = m.get(s.userId);
+    if (!cur || s.updatedAt > cur.updatedAt) m.set(s.userId, s);
+  }
+  return [...m.values()];
+}
+
+/** 自分のいつもの時間を保存する。直せるのは本人だけ */
+export async function saveSchedule(personId: string, input: ScheduleInput, actorId: string) {
+  const mine = (await db.userSchedules.where('personId').equals(personId).toArray()).filter((s) => s.userId === actorId);
+  const before = latestSchedules(mine)[0];
+  const after: UserSchedule = before
+    ? { ...before, ...input, updatedAt: nowISO() }
+    : { ...base(), personId, userId: actorId, ...input };
+  await db.userSchedules.put(after);
+  await audit(personId, 'userSchedule', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
+}
+
+/** 自分のいつもの時間をやめる（論理削除） */
+export async function deleteSchedule(id: string, actorId: string) {
+  const before = await db.userSchedules.get(id);
+  if (!before || before.userId !== actorId) return;
+  const t = nowISO();
+  const after: UserSchedule = { ...before, deletedAt: t, updatedAt: t };
+  await db.userSchedules.put(after);
+  await audit(before.personId, 'userSchedule', id, 'delete', actorId, before, after);
+}
+
 /** いまの場所を端末に覚える（Place.id / 'outside' / null = 未設定） */
 export async function setPlaceChoice(personId: string, choice: string | null) {
   const dev = await getDevice();
@@ -593,7 +630,7 @@ export const TEAM_DELETE_DAYS = 30;
 export async function purgeTeam(personId: string, actorId: string) {
   const tables = [
     db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
-    db.places, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
+    db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
     db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments,
   ];
   await db.transaction('rw', [...tables, db.teamSettings, db.persons, db.auditLogs, db.device], async () => {

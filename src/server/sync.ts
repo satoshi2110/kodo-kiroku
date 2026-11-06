@@ -3,7 +3,7 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ。
+ * いまは 対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ。
  * AI の結果と同意は、まだこの端末の中だけ。
  */
 import Dexie, { type Table } from 'dexie';
@@ -28,6 +28,7 @@ const TABLES: SyncTable[] = [
   { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
   { local: db.observations, remote: 'observations', team: (r) => r.personId, insert: true },
   { local: db.places, remote: 'places', team: (r) => r.personId, insert: true },
+  { local: db.userSchedules, remote: 'user_schedules', team: (r) => r.personId, insert: true },
   { local: db.sleepLogs, remote: 'sleep_logs', team: (r) => r.personId, insert: true },
   { local: db.notObservedDays, remote: 'not_observed_days', team: (r) => r.personId, insert: true },
   { local: db.events, remote: 'events', team: (r) => r.personId, insert: true },

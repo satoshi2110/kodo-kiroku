@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, Person, TeamMember, User } from './types';
+import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, UserSchedule, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, Person, TeamMember, User } from './types';
 
 /**
  * 端末内の保存（IndexedDB）。電波がなくても記録でき（6.3.6）、サーバー接続後は同期の元になる。
@@ -32,6 +32,7 @@ export class AppDB extends Dexie {
   restraintLogs!: Table<RestraintLog, string>;
   meetingNotes!: Table<MeetingNote, string>;
   comments!: Table<Comment, string>;
+  userSchedules!: Table<UserSchedule, string>;
 
   constructor() {
     super('kodo-kiroku-v1');
@@ -75,6 +76,10 @@ export class AppDB extends Dexie {
       restraintLogs: 'id, personId',
       meetingNotes: 'id, personId',
       comments: 'id, personId, [target+targetId]',
+    });
+    // わたしのいつもの時間（6.3.3）
+    this.version(8).stores({
+      userSchedules: 'id, personId',
     });
   }
 }
