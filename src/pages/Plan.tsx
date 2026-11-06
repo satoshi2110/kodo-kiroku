@@ -5,6 +5,7 @@
  * - 達成基準と直近7日の平均を比べる。見直し日が近づいたら知らせる（通知は出さず、画面に出す）
  * - 合意の状況、意見あり（保存した人と管理者に出す、決定75）
  * - 身体拘束の記録・支援会議メモ・PDF レポート・できたことへの入口
+ * - 機能分析のツール（外部のサイト）へのリンク（決定90）
  */
 import { Link } from 'react-router-dom';
 import { useApp } from '../state';
@@ -16,6 +17,7 @@ import { usePlanData } from '../lib/usePlan';
 import { criterionText } from '../lib/planText';
 import { FUNCTION_LABEL, KIND_LABEL, ROLE_LABEL, type PlanChange, type PlanContent } from '../db/types';
 import { KindBadge, TopBar } from '../components/ui';
+import { FBA_LINK } from '../lib/links';
 
 export default function Plan() {
   const { person, behaviors, members, me, userId } = useApp();
@@ -53,6 +55,7 @@ export default function Plan() {
             {editable ? <Link to="/plan/edit" className="btn btn--primary btn--block">支援計画を作る</Link> : <p className="help">作れるのは管理者・副管理者・支援リーダーです。</p>}
           </div>
         </div>
+        <FbaTool />
         <PlanLinks exportable={canExport(me?.role)} />
       </div>
     );
@@ -171,6 +174,7 @@ export default function Plan() {
       )}
 
       {latest && <SignStatus change={latest} />}
+      <FbaTool />
       <PlanLinks exportable={canExport(me?.role)} />
     </div>
   );
@@ -206,6 +210,24 @@ function PlanText({ title, text }: { title: string; text: string }) {
     <div className="stack" style={{ gap: 2 }}>
       <span className="card__title" style={{ margin: 0 }}>{title}</span>
       <p className="reinf__usage">{text || '（まだ書いていません）'}</p>
+    </div>
+  );
+}
+
+/** 支援者が機能分析をするときのツール（外部のサイト、決定58・90）。リンク先の内容は取り込まない */
+function FbaTool() {
+  return (
+    <div className="section">
+      <div className="card stack">
+        <span className="label">機能分析のツール</span>
+        <p className="help">
+          井上研究室の「機能分析スクリーニングツール日本版」で、支援者が行動の働き（機能）を調べられます。結果は、計画の「機能の仮説」を考える手がかりにしてください。
+        </p>
+        <a className="list-item" href={FBA_LINK} target="_blank" rel="noopener noreferrer">
+          機能分析スクリーニングツール日本版を開く<span aria-hidden="true">↗</span>
+        </a>
+        <span className="help">外部のサイトが開きます。このアプリの記録は送られません。</span>
+      </div>
     </div>
   );
 }
