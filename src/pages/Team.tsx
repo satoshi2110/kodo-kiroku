@@ -205,7 +205,7 @@ function Account() {
           {st.pending > 0 && ` ・ 送れていない変更 ${st.pending} 件`}
         </span>
         {st.error && <p className="ai-error" role="alert">{st.error}</p>}
-        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・行動・記録・ABC記録です。睡眠・場所などは、この端末の中だけです（順に足します）。</p>
+        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・行動・記録・ABC記録・睡眠・場所・「観察していなかった日」です。支援計画・拘束記録・申し送りなどは、この端末の中だけです（順に足します）。</p>
         <button type="button" className="btn btn--block" onClick={logout}>ログアウト</button>
       </div>
     </div>

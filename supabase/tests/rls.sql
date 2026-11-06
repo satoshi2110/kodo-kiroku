@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: 0001_init.sql を適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001, 0002 …）を順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -45,6 +45,18 @@ insert into choice_options (id, person_id, kind, name) values
 insert into abc_details (id, person_id, event_id, antecedent_ids, recorder_id, updated_at) values
   ('60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '{50000000-0000-0000-0000-000000000001}', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
   ('60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '{50000000-0000-0000-0000-000000000002}', '00000000-0000-0000-0000-0000000000b1', now());
+
+insert into sleep_logs (id, person_id, wake_date, bed_time, wake_time, recorder_id, updated_at) values
+  ('70000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', current_date, '21:30', '06:30', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('70000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', current_date, '22:00', '07:00', '00000000-0000-0000-0000-0000000000b1', now());
+
+insert into not_observed_days (id, person_id, behavior_id, local_date, recorder_id) values
+  ('71000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', current_date - 1, '00000000-0000-0000-0000-0000000000a1'),
+  ('71000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', current_date - 1, '00000000-0000-0000-0000-0000000000b1');
+
+insert into places (id, person_id, name, kind, lat, lng, created_by, updated_at) values
+  ('72000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '場所1', 'home', 35.0, 139.0, '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('72000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '場所2', 'home', 36.0, 140.0, '00000000-0000-0000-0000-0000000000b1', now());
 
 insert into start_codes (code) values ('RLSTESTCODE1');
 
@@ -188,6 +200,63 @@ begin
     raise exception 'NG: ABC記録を消せた（論理削除のみのはず）';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 
+  -- 睡眠・観察していなかった日・場所（6.3.3、6.3.4）
+  select count(*) into n from sleep_logs where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 の睡眠を読めた'; end if;
+  select count(*) into n from not_observed_days where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 の「観察していなかった日」を読めた'; end if;
+  select count(*) into n from places where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 の場所を読めた'; end if;
+  select count(*) into n from places;
+  if n <> 1 then raise exception 'NG: A が自分のチームの場所を読めない'; end if;
+
+  begin
+    insert into sleep_logs (id, person_id, wake_date, bed_time, wake_time, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', current_date - 1, '21:00', '06:00', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 に睡眠を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    insert into places (id, person_id, name, kind, created_by)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', 'x', 'other', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 に場所を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    insert into not_observed_days (id, person_id, behavior_id, local_date, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', current_date - 2, '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 に「観察していなかった日」を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  update sleep_logs set note = 'x', updated_at = now() where id = '70000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の睡眠を書きかえた'; end if;
+
+  update places set name = 'x', updated_at = now() where id = '72000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の場所を書きかえた'; end if;
+
+  begin
+    update places set person_id = '10000000-0000-0000-0000-000000000002', updated_at = now()
+      where id = '72000000-0000-0000-0000-000000000001';
+    raise exception 'NG: A が自分の場所をチーム2 に移せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    insert into sleep_logs (id, person_id, wake_date, bed_time, wake_time, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', current_date, '20:00', '05:00', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 同じ日の睡眠が2件入った';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    delete from places where id = '72000000-0000-0000-0000-000000000001';
+    raise exception 'NG: 場所を消せた（非表示のみのはず）';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  update sleep_logs set wakings = 1, updated_at = now() where id = '70000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 管理者が睡眠を直せない'; end if;
+
   -- 古い変更は捨てられる（後から届いた古い記録で上書きしない）
   update events set count = 5, updated_at = now() - interval '2 hours' where id = '40000000-0000-0000-0000-000000000001';
   select count into n from events where id = '40000000-0000-0000-0000-000000000001';
@@ -207,6 +276,10 @@ begin
   if n <> 0 then raise exception 'NG: 承認待ちの人に記録が見えた'; end if;
   select count(*) into n from abc_details;
   if n <> 0 then raise exception 'NG: 承認待ちの人にABC記録が見えた'; end if;
+  select count(*) into n from sleep_logs;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に睡眠が見えた'; end if;
+  select count(*) into n from places;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に場所が見えた'; end if;
   select count(*) into n from choice_options;
   if n <> 0 then raise exception 'NG: 承認待ちの人にABCの選択肢が見えた'; end if;
   select count(*) into n from team_members;
@@ -257,6 +330,16 @@ begin
   update abc_details set note = 'x', updated_at = now() where id = '60000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者がABC記録を書きかえた'; end if;
+  select count(*) into n from sleep_logs;
+  if n <> 1 then raise exception 'NG: 閲覧者に自分のチームの睡眠が見えない'; end if;
+  update sleep_logs set note = 'x', recorder_id = '00000000-0000-0000-0000-0000000000d1', updated_at = now() where id = '70000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が睡眠を書きかえた'; end if;
+  begin
+    insert into places (id, person_id, name, kind, created_by)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'x', 'other', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者が場所を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   update events set count = 7, updated_at = now() where id = '40000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者が記録を書きかえた'; end if;
@@ -289,6 +372,17 @@ begin
   update abc_details set note = 'リーダーが修正', updated_at = now() where id = '60000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'NG: 支援リーダーがチームのABC記録を直せない'; end if;
+  -- 「家族」の印がない支援リーダーは、睡眠を入力・変更できない（決定37）
+  update sleep_logs set note = 'x', recorder_id = '00000000-0000-0000-0000-0000000000c1', updated_at = now() where id = '70000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 家族の印がない支援リーダーが睡眠を書きかえた'; end if;
+  -- 場所の追加と、ほかの人が書いた睡眠以外の共有の印は支援者以上ならできる
+  insert into places (id, person_id, name, kind, created_by)
+    values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'リーダーが追加', 'school', '00000000-0000-0000-0000-0000000000c1');
+  update not_observed_days set deleted_at = now(), recorder_id = '00000000-0000-0000-0000-0000000000c1', updated_at = now()
+    where id = '71000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが「観察していなかった」を戻せない'; end if;
   -- 支援者としての招待はできる。コードは次の J のテストで使う
   code := create_invite('10000000-0000-0000-0000-000000000001', 'supporter');
   perform set_config('rls_test.invite', code, true);

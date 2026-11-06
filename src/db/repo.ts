@@ -199,7 +199,7 @@ export async function deleteBehaviorWithRecords(id: string, actorId: string) {
     await db.events.bulkPut(gone(events));
     await db.abcDetails.bulkPut(gone(abcs));
     await db.observations.bulkPut(gone(obs));
-    await db.notObservedDays.bulkPut(gone(marks));
+    await db.notObservedDays.bulkPut(gone(marks).map((x) => ({ ...x, recorderId: actorId }))); // サーバーでは最後に変えた人を残す
     const after: Behavior = { ...before, deletedAt: t, updatedAt: t };
     await db.behaviors.put(after);
     await audit(before.personId, 'behavior', id, 'delete', actorId, before, {
@@ -273,19 +273,27 @@ export async function undoLastEvent(personId: string, behaviorId: string, localD
   return last;
 }
 
-/** 自動の 0 を「観察していなかった（未記録）」にする／0 に戻す（6.3.3）。どちらも履歴に残る */
+/**
+ * 自動の 0 を「観察していなかった（未記録）」にする／0 に戻す（6.3.3）。どちらも履歴に残る。
+ * id は「対象者・行動・日」から決めるので、2台で同じ日に印を付けても、サーバーでは1件にまとまる。
+ */
 export async function setNotObserved(personId: string, behaviorId: string, localDate: string, notObserved: boolean, actorId: string) {
   const current = (await db.notObservedDays.where('[personId+localDate]').equals([personId, localDate]).toArray()).find(
     (x) => x.behaviorId === behaviorId && !x.deletedAt,
   );
   if (notObserved && !current) {
-    const rec: NotObservedDay = { ...base(), personId, behaviorId, localDate, recorderId: actorId };
-    await db.notObservedDays.add(rec);
+    const id = await fixedId(`nod:${personId}:${behaviorId}:${localDate}`);
+    const old = await db.notObservedDays.get(id);
+    const t = nowISO();
+    const rec: NotObservedDay = old
+      ? { ...old, deletedAt: null, updatedAt: t, recorderId: actorId }
+      : { ...base(), id, personId, behaviorId, localDate, recorderId: actorId };
+    await db.notObservedDays.put(rec);
     await audit(personId, 'notObservedDay', rec.id, 'create', actorId, null, rec);
   }
   if (!notObserved && current) {
     const t = nowISO();
-    const after = { ...current, deletedAt: t, updatedAt: t };
+    const after = { ...current, deletedAt: t, updatedAt: t, recorderId: actorId };
     await db.notObservedDays.put(after);
     await audit(personId, 'notObservedDay', current.id, 'delete', actorId, current, after);
   }
@@ -335,10 +343,18 @@ export function observedRatio(list: Observation[]): number | null {
 
 // ---------- 睡眠ログ（6.3.4） ----------
 
-/** 同じ夜（起きた日）に2件目を入れたときは上書きし、前の値は監査ログに残す */
+/**
+ * 同じ夜（起きた日）に2件目を入れたときは上書きし、前の値は監査ログに残す。
+ * id は「対象者・起きた日」から決めるので、2台で同じ夜を入れても、サーバーでは1件にまとまる（新しいほうが残る）。
+ */
 export async function saveSleep(input: Pick<SleepLog, 'personId' | 'wakeDate' | 'bedTime' | 'wakeTime' | 'wakings' | 'note'>, actorId: string) {
-  const before = (await db.sleepLogs.where('[personId+wakeDate]').equals([input.personId, input.wakeDate]).toArray()).find((l) => !l.deletedAt);
-  const after: SleepLog = before ? { ...before, ...input, recorderId: actorId, updatedAt: nowISO() } : { ...base(), ...input, recorderId: actorId };
+  const id = await fixedId(`sleep:${input.personId}:${input.wakeDate}`);
+  const before =
+    (await db.sleepLogs.where('[personId+wakeDate]').equals([input.personId, input.wakeDate]).toArray()).find((l) => !l.deletedAt) ??
+    (await db.sleepLogs.get(id));
+  const after: SleepLog = before
+    ? { ...before, ...input, recorderId: actorId, updatedAt: nowISO(), deletedAt: null }
+    : { ...base(), id, ...input, recorderId: actorId };
   await db.sleepLogs.put(after);
   await audit(input.personId, 'sleepLog', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
 }
