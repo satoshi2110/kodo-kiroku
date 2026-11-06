@@ -39,14 +39,14 @@ export default function Login() {
       const err = await requestPasswordReset(email.trim());
       // 登録があるかどうかは知らせない（どのメールでも同じ表示）
       if (err) setError(err);
-      else setMessage('登録されているメールアドレスなら、パスワードを決め直すリンクを送りました。メールのリンクを開いてください（30分以内・1回だけ使えます）。届かないときは迷惑メールのフォルダも見てください。');
+      else setMessage('登録されているメールアドレスなら、パスワードを決め直すリンクを送りました。英語のメールの「Reset password」を押してください（30分以内・1回だけ使えます）。届かないときは迷惑メールのフォルダも見てください。');
     } else if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) setError(error.message === 'Invalid login credentials' ? 'メールアドレスかパスワードがちがいます。' : error.message);
     } else {
       const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
       if (error) setError(error.message);
-      else if (!data.session) setMessage('確認のメールを送りました。メールのリンクを開いてから、ログインしてください。');
+      else if (!data.session) setMessage('確認のメールを送りました（いまは英語のメールです）。メールの中のリンクを押してから、ログインしてください。');
     }
     setBusy(false);
   }
@@ -56,7 +56,9 @@ export default function Login() {
       <TopBar title="行動の記録" sub="招待された人だけが使えます。一般には公開していません。" />
       <form className="section stack" onSubmit={submit}>
         {mode === 'forgot' ? (
-          <p className="help">登録したメールアドレスに、パスワードを決め直すためのリンクを送ります。</p>
+          <p className="help">
+            登録したメールアドレスに、パスワードを決め直すためのリンクを送ります。いまは英語のメール（件名「Reset your password」）が届くので、中の「Reset password」を押してください。
+          </p>
         ) : (
           <Segmented<Mode>
             label="ログインのしかた"
