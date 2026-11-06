@@ -17,6 +17,7 @@ import { formatSleep, sleepMinutes } from '../lib/sleep';
 import { useRecordSet } from '../lib/series';
 import { computeWins } from '../lib/wins';
 import { usePlanData } from '../lib/usePlan';
+import { needsMyAnswer, useOwnerTransfers } from '../lib/ownerTransfer';
 import { addDays, formatShortDate } from '../lib/date';
 
 type Timer = { behaviorId: string; startedAt: number };
@@ -26,6 +27,7 @@ export default function Home() {
   const today = toLocalDate();
   const personId = person?.id ?? '';
   const now = useNow(30_000);
+  const handover = useOwnerTransfers(person?.id)?.pending;
 
   const todayEvents = useLiveQuery(
     async () => (personId ? (await db.events.where('[personId+localDate]').equals([personId, today]).toArray()).filter((e) => !e.deletedAt) : []),
@@ -200,6 +202,17 @@ export default function Home() {
             <span className="stack" style={{ gap: 2 }}>
               <strong>支援計画の確認の依頼があります</strong>
               <span className="muted">{formatShortDate(signRequest.createdAt.slice(0, 10))} の変更 ・ 内容を見て返事をしてください</span>
+            </span>
+            <span className="today-row__go" aria-hidden="true">›</span>
+          </Link>
+        </div>
+      )}
+      {handover && userId && (needsMyAnswer(handover, userId) || ![handover.fromUser, handover.toUser].includes(userId)) && (
+        <div className="section">
+          <Link to="/team" className="card row row--between notice-card">
+            <span className="stack" style={{ gap: 2 }}>
+              <strong>{needsMyAnswer(handover, userId) ? '管理者の引き継ぎについて、返事をしてください' : '管理者の引き継ぎが進んでいます'}</strong>
+              <span className="muted">チームの画面で内容を見られます</span>
             </span>
             <span className="today-row__go" aria-hidden="true">›</span>
           </Link>

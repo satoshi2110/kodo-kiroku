@@ -155,6 +155,23 @@ export interface Place extends BaseRecord {
 }
 
 /**
+ * 管理者の引き継ぎ（6.9、データモデル OwnerTransfer）。サーバーのチームだけ。
+ * 作る・返事をするのはサーバーの関数（0012）で、端末は受け取って見せるだけ。
+ */
+export interface OwnerTransfer extends Omit<BaseRecord, 'deletedAt'> {
+  personId: string;
+  method: 'nominate' | 'subadmin_request'; // 本人指名 / 副管理者申請
+  requestedBy: string;
+  fromUser: string; // 旧管理者
+  toUser: string; // 新管理者
+  requestedAt: ISODateTime;
+  dueAt: ISODateTime | null; // 副管理者申請だけ（申し込みから14日）
+  result: 'pending' | 'completed' | 'declined' | 'rejected' | 'cancelled';
+  decidedAt: ISODateTime | null;
+  decidedBy: string | null;
+}
+
+/**
  * わたしのいつもの時間（6.3.3、データモデル UserSchedule）。記録者ごとの勤務・在宅時間の目安で、観察時間の推定に使う。
  * 1人につき対象者ごとに1つ。直せるのは本人だけで、チームのほかの人は見るだけ。やめるときは論理削除。
  */

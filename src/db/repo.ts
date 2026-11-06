@@ -636,7 +636,7 @@ export const TEAM_DELETE_DAYS = 30;
 const teamTables = () => [
   db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
   db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
-  db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments,
+  db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments, db.ownerTransfers,
 ];
 
 /**

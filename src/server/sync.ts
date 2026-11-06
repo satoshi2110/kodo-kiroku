@@ -3,7 +3,7 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・チームの設定・同意・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ。
+ * いまは 対象者・メンバー・チームの設定・同意・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・管理者の引き継ぎ（受け取るだけ）・監査ログ。
  * AI の結果は、まだこの端末の中だけ。
  */
 import Dexie, { type Table } from 'dexie';
@@ -26,6 +26,7 @@ interface SyncTable {
 const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
+  { local: db.ownerTransfers, remote: 'owner_transfers', team: (r) => r.personId, insert: false },
   { local: db.teamSettings, remote: 'team_settings', team: (r) => r.personId, insert: true },
   { local: db.consents, remote: 'consents', team: (r) => r.personId, insert: true, appendOnly: true },
   { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
@@ -253,6 +254,22 @@ async function pull(uid: string): Promise<string[]> {
   return errors;
 }
 
+/**
+ * 管理者の引き継ぎ（6.9）: 自分が申し込んだ副管理者申請が14日たっても断られていなければ、管理者になる。
+ * サーバーの関数が期限と返事を確かめる。入れかわったときは true（もう一度受け取って役割を新しくする）
+ */
+async function finishDueRequests(uid: string): Promise<boolean> {
+  const due = await db.ownerTransfers
+    .filter((t) => t.method === 'subadmin_request' && t.result === 'pending' && t.toUser === uid && !!t.dueAt && new Date(t.dueAt).getTime() <= Date.now())
+    .toArray();
+  let done = false;
+  for (const t of due) {
+    const { error } = await supabase!.rpc('finish_admin_request', { p_id: t.id });
+    if (!error) done = true;
+  }
+  return done;
+}
+
 // ---------- まとめて ----------
 
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -278,6 +295,7 @@ export async function runSync(): Promise<void> {
     setStatus({ running: true });
     try {
       const errors = [...(await pull(uid))];
+      if (await finishDueRequests(uid)) errors.push(...(await pull(uid)));
       errors.push(...(await push(uid, await serverTeams())));
       const pending = await unsentCount();
       setStatus({ running: false, lastAt: new Date().toISOString(), error: errors.length ? errors.join(' / ') : null, pending });

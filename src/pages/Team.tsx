@@ -3,6 +3,7 @@
  * AI・睡眠不足の判定・書き出し・チームの削除は「チームの設定」にある。
  * サーバーにつながる設定があるときは、招待コードを作り、参加した人を承認できる（決定44、7.4.2 #3）。
  * 管理者・副管理者・支援リーダーは、ほかのメンバーの役割を変えたり、停止したりできる（7章 #2）。
+ * 管理者の引き継ぎ（6.9）: 管理者が指名して相手が受ける／副管理者が申し込み、14日のあいだ管理者が断らなければ入れかわる。
  * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
  */
 import { useState, useSyncExternalStore } from 'react';
@@ -12,12 +13,13 @@ import { db } from '../db/db';
 import { useApp } from '../state';
 import { assignableRoles, canInvite, canManageMember, canRecord, setMemberFlags } from '../db/repo';
 import { supabase } from '../server/supabase';
-import { syncStatus, unsentCount } from '../server/sync';
+import { runSync, syncStatus, unsentCount } from '../server/sync';
 import { signOut } from '../server/session';
 import { addComment, removeComment } from '../db/phase2';
 import { formatDateTimeJa, nowISO } from '../lib/date';
 import { AFFILIATION_LABEL, ROLE_LABEL, type Role, type TeamMember } from '../db/types';
 import { Sheet, TopBar } from '../components/ui';
+import { formerAdminRole, isDue, TRANSFER_RESULT_LABEL, useOwnerTransfers } from '../lib/ownerTransfer';
 
 export default function Team() {
   const { person, members, me, userId, aiEnabled } = useApp();
@@ -93,6 +95,8 @@ export default function Team() {
           </p>
         )}
       </div>
+
+      {supabase && <Handover personId={person.id} />}
 
       <div className="section">
         <div className="card stack">
@@ -218,6 +222,142 @@ function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
   );
 }
 
+/**
+ * 管理者の引き継ぎ（6.9）。管理者は副管理者か「家族」の印の人を指名し、相手が受けたら入れかわる。
+ * 管理者が操作できないときは、副管理者が申し込む。14日のあいだ管理者が断らなければ、副管理者が管理者になる。
+ * 進んでいる間も、記録と閲覧は止まらない。申し込み・返事・入れかわりはサーバーの監査ログに残る。
+ */
+function Handover({ personId }: { personId: string }) {
+  const { members, me, userId } = useApp();
+  const transfers = useOwnerTransfers(personId);
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!me || !userId || !transfers) return null;
+  const { pending, last } = transfers;
+  const isAdmin = me.role === 'admin';
+  const isSub = me.role === 'subadmin';
+  if (!pending && !last && !isAdmin && !isSub) return null;
+  const nameOf = (uid: string) => members.find((m) => m.userId === uid)?.displayName ?? '（チームにいない人）';
+  const candidates = members.filter((m) => m.userId !== userId && m.approvedAt != null && !m.suspendedAt && (m.role === 'subadmin' || m.familyMark));
+
+  async function call(fn: string, args: Record<string, unknown>, confirmText?: string) {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase!.rpc(fn, args);
+    setBusy(false);
+    if (error) return setError(error.message);
+    setTo('');
+    await runSync();
+  }
+  const answer = (accept: boolean, confirmText?: string) => call('answer_owner_transfer', { p_id: pending!.id, p_accept: accept }, confirmText);
+
+  let body: JSX.Element;
+  if (pending) {
+    const from = nameOf(pending.fromUser);
+    const toName = nameOf(pending.toUser);
+    const after = `${toName}さんが管理者に、${from}さんは${formerAdminRole(pending, members)}になります。`;
+    const due = pending.dueAt ? formatDateTimeJa(pending.dueAt) : '';
+    if (pending.method === 'nominate') {
+      body =
+        pending.toUser === userId ? (
+          <>
+            <p className="notice-inline" role="status">管理者の{from}さんから、管理者の引き継ぎを頼まれています。受けると、{after}</p>
+            <button type="button" className="btn btn--block" disabled={busy} onClick={() => answer(true, `管理者を引き継ぎますか？\n${after}`)}>受けて管理者になる</button>
+            <button type="button" className="btn btn--outline btn--block" disabled={busy} onClick={() => answer(false, '引き継ぎを断りますか？')}>断る</button>
+          </>
+        ) : pending.fromUser === userId ? (
+          <>
+            <span>{toName}さんに引き継ぎをお願いしています。返事を待っています（{formatDateTimeJa(pending.requestedAt)}）。</span>
+            <button type="button" className="btn btn--outline btn--block" disabled={busy} onClick={() => answer(false, '引き継ぎのお願いを取り下げますか？')}>取り下げる</button>
+          </>
+        ) : (
+          <span>{from}さん（管理者）が{toName}さんに引き継ぎをお願いしています。受けると、{after}</span>
+        );
+    } else {
+      body =
+        pending.fromUser === userId ? (
+          <>
+            <p className="notice-inline" role="status">
+              副管理者の{toName}さんが、管理者になる申し込みをしました。{isDue(pending) ? '期限を過ぎたので、もう断れません。' : `${due}までに断らなければ、${after}`}
+            </p>
+            {!isDue(pending) && (
+              <button type="button" className="btn btn--block" disabled={busy} onClick={() => answer(false, '申し込みを断りますか？ あなたが管理者のままです。')}>断る（管理者のまま）</button>
+            )}
+            <button type="button" className="btn btn--outline btn--block" disabled={busy} onClick={() => answer(true, `いま引き継ぎますか？\n${after}`)}>いま引き継ぐ</button>
+          </>
+        ) : pending.toUser === userId ? (
+          <>
+            <span>管理者になる申し込みをしました（{formatDateTimeJa(pending.requestedAt)}）。{isDue(pending) ? '期限を過ぎました。' : `${due}まで管理者の返事を待ちます。断られなければ、そのあと管理者になります。`}</span>
+            {isDue(pending) && (
+              <button type="button" className="btn btn--block" disabled={busy} onClick={() => call('finish_admin_request', { p_id: pending.id })}>管理者になる</button>
+            )}
+            <button type="button" className="btn btn--outline btn--block" disabled={busy} onClick={() => answer(false, '申し込みを取り下げますか？')}>取り下げる</button>
+          </>
+        ) : (
+          <span>副管理者の{toName}さんが、管理者になる申し込みをしています。{due}までに{from}さん（管理者）が断らなければ、{after}</span>
+        );
+    }
+  } else {
+    body = (
+      <>
+        {last && (
+          <span className="muted">
+            前回: {formatDateTimeJa(last.decidedAt ?? last.requestedAt)} ・ {nameOf(last.fromUser)} → {nameOf(last.toUser)}（{last.method === 'nominate' ? '指名' : '副管理者の申し込み'}）・ {TRANSFER_RESULT_LABEL[last.result]}
+          </span>
+        )}
+        {isAdmin &&
+          (candidates.length ? (
+            <>
+              <label className="field">
+                引き継ぐ人
+                <select value={to} onChange={(e) => setTo(e.target.value)}>
+                  <option value="">選んでください</option>
+                  {candidates.map((m) => <option key={m.id} value={m.userId}>{m.displayName}（{m.role === 'subadmin' ? ROLE_LABEL[m.role] : '家族の印'}）</option>)}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn btn--outline btn--block"
+                disabled={busy || !to}
+                onClick={() => call('nominate_admin', { p_person: personId, p_to_user: to }, `${nameOf(to)}さんに管理者の引き継ぎをお願いしますか？\n相手が受けると入れかわります。`)}
+              >
+                引き継ぎをお願いする
+              </button>
+              <p className="help">指名できるのは、副管理者か「家族」の印がある人です。相手が受けると、あなたは{formerAdminRole({ toUser: to }, members)}になります。</p>
+            </>
+          ) : (
+            <p className="help">引き継げるのは、副管理者か「家族」の印がある人です。先にメンバーの「変更」で決めてください。</p>
+          ))}
+        {isSub && (
+          <>
+            <button
+              type="button"
+              className="btn btn--outline btn--block"
+              disabled={busy}
+              onClick={() => call('request_admin', { p_person: personId }, '管理者になる申し込みをしますか？\n管理者に知らせ、14日のあいだに断られなければ、あなたが管理者になります。')}
+            >
+              管理者になる申し込みをする
+            </button>
+            <p className="help">管理者が病気などで操作できないときに使います。14日のあいだ、管理者は断ることができます。</p>
+          </>
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="section">
+      <div className="card stack">
+        <h2 className="card__title" style={{ margin: 0 }}>管理者の引き継ぎ</h2>
+        {body}
+        {error && <p className="ai-error" role="alert">{error}</p>}
+        {pending && <p className="help">引き継ぎの間も、記録と閲覧はいつもどおりできます。お願い・返事・入れかわりは記録に残ります。</p>}
+      </div>
+    </div>
+  );
+}
+
 /** サーバーとの同期の状態とログアウト */
 function Account() {
   const st = useSyncExternalStore(syncStatus.subscribe, syncStatus.get);
@@ -237,7 +377,7 @@ function Account() {
           {st.pending > 0 && ` ・ 送れていない変更 ${st.pending} 件`}
         </span>
         {st.error && <p className="ai-error" role="alert">{st.error}</p>}
-        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りです。AI の結果は、この端末の中だけです。</p>
+        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送り・管理者の引き継ぎです。AI の結果は、この端末の中だけです。</p>
         <button type="button" className="btn btn--block" onClick={logout}>ログアウト</button>
       </div>
     </div>

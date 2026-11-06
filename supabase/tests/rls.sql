@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0011）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0012）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -1145,6 +1145,204 @@ do $$ begin
   end if;
 end $$;
 reset role;
+
+-- ---------- 管理者の引き継ぎ（6.9、0012） ----------
+-- 管理者の役割は、引き継ぎの関数の外からは変えられない（管理者でも、副管理者でも）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    update team_members set role = 'admin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000b2';
+    raise exception 'NG: 副管理者が自分を管理者にできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update team_members set role = 'subadmin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000a1';
+    raise exception 'NG: 副管理者が管理者を下ろせた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform set_config('app.owner_transfer', 'on', true);
+    update team_members set role = 'admin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000b2';
+    raise exception 'NG: 印を自分で付けた副管理者が管理者になれた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  perform set_config('app.owner_transfer', 'off', true);
+  begin
+    perform owner_transfer_swap(gen_random_uuid());
+    raise exception 'NG: 入れかえの関数を直接呼べた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare t uuid;
+begin
+  begin
+    update team_members set role = 'admin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000b2';
+    raise exception 'NG: 管理者がほかの人を直接管理者にできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update team_members set role = 'subadmin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000a1';
+    raise exception 'NG: 管理者が自分の役割を直接下げられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform set_config('app.owner_transfer', 'on', true);
+    update team_members set role = 'subadmin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000a1';
+    raise exception 'NG: 印を自分で付けた管理者が、関数の外で役割を下げられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  perform set_config('app.owner_transfer', 'off', true);
+  -- 「家族」の印がない閲覧者・チーム2 の人・自分は指名できない
+  begin
+    perform nominate_admin('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 「家族」の印がない閲覧者を指名できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform nominate_admin('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1');
+    raise exception 'NG: チーム2 の人を指名できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform nominate_admin('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b2');
+    raise exception 'NG: A がチーム2 の引き継ぎを指名できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  -- 副管理者（D）を指名できる。進んでいる引き継ぎは1つだけ
+  t := nominate_admin('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b2');
+  perform set_config('test.t1', t::text, true);
+  begin
+    perform nominate_admin('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b2');
+    raise exception 'NG: 引き継ぎを2つ同時に作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into owner_transfers (person_id, method, requested_by, from_user, to_user)
+      values ('10000000-0000-0000-0000-000000000001', 'nominate', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000c1');
+    raise exception 'NG: 引き継ぎの表に直接書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 支援リーダー（L）には見えるが、指名・申し込み・返事はできない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from owner_transfers;
+  if n <> 1 then raise exception 'NG: 支援リーダーに引き継ぎが見えない（% 件）', n; end if;
+  begin
+    perform nominate_admin('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1');
+    raise exception 'NG: 支援リーダーが指名できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform request_admin('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 支援リーダーが管理者になる申し込みをできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform answer_owner_transfer(current_setting('test.t1')::uuid, true);
+    raise exception 'NG: 支援リーダーが指名を受けられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update owner_transfers set result = 'completed' where id = current_setting('test.t1')::uuid;
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 支援リーダーが引き継ぎの表を書きかえた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 閲覧者（V、かかわっていない）とチーム2 の B には見えない。B は返事もできない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from owner_transfers) <> 0 then raise exception 'NG: かかわっていない閲覧者に引き継ぎが見えた'; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from owner_transfers) <> 0 then raise exception 'NG: チーム2 の B にチーム1 の引き継ぎが見えた'; end if;
+  begin
+    perform answer_owner_transfer(current_setting('test.t1')::uuid, false);
+    raise exception 'NG: チーム2 の B がチーム1 の引き継ぎに返事できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 指名された D は断れる。そのあと D が申し込み、期限の前は自分で管理者になれず、A は断れる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare t uuid; r text;
+begin
+  r := answer_owner_transfer(current_setting('test.t1')::uuid, false);
+  if r <> 'declined' then raise exception 'NG: 指名を断ったのに %', r; end if;
+  t := request_admin('10000000-0000-0000-0000-000000000001');
+  perform set_config('test.t2', t::text, true);
+  begin
+    perform finish_admin_request(t);
+    raise exception 'NG: 14日たつ前に副管理者が管理者になれた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare r text;
+begin
+  r := answer_owner_transfer(current_setting('test.t2')::uuid, false);
+  if r <> 'rejected' then raise exception 'NG: 管理者が申し込みを断ったのに %', r; end if;
+end $$;
+reset role;
+
+-- 14日たった申し込み（ここでは期限を過ぎた行を直接作る）。A はもう断れず、D が管理者になる。A は副管理者になる
+insert into owner_transfers (id, person_id, method, requested_by, from_user, to_user, due_at) values
+  ('4c000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'subadmin_request',
+   '00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b2', now() - interval '1 day');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform answer_owner_transfer('4c000000-0000-0000-0000-000000000003', false);
+    raise exception 'NG: 期限を過ぎたのに管理者が断れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  perform finish_admin_request('4c000000-0000-0000-0000-000000000003');
+end $$;
+reset role;
+do $$ begin
+  if (select role from team_members where id = '20000000-0000-0000-0000-0000000000b2') <> 'admin' then raise exception 'NG: 期限のあと D が管理者にならない'; end if;
+  if (select role from team_members where id = '20000000-0000-0000-0000-0000000000a1') <> 'subadmin' then raise exception 'NG: 元の管理者 A が副管理者にならない'; end if;
+  if (select count(*) from team_members where person_id = '10000000-0000-0000-0000-000000000001' and role = 'admin' and deleted_at is null) <> 1 then
+    raise exception 'NG: 入れかわったあと、管理者が1人ではない';
+  end if;
+  if (select result from owner_transfers where id = '4c000000-0000-0000-0000-000000000003') <> 'completed' then raise exception 'NG: 引き継ぎが終わったことになっていない'; end if;
+  if (select count(*) from audit_logs where entity = 'owner_transfers' and by_server) < 4 then raise exception 'NG: 引き継ぎが監査ログに残っていない'; end if;
+  if not exists (select 1 from audit_logs where entity = 'team_members' and entity_id = '20000000-0000-0000-0000-0000000000b2' and after ->> 'role' = 'admin') then
+    raise exception 'NG: 管理者になったことが監査ログに残っていない';
+  end if;
+end $$;
+
+-- 新しい管理者 D が A を指名し、A が受けると元に戻る（指名の流れ）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  perform set_config('test.t4', nominate_admin('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1')::text, true);
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare r text;
+begin
+  r := answer_owner_transfer(current_setting('test.t4')::uuid, true);
+  if r <> 'completed' then raise exception 'NG: 指名を受けたのに %', r; end if;
+  if my_role('10000000-0000-0000-0000-000000000001') <> 'admin' then raise exception 'NG: 指名を受けた A が管理者にならない'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select role from team_members where id = '20000000-0000-0000-0000-0000000000b2') <> 'subadmin' then raise exception 'NG: 指名で入れかわったあと D が副管理者にならない'; end if;
+end $$;
 
 -- ---------- 開始コードは1回だけ使える ----------
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}', true);
