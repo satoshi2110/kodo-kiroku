@@ -6,6 +6,7 @@ import { db } from './db';
 import { fixedId, newId } from '../lib/id';
 import { localDateOf, nowISO } from '../lib/date';
 import {
+  AI_CONSENT_TEXT_VERSION,
   CONSENT_TEXT_VERSION,
   DEFAULT_CHOICES,
   type AbcDetail,
@@ -682,7 +683,7 @@ export async function setAiEnabled(personId: string, enabled: boolean, actorId: 
     await db.teamSettings.put(after);
     await audit(personId, 'teamSetting', personId, 'update', actorId, before, after);
     if (enabled) {
-      const consent = { ...base(), personId, userId: actorId, kind: 'ai_overseas' as const, textVersion: CONSENT_TEXT_VERSION, revokedAt: null };
+      const consent = { ...base(), personId, userId: actorId, kind: 'ai_overseas' as const, textVersion: AI_CONSENT_TEXT_VERSION, revokedAt: null };
       await db.consents.add(consent);
       await audit(personId, 'consent', consent.id, 'create', actorId, null, consent);
     } else {

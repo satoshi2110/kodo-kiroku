@@ -548,3 +548,5 @@ export const INTENSITY_NAMES: Record<3 | 5, string[]> = {
 
 /** 同意文面の版（下書き、決定79） */
 export const CONSENT_TEXT_VERSION = 'draft-2026-11-05';
+/** AI の同意（外国にある第三者への提供、7.5）の文面の版。文面を変えたら上げる */
+export const AI_CONSENT_TEXT_VERSION = 'ai-draft-2026-11-07';

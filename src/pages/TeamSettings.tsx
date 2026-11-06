@@ -13,6 +13,11 @@ import { addDays, formatDateJa, localDateOf, nowISO, toLocalDate } from '../lib/
 import { Chip, TopBar } from '../components/ui';
 import { serverEnabled } from '../server/supabase';
 
+// AI の同意画面で案内するページ（7.5）。内容は取り込まず、リンクだけを置く
+const PPC_US = 'https://www.ppc.go.jp/enforcement/infoprovision/laws/offshore_report_america/';
+const ANTHROPIC_TRAINING = 'https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training';
+const ANTHROPIC_RETENTION = 'https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data';
+
 export default function TeamSettings() {
   const { person, me, members, userId, aiEnabled, shortSleepUnderHours, deleteRequestedAt } = useApp();
   const [asking, setAsking] = useState(false);
@@ -93,6 +98,19 @@ export default function TeamSettings() {
                 対象者は「対象者」、支援者は「支援者A」、場所は「場所A」のように名前を置きかえ、関わった人は所属（家族・施設の職員など）だけを送ります。写真は送りません。
                 結果は AI による仮説で、診断ではありません。採否は管理者・副管理者・支援リーダーが決めます。
               </p>
+              <p className="help">
+                <strong>送り先の国</strong>: 米国。米国の個人情報を守る制度は、個人情報保護委員会がまとめています（
+                <a href={PPC_US} target="_blank" rel="noopener noreferrer">外国制度（アメリカ合衆国）</a>）。
+              </p>
+              <p className="help">
+                <strong>送り先（Anthropic）の扱い</strong>（2026-11-07 に Anthropic の公開ページで確認）:
+                API で送ったものを AI の学習には使いません（
+                <a href={ANTHROPIC_TRAINING} target="_blank" rel="noopener noreferrer">学習について</a>）。
+                送ったものと AI の答えは、受け取ってから30日以内に自動で消えます。利用のきまりに反する疑いがあるときや、法令で求められるときは、もっと長く残ることがあります。
+                こちらから個別に消してもらう申し込みはできず、30日以内の自動の削除が消す方法になります（
+                <a href={ANTHROPIC_RETENTION} target="_blank" rel="noopener noreferrer">保存の期間について</a>）。
+              </p>
+              <p className="help">リンクは外部のサイト（英語のページを含む）が開きます。この文面は下書きで、試用中に法律の専門家に確かめます。</p>
               <label className="row">
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ width: 22, height: 22 }} />
                 <span className="label">内容を読み、同意します</span>
