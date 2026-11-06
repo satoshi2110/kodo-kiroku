@@ -3,7 +3,7 @@
  * - 縦軸: 目盛り・補助線・単位つきの軸名。目盛りは記録全体の最大値で固定し、横に動かしても変わらない
  * - 横軸: 1日（週・月）ずつの目盛りに日付。文字は最後から数えて1つおき。軸名を右下に書く
  * - 記録がない日は線を切る。条件変更（フェーズ）の前後も線をつながない（決定25）
- * - 線の右端に行動名と最後の値を書く（決定31）。問題行動は実線、代替行動・望ましい行動は点線（色だけに頼らない）
+ * - 線の右端に行動名と最後の値を書く（決定31）。左に入りきらないときは点の右に書く。問題行動は実線、代替行動・望ましい行動は点線（色だけに頼らない）
  * - 横にスクロールでき、縦軸は左に固定。同じ sync を渡したパネルは一緒に動く（決定73）。最初は最後の14区切り、「今日に戻る」で右端へ
  * - staticMode: スクロールしない（支援会議メモ・PDF レポート用。全期間を幅に収める）
  */
@@ -19,6 +19,7 @@ const BOTTOM = 52;
 const H = TOP + PLOT_H + BOTTOM;
 const VISIBLE = 14;
 const PAD_R = 16;
+const PAD_L = 14; // 最初の日付の文字が左で切れないように
 
 export interface ChartLine {
   name: string;
@@ -102,8 +103,8 @@ export default function LineChart({
 
   const n = dates.length;
   const w = width || 340;
-  const slotW = staticMode ? Math.max(4, (w - AXIS_W - PAD_R) / Math.max(1, n)) : Math.max(18, (w - AXIS_W - PAD_R) / VISIBLE);
-  const plotW = staticMode ? w - AXIS_W : Math.max(n * slotW + PAD_R, w - AXIS_W);
+  const slotW = staticMode ? Math.max(4, (w - AXIS_W - PAD_L - PAD_R) / Math.max(1, n)) : Math.max(18, (w - AXIS_W - PAD_L - PAD_R) / VISIBLE);
+  const plotW = staticMode ? w - AXIS_W : Math.max(PAD_L + n * slotW + PAD_R, w - AXIS_W);
 
   // 最初は右端（最後の14区切り）を見せる
   useEffect(() => {
@@ -124,17 +125,17 @@ export default function LineChart({
   const maxVal = Math.max(0, ...all, ...targets.map((t) => t.value));
   const { min, max, ticks } = fixedMax != null && fixedMin > 0 ? evenScale(fixedMin, fixedMax) : niceScale(fixedMax ?? maxVal);
   const y = (v: number) => TOP + PLOT_H - ((v - min) / (max - min)) * PLOT_H;
-  const x = (i: number) => i * slotW + slotW / 2;
+  const x = (i: number) => PAD_L + i * slotW + slotW / 2;
 
   // 条件変更の位置: その区切りの左端（週・月は、変更日の入る区切りの中の位置）
   const phaseX = (date: string) => {
     let j = -1;
     dates.forEach((d, i) => { if (d <= date) j = i; });
     if (j < 0) return null;
-    if (granularity === 'day' || dates[j] === date) return j * slotW;
+    if (granularity === 'day' || dates[j] === date) return PAD_L + j * slotW;
     const start = parseLocalDate(dates[j]).getTime();
     const end = j + 1 < n ? parseLocalDate(dates[j + 1]).getTime() : start + (granularity === 'week' ? 7 : 30) * 86400_000;
-    return j * slotW + ((parseLocalDate(date).getTime() - start) / (end - start)) * slotW;
+    return PAD_L + j * slotW + ((parseLocalDate(date).getTime() - start) / (end - start)) * slotW;
   };
   const shownPhases = phases.filter((p) => p.date > (dates[0] ?? '') && p.date <= (dates[n - 1] ?? ''));
   // i と i+1 の間に条件変更があれば線を切る
@@ -179,6 +180,8 @@ export default function LineChart({
     .filter((e): e is { k: number; x: number; y: number; text: string } => !!e)
     .sort((a, b) => a.y - b.y);
   for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+  // 文字の幅の目安（12px の太字。全角 12・半角 7）
+  const textW = (s: string) => [...s].reduce((sum, c) => sum + (c.charCodeAt(0) > 0xff ? 12 : 7), 0);
 
   const plot = (
     <>
@@ -237,7 +240,16 @@ export default function LineChart({
         ),
       )}
       {ends.map((e) => (
-        <text key={e.k} x={e.x - 6} y={e.y - 8} textAnchor="end" className="chart__end" fill={lines[e.k].color}>{e.text}</text>
+        <text
+          key={e.k}
+          x={e.x - 6 - textW(e.text) < 0 ? e.x + 6 : e.x - 6}
+          y={Math.max(12, e.y - 8)}
+          textAnchor={e.x - 6 - textW(e.text) < 0 ? 'start' : 'end'}
+          className="chart__end"
+          fill={lines[e.k].color}
+        >
+          {e.text}
+        </text>
       ))}
       <text x={plotW - 4} y={H - 6} textAnchor="end" className="chart__title">{xLabel}</text>
     </>
