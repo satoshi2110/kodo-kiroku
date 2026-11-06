@@ -1082,6 +1082,70 @@ begin
 end $$;
 reset role;
 
+-- ---------- 同意の記録（7.5、0001。端末から同期する） ----------
+-- A は自分の同意をチーム1 に書ける。他人の名前・チーム2 には書けない。書いたあとは変えられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  insert into consents (id, person_id, user_id, kind, text_version)
+    values ('4b000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'ai_overseas', 'test');
+  -- 同期で送り直しても（重なったら何もしない）エラーにならず、増えない
+  insert into consents (id, person_id, user_id, kind, text_version)
+    values ('4b000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'ai_overseas', 'test')
+    on conflict (id) do nothing;
+  select count(*) into n from consents where id = '4b000000-0000-0000-0000-000000000001';
+  if n <> 1 then raise exception 'NG: 同意を送り直すと % 件になった', n; end if;
+  begin
+    insert into consents (id, person_id, user_id, kind, text_version)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', 'ai_overseas', 'test');
+    raise exception 'NG: A が他人（L）の同意を書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into consents (id, person_id, user_id, kind, text_version)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000a1', 'ai_overseas', 'test');
+    raise exception 'NG: A がチーム2 に同意を書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update consents set text_version = 'x' where id = '4b000000-0000-0000-0000-000000000001';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 同意を書きかえられた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    delete from consents where id = '4b000000-0000-0000-0000-000000000001';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 同意を消せた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 副管理者（D）にはチームの同意が見える。支援リーダー（L）には他人の同意は見えない。チーム2 の B には見えない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from consents where id = '4b000000-0000-0000-0000-000000000001') <> 1 then
+    raise exception 'NG: 副管理者（D）にチームの同意が見えない';
+  end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from consents where user_id <> '00000000-0000-0000-0000-0000000000c1') <> 0 then
+    raise exception 'NG: 支援リーダー（L）に他人の同意が見えた';
+  end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from consents where person_id = '10000000-0000-0000-0000-000000000001') <> 0 then
+    raise exception 'NG: チーム2 の B にチーム1 の同意が見えた';
+  end if;
+end $$;
+reset role;
+
 -- ---------- 開始コードは1回だけ使える ----------
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}', true);
 set local role authenticated;

@@ -3,8 +3,8 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ。
- * AI の結果と同意は、まだこの端末の中だけ。
+ * いまは 対象者・メンバー・チームの設定・同意・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ。
+ * AI の結果は、まだこの端末の中だけ。
  */
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
@@ -19,6 +19,7 @@ interface SyncTable {
   remote: string;
   team: (r: Row) => string | undefined; // どのチーム（対象者）の行か
   insert: boolean; // 端末から新しく作ってよいか（対象者とメンバーはサーバーの関数でだけ作る）
+  appendOnly?: boolean; // 作ったあとは変えない（同意）。送り直しても重ならないように送る
 }
 
 /** 送る順番（行動・場所・睡眠の前に対象者、記録・インターバル記録・「観察していなかった日」の前に行動、ABC記録の前に記録、写真の前に好きなもの、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
@@ -26,6 +27,7 @@ const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
   { local: db.teamSettings, remote: 'team_settings', team: (r) => r.personId, insert: true },
+  { local: db.consents, remote: 'consents', team: (r) => r.personId, insert: true, appendOnly: true },
   { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
   { local: db.observations, remote: 'observations', team: (r) => r.personId, insert: true },
   { local: db.places, remote: 'places', team: (r) => r.personId, insert: true },
@@ -158,6 +160,15 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
   const sb = supabase!;
   const errors: string[] = [];
   for (const s of TABLES) {
+    if (s.appendOnly) {
+      // 同期を入れる前に端末で取った同意（_srv なし）も送る。送れるのは自分の同意だけ
+      const own = (await s.local.filter((r: Row) => (r._dirty === 1 || r._srv !== 1) && r.userId === uid && teams.has(s.team(r) ?? '')).toArray()) as Row[];
+      if (!own.length) continue;
+      const { error } = await sb.from(s.remote).upsert(own.map(toRemote), { onConflict: 'id', ignoreDuplicates: true });
+      if (!error) await markSent(s.local, own);
+      else errors.push(`${s.remote}: ${error.message}`);
+      continue;
+    }
     const rows = (await s.local.filter((r: Row) => r._dirty === 1 && teams.has(s.team(r) ?? '')).toArray()) as Row[];
     if (!rows.length) continue;
     const fresh = s.insert ? rows.filter((r) => r._srv !== 1) : [];
@@ -282,7 +293,7 @@ export async function runSync(): Promise<void> {
 /** ログアウトしたとき: サーバーのチームのデータをこの端末から消す（端末の紛失・共用への備え、7.4.2 #1）。サンプルは残す */
 export async function clearServerData() {
   const teams = await serverTeams();
-  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.consents, db.device];
+  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.device];
   await db.transaction('rw', all, async () => {
     for (const t of all) {
       if (t === db.device) continue;
