@@ -3,7 +3,8 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・行動・記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ だけ。ほかの表は順に足す。
+ * いまは 対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ。
+ * AI の結果と同意は、まだこの端末の中だけ。
  */
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
@@ -19,17 +20,21 @@ interface SyncTable {
   insert: boolean; // 端末から新しく作ってよいか（対象者とメンバーはサーバーの関数でだけ作る）
 }
 
-/** 送る順番（行動・場所・睡眠の前に対象者、記録と「観察していなかった日」の前に行動、ABC記録の前に記録、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
+/** 送る順番（行動・場所・睡眠の前に対象者、記録・インターバル記録・「観察していなかった日」の前に行動、ABC記録の前に記録、写真の前に好きなもの、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
 const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
+  { local: db.teamSettings, remote: 'team_settings', team: (r) => r.personId, insert: true },
   { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
+  { local: db.observations, remote: 'observations', team: (r) => r.personId, insert: true },
   { local: db.places, remote: 'places', team: (r) => r.personId, insert: true },
   { local: db.sleepLogs, remote: 'sleep_logs', team: (r) => r.personId, insert: true },
   { local: db.notObservedDays, remote: 'not_observed_days', team: (r) => r.personId, insert: true },
   { local: db.events, remote: 'events', team: (r) => r.personId, insert: true },
   { local: db.choiceOptions, remote: 'choice_options', team: (r) => r.personId, insert: true },
   { local: db.abcDetails, remote: 'abc_details', team: (r) => r.personId, insert: true },
+  { local: db.reinforcers, remote: 'reinforcers', team: (r) => r.personId, insert: true },
+  { local: db.reinforcerPhotos, remote: 'reinforcer_photos', team: (r) => r.personId, insert: true },
   { local: db.supportPlans, remote: 'support_plans', team: (r) => r.personId, insert: true },
   { local: db.planChanges, remote: 'plan_changes', team: (r) => r.personId, insert: true },
   { local: db.planSignoffs, remote: 'plan_signoffs', team: (r) => r.personId, insert: true },
@@ -193,11 +198,17 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
 
 // ---------- 受け取る ----------
 
-async function pull(): Promise<string[]> {
+async function pull(uid: string): Promise<string[]> {
   const sb = supabase!;
   const errors: string[] = [];
   const dev = await db.device.get('device');
-  const since = { ...(dev?.syncSince ?? {}) };
+  let since = { ...(dev?.syncSince ?? {}) };
+  // 承認された・別のチームに入ったときは、それまで見えなかった古い行（ほかのメンバーなど）も全部取り直す
+  const mine = await sb.from('team_members').select('person_id').eq('user_id', uid).not('approved_at', 'is', null).is('suspended_at', null).is('deleted_at', null);
+  if (mine.error) return [`team_members: ${mine.error.message}`];
+  const teams = mine.data.map((m) => m.person_id as string);
+  const known = new Set(dev?.syncTeams ?? []);
+  if (teams.some((t) => !known.has(t))) since = {};
   for (const s of TABLES) {
     // 同じ時刻に書かれた行を取りこぼさないよう、5分さかのぼって取り直す（同じ行は上書きされるだけ）
     let from = since[s.remote] ? new Date(new Date(since[s.remote]).getTime() - 5 * 60_000).toISOString() : '1970-01-01T00:00:00Z';
@@ -223,7 +234,7 @@ async function pull(): Promise<string[]> {
       if (data.length < 500) break;
     }
   }
-  await db.device.update('device', { syncSince: since });
+  await db.device.update('device', { syncSince: since, syncTeams: teams });
   return errors;
 }
 
@@ -251,7 +262,7 @@ export async function runSync(): Promise<void> {
     }
     setStatus({ running: true });
     try {
-      const errors = [...(await pull())];
+      const errors = [...(await pull(uid))];
       errors.push(...(await push(uid, await serverTeams())));
       const pending = await unsentCount();
       setStatus({ running: false, lastAt: new Date().toISOString(), error: errors.length ? errors.join(' / ') : null, pending });
@@ -267,14 +278,14 @@ export async function runSync(): Promise<void> {
 /** ログアウトしたとき: サーバーのチームのデータをこの端末から消す（端末の紛失・共用への備え、7.4.2 #1）。サンプルは残す */
 export async function clearServerData() {
   const teams = await serverTeams();
-  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.choiceOptions, db.abcDetails, db.teamSettings, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.observations, db.reinforcers, db.reinforcerPhotos, db.consents, db.device];
+  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.consents, db.device];
   await db.transaction('rw', all, async () => {
     for (const t of all) {
       if (t === db.device) continue;
       if (t === db.persons) await t.where('id').anyOf([...teams]).delete();
       else await t.filter((r: Row) => teams.has(r.personId ?? '')).delete();
     }
-    await db.device.update('device', { userId: null, currentPersonId: null, syncSince: {} });
+    await db.device.update('device', { userId: null, currentPersonId: null, syncSince: {}, syncTeams: [] });
   });
 }
 

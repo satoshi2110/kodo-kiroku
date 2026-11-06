@@ -180,11 +180,15 @@ export interface Reinforcer extends BaseRecord {
   hiddenAt: ISODateTime | null;
 }
 
-/** 強化子の写真。長辺 1280px に縮小し、描き直して Exif（撮影場所など）を落としたもの。強化子を削除すると消す */
-export interface ReinforcerPhoto {
+/**
+ * 強化子の写真。長辺 640px に縮小し、描き直して Exif（撮影場所など）を落とした JPEG の data URL。
+ * 写真を外す・強化子を削除すると data を空にして論理削除する（6.14a）。blob は以前の形で端末に残っている写真だけ
+ */
+export interface ReinforcerPhoto extends BaseRecord {
   id: string; // Reinforcer.id と同じ
   personId: string;
-  blob: Blob;
+  data: string;
+  blob?: Blob;
 }
 
 export const REINFORCER_CATEGORY_LABEL: Record<ReinforcerCategory, string> = {
@@ -234,6 +238,7 @@ export type RestraintPeriod = 'week' | 'month' | 'quarter';
 export const RESTRAINT_PERIOD_LABEL: Record<RestraintPeriod, string> = { week: '1週間', month: '1か月', quarter: '3か月' };
 
 export interface TeamSetting {
+  id?: string; // = personId（同期のため）
   personId: string; // チーム = 対象者ごと
   aiEnabled: boolean;
   restraintPeriod?: RestraintPeriod | null; // 身体拘束の見直しをすすめる目安の期間。初期値なし（決定74）
@@ -456,6 +461,7 @@ export interface DeviceSetting {
   useLocation?: boolean; // この端末で位置情報を使う（既定はオフ。6.3.3a）
   placeChoice?: Record<string, string>; // 対象者ごとの、いまの場所（Place.id か 'outside'）
   syncSince?: Record<string, string>; // 表ごとに、サーバーから最後に受け取った時刻（server_at）
+  syncTeams?: string[]; // 前回の同期で見えていたチーム（対象者の id）。新しく見えたチームがあれば全部取り直す
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

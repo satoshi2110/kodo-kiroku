@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001, 0002, 0003 …）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0005）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -7,7 +7,7 @@ begin;
 
 -- ---------- テスト用の人とチーム（管理者として作る。RLS はかからない） ----------
 -- A: チーム1 の管理者 / B: チーム2 の管理者 / L: チーム1 の支援リーダー / V: チーム1 の閲覧者
--- P: チーム1 の承認待ち / S: チーム1 の停止中 / J: これから招待で参加する人 / N: どこにも入っていない人
+-- D: チーム1 の副管理者 / P: チーム1 の承認待ち / S: チーム1 の停止中 / J: これから招待で参加する人 / N: どこにも入っていない人
 insert into auth.users (id, email, aud, role) values
   ('00000000-0000-0000-0000-0000000000a1', 'rls-a@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-0000000000b1', 'rls-b@test.invalid', 'authenticated', 'authenticated'),
@@ -15,6 +15,7 @@ insert into auth.users (id, email, aud, role) values
   ('00000000-0000-0000-0000-0000000000d1', 'rls-v@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-0000000000e1', 'rls-p@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-0000000000f1', 'rls-s@test.invalid', 'authenticated', 'authenticated'),
+  ('00000000-0000-0000-0000-0000000000b2', 'rls-d@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-0000000000a2', 'rls-j@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-0000000000a3', 'rls-n@test.invalid', 'authenticated', 'authenticated');
 
@@ -27,6 +28,7 @@ insert into team_members (id, person_id, user_id, display_name, affiliation, rol
   ('20000000-0000-0000-0000-0000000000b1', '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', 'B', 'family', 'admin', now(), null),
   ('20000000-0000-0000-0000-0000000000c1', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', 'L', 'facility', 'leader', now(), null),
   ('20000000-0000-0000-0000-0000000000d1', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000d1', 'V', 'school', 'viewer', now(), null),
+  ('20000000-0000-0000-0000-0000000000b2', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b2', 'D', 'facility', 'subadmin', now(), null),
   ('20000000-0000-0000-0000-0000000000e1', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000e1', 'P', 'school', 'supporter', null, null),
   ('20000000-0000-0000-0000-0000000000f1', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000f1', 'S', 'facility', 'supporter', now(), now());
 
@@ -90,6 +92,19 @@ insert into comments (id, person_id, target, text, author_id, updated_at) values
   ('85000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'team', '申し送り3', '00000000-0000-0000-0000-0000000000c1', now() - interval '1 hour'),
   ('85000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'team', '申し送り2', '00000000-0000-0000-0000-0000000000b1', now());
 
+-- チームの設定・好きなもの（写真）・インターバル記録（6.3.1、6.14）
+insert into team_settings (id, person_id, updated_at) values
+  ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', now() - interval '1 hour'),
+  ('10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', now());
+insert into reinforcers (id, person_id, name, category, level, updated_at) values
+  ('87000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '好きなもの1', 'thing', 3, now() - interval '1 hour'),
+  ('87000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '好きなもの2', 'food', 4, now());
+insert into reinforcer_photos (id, person_id, data) values
+  ('87000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'data:image/jpeg;base64,/9j/AAAA');
+insert into observations (id, person_id, behavior_id, method, interval_sec, started_at, local_date, results, recorder_id, updated_at) values
+  ('88000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'interval', 10, now(), current_date, '["yes","no"]', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('88000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 'interval', 10, now(), current_date, '["no"]', '00000000-0000-0000-0000-0000000000b1', now());
+
 insert into start_codes (code) values ('RLSTESTCODE1');
 
 -- ---------- ログインしていない人（anon）は何もできない ----------
@@ -102,6 +117,10 @@ do $$ begin
   begin
     perform 1 from restraint_logs;
     raise exception 'NG: ログインしていない人が拘束記録の表を読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform 1 from reinforcer_photos;
+    raise exception 'NG: ログインしていない人が好きなものの写真を読めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   begin
     perform 1 from comments;
@@ -421,6 +440,57 @@ begin
   insert into comments (id, person_id, target, target_id, text, author_id)
     values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'meeting', '84000000-0000-0000-0000-000000000001', 'コメント', '00000000-0000-0000-0000-0000000000a1');
 
+  -- 設定・好きなもの・写真・インターバル記録: チーム2 は読めない・書けない
+  select count(*) into n from team_settings;
+  if n <> 1 then raise exception 'NG: A に見えるチームの設定が自分のチームの1件ではない'; end if;
+  select count(*) into n from reinforcers;
+  if n <> 1 then raise exception 'NG: A に見える好きなものが自分のチームの1件ではない'; end if;
+  select count(*) into n from reinforcer_photos;
+  if n <> 0 then raise exception 'NG: A にチーム2 の好きなものの写真が見えた'; end if;
+  select count(*) into n from observations;
+  if n <> 1 then raise exception 'NG: A に見えるインターバル記録が自分のチームの1件ではない'; end if;
+  update team_settings set ai_enabled = true, updated_at = now() where id = '10000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の設定を変えた'; end if;
+  begin
+    insert into reinforcers (id, person_id, name, category, level)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', 'x', 'thing', 1);
+    raise exception 'NG: A がチーム2 に好きなものを書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update reinforcers set level = 1, updated_at = now() where id = '87000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の好きなものを書きかえた'; end if;
+  update reinforcer_photos set data = '', updated_at = now() where id = '87000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の写真を消した'; end if;
+  begin
+    insert into reinforcer_photos (id, person_id, data)
+      values ('87000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'data:image/jpeg;base64,/9j/AAAA');
+    raise exception 'NG: A がチーム2 の好きなものに写真を付けられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into observations (id, person_id, behavior_id, method, interval_sec, started_at, local_date, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 'interval', 10, now(), current_date, '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 にインターバル記録を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update observations set results = '[]', updated_at = now() where id = '88000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 のインターバル記録を書きかえた'; end if;
+
+  -- 写真は JPEG の文字だけ。それ以外の形は受け付けない
+  begin
+    insert into reinforcer_photos (id, person_id, data)
+      values ('87000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'data:image/svg+xml;base64,AAAA');
+    raise exception 'NG: JPEG 以外の写真を保存できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  insert into reinforcer_photos (id, person_id, data)
+    values ('87000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'data:image/jpeg;base64,/9j/AAAA');
+
+  -- AI の あり／なし は管理者が変えられる。変えた人はサーバーが送った人にする
+  update team_settings set ai_enabled = true, updated_by = '00000000-0000-0000-0000-0000000000d1', updated_at = now() where id = '10000000-0000-0000-0000-000000000001';
+  select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and ai_enabled and updated_by = '00000000-0000-0000-0000-0000000000a1';
+  if n <> 1 then raise exception 'NG: 管理者が AI を「あり」にできない（または変えた人が送った人にならない）'; end if;
+
   -- 古い変更は捨てられる（後から届いた古い記録で上書きしない）
   update events set count = 5, updated_at = now() - interval '2 hours' where id = '40000000-0000-0000-0000-000000000001';
   select count into n from events where id = '40000000-0000-0000-0000-000000000001';
@@ -452,6 +522,12 @@ begin
   if n <> 0 then raise exception 'NG: 承認待ちの人に会議メモが見えた'; end if;
   select count(*) into n from comments;
   if n <> 0 then raise exception 'NG: 承認待ちの人に申し送りが見えた'; end if;
+  select count(*) into n from team_settings;
+  if n <> 0 then raise exception 'NG: 承認待ちの人にチームの設定が見えた'; end if;
+  select count(*) into n from reinforcers;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に好きなものが見えた'; end if;
+  select count(*) into n from observations;
+  if n <> 0 then raise exception 'NG: 承認待ちの人にインターバル記録が見えた'; end if;
   select count(*) into n from choice_options;
   if n <> 0 then raise exception 'NG: 承認待ちの人にABCの選択肢が見えた'; end if;
   select count(*) into n from team_members;
@@ -480,6 +556,8 @@ begin
   if n <> 0 then raise exception 'NG: 停止中の人に拘束記録が見えた'; end if;
   select count(*) into n from comments;
   if n <> 0 then raise exception 'NG: 停止中の人に申し送りが見えた'; end if;
+  select count(*) into n from reinforcer_photos;
+  if n <> 0 then raise exception 'NG: 停止中の人に好きなものの写真が見えた'; end if;
 end $$;
 reset role;
 
@@ -542,6 +620,27 @@ begin
       values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'team', 'x', '00000000-0000-0000-0000-0000000000d1');
     raise exception 'NG: 閲覧者が申し送りを書き込めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  select count(*) into n from reinforcers;
+  if n <> 1 then raise exception 'NG: 閲覧者に自分のチームの好きなものが見えない'; end if;
+  begin
+    insert into reinforcers (id, person_id, name, category, level)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'x', 'thing', 1);
+    raise exception 'NG: 閲覧者が好きなものを書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update reinforcers set level = 1, updated_at = now() + interval '1 second' where id = '87000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が好きなものを書きかえた'; end if;
+  update reinforcer_photos set data = '', updated_at = now() + interval '1 second' where id = '87000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が写真を消した'; end if;
+  begin
+    insert into observations (id, person_id, behavior_id, method, interval_sec, started_at, local_date, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'interval', 10, now(), current_date, '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者がインターバル記録を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update team_settings set short_sleep_under_hours = 5, updated_at = now() + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者がチームの設定を変えた'; end if;
   update events set count = 7, updated_at = now() where id = '40000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者が記録を書きかえた'; end if;
@@ -620,9 +719,38 @@ begin
   update meeting_notes set decisions = '決めたこと', updated_at = now() + interval '2 seconds' where id = '84000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'NG: 支援リーダーが会議メモを直せない'; end if;
+  -- 設定は副管理者から。支援リーダーは変えられない
+  update team_settings set short_sleep_under_hours = 5, updated_at = now() + interval '2 seconds' where id = '10000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援リーダーがチームの設定を変えた'; end if;
+  -- 好きなものは支援者以上なら直せる。インターバル記録は、ほかの人が記録したものも直せる
+  update reinforcers set level = 5, updated_at = now() + interval '2 seconds' where id = '87000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが好きなものを直せない'; end if;
+  update observations set results = '["yes"]', updated_at = now() + interval '2 seconds' where id = '88000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーがインターバル記録を直せない'; end if;
+  begin
+    update observations set recorder_id = '00000000-0000-0000-0000-0000000000c1', updated_at = now() + interval '3 seconds' where id = '88000000-0000-0000-0000-000000000001';
+    raise exception 'NG: インターバル記録の記録者を変えられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   -- 支援者としての招待はできる。コードは次の J のテストで使う
   code := create_invite('10000000-0000-0000-0000-000000000001', 'supporter');
   perform set_config('rls_test.invite', code, true);
+end $$;
+reset role;
+
+-- ---------- 副管理者（D）は設定を変えられるが、AI と チームの削除 は管理者だけ ----------
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  update team_settings set short_sleep_under_hours = 6, ai_enabled = false, delete_requested_at = now(), updated_at = now() + interval '5 seconds' where id = '10000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 副管理者がチームの設定を変えられない'; end if;
+  select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and short_sleep_under_hours = 6 and ai_enabled and delete_requested_at is null;
+  if n <> 1 then raise exception 'NG: 副管理者が AI の あり／なし か チームの削除 を変えられた'; end if;
 end $$;
 reset role;
 

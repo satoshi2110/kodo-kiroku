@@ -399,8 +399,14 @@ export const canEditReinforcers = canRecord;
 
 export type ReinforcerInput = Pick<Reinforcer, 'personId' | 'name' | 'category' | 'level' | 'usage'>;
 
-/** 追加・編集。photo: Blob は差しかえ、null は写真を消す、undefined はそのまま */
-export async function saveReinforcer(id: string | null, input: ReinforcerInput, photo: Blob | null | undefined, actorId: string): Promise<Reinforcer> {
+/** 写真を外す: 中身を空にして論理削除する（ほかの端末にも消えたことが伝わる） */
+async function dropPhoto(id: string, t: string) {
+  const old = await db.reinforcerPhotos.get(id);
+  if (old && !old.deletedAt) await db.reinforcerPhotos.put({ id, personId: old.personId, data: '', createdAt: old.createdAt ?? t, updatedAt: t, deletedAt: t });
+}
+
+/** 追加・編集。photo: 文字（JPEG の data URL）は差しかえ、null は写真を外す、undefined はそのまま */
+export async function saveReinforcer(id: string | null, input: ReinforcerInput, photo: string | null | undefined, actorId: string): Promise<Reinforcer> {
   return db.transaction('rw', [db.reinforcers, db.reinforcerPhotos, db.auditLogs], async () => {
     const before = id ? await db.reinforcers.get(id) : undefined;
     const hasPhoto = photo === undefined ? !!before?.hasPhoto : photo !== null;
@@ -408,8 +414,11 @@ export async function saveReinforcer(id: string | null, input: ReinforcerInput, 
       ? { ...before, ...input, hasPhoto, updatedBy: actorId, updatedAt: nowISO() }
       : { ...base(), ...input, hasPhoto, lastUsedAt: null, updatedBy: actorId, hiddenAt: null };
     await db.reinforcers.put(after);
-    if (photo) await db.reinforcerPhotos.put({ id: after.id, personId: after.personId, blob: photo });
-    if (photo === null) await db.reinforcerPhotos.delete(after.id);
+    if (photo) {
+      const old = await db.reinforcerPhotos.get(after.id);
+      await db.reinforcerPhotos.put({ id: after.id, personId: after.personId, data: photo, createdAt: old?.createdAt ?? after.updatedAt, updatedAt: after.updatedAt, deletedAt: null });
+    }
+    if (photo === null) await dropPhoto(after.id, after.updatedAt);
     await audit(after.personId, 'reinforcer', after.id, before ? 'update' : 'create', actorId, before ?? null, after);
     return after;
   });
@@ -433,7 +442,7 @@ export async function markReinforcerUsed(id: string, actorId: string) {
   await audit(after.personId, 'reinforcer', id, 'update', actorId, before, after);
 }
 
-/** 削除: 強化子は論理削除し、写真は消す（6.14a） */
+/** 削除: 強化子は論理削除し、写真は中身を空にする（6.14a） */
 export async function deleteReinforcer(id: string, actorId: string) {
   await db.transaction('rw', [db.reinforcers, db.reinforcerPhotos, db.auditLogs], async () => {
     const before = await db.reinforcers.get(id);
@@ -441,7 +450,7 @@ export async function deleteReinforcer(id: string, actorId: string) {
     const t = nowISO();
     const after: Reinforcer = { ...before, hasPhoto: false, deletedAt: t, updatedAt: t };
     await db.reinforcers.put(after);
-    await db.reinforcerPhotos.delete(id);
+    await dropPhoto(id, t);
     await audit(before.personId, 'reinforcer', id, 'delete', actorId, before, after);
   });
 }
@@ -558,7 +567,7 @@ export const canEditTeamSettings = (r?: Role) => !!r && RANK[r] >= RANK.subadmin
 /** AI 以外のチームの設定を直す。変更は監査ログに残る */
 export async function updateTeamSetting(personId: string, patch: Partial<Pick<TeamSetting, 'shortSleepUnderHours' | 'deleteRequestedAt' | 'restraintPeriod' | 'restraintCount'>>, actorId: string) {
   const before = (await db.teamSettings.get(personId)) ?? null;
-  const after: TeamSetting = { aiEnabled: false, ...before, ...patch, personId, updatedAt: nowISO(), updatedBy: actorId };
+  const after: TeamSetting = { aiEnabled: false, ...before, ...patch, id: personId, personId, updatedAt: nowISO(), updatedBy: actorId };
   await db.teamSettings.put(after);
   await audit(personId, 'teamSetting', personId, 'update', actorId, before, after);
 }
@@ -601,7 +610,7 @@ export async function purgeTeam(personId: string, actorId: string) {
 export async function setAiEnabled(personId: string, enabled: boolean, actorId: string) {
   await db.transaction('rw', [db.teamSettings, db.consents, db.auditLogs], async () => {
     const before = (await db.teamSettings.get(personId)) ?? null;
-    const after: TeamSetting = { ...before, personId, aiEnabled: enabled, updatedAt: nowISO(), updatedBy: actorId };
+    const after: TeamSetting = { ...before, id: personId, personId, aiEnabled: enabled, updatedAt: nowISO(), updatedBy: actorId };
     await db.teamSettings.put(after);
     await audit(personId, 'teamSetting', personId, 'update', actorId, before, after);
     if (enabled) {

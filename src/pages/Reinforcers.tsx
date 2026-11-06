@@ -16,7 +16,7 @@ import { Chip, Sheet, TopBar } from '../components/ui';
 
 const RECENT_DAYS = 14;
 
-type Form = { id: string | null; name: string; category: ReinforcerCategory; level: number; usage: string; photo: Blob | null | undefined };
+type Form = { id: string | null; name: string; category: ReinforcerCategory; level: number; usage: string; photo: string | null | undefined };
 
 export default function Reinforcers() {
   const { person, me, members, userId } = useApp();
@@ -39,9 +39,9 @@ export default function Reinforcers() {
   const old = list.filter((r) => lastTouched(r) < since).sort(byLevel);
   const nameOf = (uid: string) => members.find((m) => m.userId === uid)?.displayName ?? '（不明）';
 
-  const blank = (photo: Blob | null): Form => ({ id: null, name: '', category: 'thing', level: 3, usage: '', photo });
+  const blank = (photo: string | null): Form => ({ id: null, name: '', category: 'thing', level: 3, usage: '', photo });
 
-  async function pickPhoto(file: File | undefined, then: (b: Blob) => void) {
+  async function pickPhoto(file: File | undefined, then: (data: string) => void) {
     if (!file) return;
     setError('');
     try {
@@ -198,13 +198,15 @@ function useBlobUrl(blob: Blob | null | undefined) {
 
 function Photo({ id, has }: { id: string; has: boolean }) {
   const rec = useLiveQuery(() => (has ? db.reinforcerPhotos.get(id) : undefined), [id, has]);
-  const url = useBlobUrl(rec?.blob);
+  const legacy = useBlobUrl(rec?.data ? undefined : rec?.blob);
+  const url = rec?.data || legacy;
   return url ? <img className="reinf__photo" src={url} alt="" /> : <span className="reinf__photo reinf__photo--none">写真なし</span>;
 }
 
 function FormPhoto({ form, onPick, onRemove }: { form: Form; onPick: (f: File | undefined) => void; onRemove: () => void }) {
   const saved = useLiveQuery(() => (form.id && form.photo === undefined ? db.reinforcerPhotos.get(form.id) : undefined), [form.id, form.photo]);
-  const url = useBlobUrl(form.photo === undefined ? saved?.blob : form.photo);
+  const legacy = useBlobUrl(form.photo === undefined && !saved?.data ? saved?.blob : undefined);
+  const url = form.photo === undefined ? saved?.data || legacy : form.photo;
   const ref = useRef<HTMLInputElement>(null);
   return (
     <div className="row">
