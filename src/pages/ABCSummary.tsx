@@ -12,7 +12,7 @@ import { useApp } from '../state';
 import { aiTeamUsage, aiUsage, canRunAi } from '../db/repo';
 import { saveSummary } from '../db/phase2';
 import { requestAi, isMockProvider } from '../ai/adapter';
-import { makeMasker } from '../ai/build';
+import { makeMasker, placeNamesFor } from '../ai/build';
 import type { SummaryInput } from '../ai/schema';
 import { addDays, formatDateTimeJa, formatShortDate, toLocalDate } from '../lib/date';
 import { usePlanData } from '../lib/usePlan';
@@ -88,9 +88,8 @@ export default function ABCSummary() {
     if (!person || !current || !userId) return;
     setBusy(true);
     setError(null);
-    // 名前を置きかえる（場所・対象者・支援者）。機能の見立ての集計は送らない（まとめで機能を判断しないため、決定72）
-    const places = [...new Set(rows.map((r) => r.e.placeName).filter((p): p is string => !!p))];
-    const mask = makeMasker(person, members, places);
+    // 名前を置きかえる（場所・対象者・通っているところ・支援者）。機能の見立ての集計は送らない（まとめで機能を判断しないため、決定72）
+    const mask = makeMasker(person, members, await placeNamesFor(person.id, rows.map((r) => r.e.placeName)));
     const input: SummaryInput = {
       behaviorName: mask(current.name),
       period: { from: range[0], to: range[1] },

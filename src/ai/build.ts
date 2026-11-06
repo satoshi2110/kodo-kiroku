@@ -1,6 +1,7 @@
 /**
  * 端末内の記録から、AI に送る入力を作る（6.5、9章）。
- * 仮名化: 対象者の呼び名 →「対象者」、支援者の呼び名 →「支援者A・B…」、場所の名前 →「場所A・B…」。
+ * 仮名化: 対象者の呼び名 →「対象者」、通っているところ →「通っているところ」、支援者の呼び名 →「支援者A・B…」、場所の名前 →「場所A・B…」。
+ * 場所は、登録した場所すべてと記録に残る場所の名前を置きかえる（メモに別の場所の名前が書かれていても送らない）。
  * 関わった人は所属だけを送る。写真は送らない。期間は直近4週間まで。
  */
 import { db } from '../db/db';
@@ -23,7 +24,7 @@ export async function buildAnalysisInput(person: Person, behavior: Behavior, mem
   const eventById = new Map(events.map((e) => [e.id, e]));
   const memberById = new Map(members.map((m) => [m.id, m]));
 
-  const places = [...new Set(events.map((e) => e.placeName).filter((p): p is string => !!p))];
+  const places = await placeNamesFor(person.id, events.map((e) => e.placeName));
   const mask = makeMasker(person, members, places);
 
   const counts = new Map<string, number>();
@@ -65,10 +66,21 @@ export async function buildAnalysisInput(person: Person, behavior: Behavior, mem
   };
 }
 
+/**
+ * 置きかえる場所の名前の一覧。登録した場所（隠した場所も）を作った順に並べ、そのあとに記録だけに残る名前を足す。
+ * 同じ対象者なら毎回同じ順になるので、分析と提案で「場所A」が同じ場所を指す。
+ */
+export async function placeNamesFor(personId: string, extra: (string | null | undefined)[] = []): Promise<string[]> {
+  const registered = await db.places.where('personId').equals(personId).toArray();
+  registered.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return [...new Set([...registered.map((p) => p.name), ...extra].filter((p): p is string => !!p && p.trim().length > 0))];
+}
+
 /** 名前を置きかえる関数を作る。長い名前から先に置きかえる（「Aさん」と「A」のような重なりを避ける） */
 export function makeMasker(person: Person, members: TeamMember[], places: string[]) {
   const pairs = ([
     [person.displayName, '対象者'],
+    [person.belongs ?? '', '通っているところ'],
     ...members.map((m, i): [string, string] => [m.displayName, `支援者${letter(i)}`]),
     ...places.map((p, i): [string, string] => [p, `場所${letter(i)}`]),
   ] as [string, string][]).filter(([name]) => name.trim().length > 0);

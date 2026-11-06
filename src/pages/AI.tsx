@@ -9,7 +9,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
 import { aiTeamUsage, aiUsage, canDecideAi, canRunAi, decideAi, saveAnalysis, saveSuggestion } from '../db/repo';
-import { buildAnalysisInput, makeMasker } from '../ai/build';
+import { buildAnalysisInput, makeMasker, placeNamesFor } from '../ai/build';
 import { isMockProvider, requestAi } from '../ai/adapter';
 import { MIN_ABC_RECORDS } from '../ai/schema';
 import { formatDateTimeJa, formatShortDate } from '../lib/date';
@@ -77,12 +77,14 @@ export default function AI() {
     if (!person || !behavior || !a.output || !userId) return;
     setBusy('suggest');
     setError(null);
-    const mask = makeMasker(person, members, []);
+    // 分析と同じ置きかえをする。分析の入力も置きかえ直す（置きかえを直す前に保存した分析のため）
+    const mask = makeMasker(person, members, await placeNamesFor(person.id));
+    const b0 = a.input.behavior;
     const res = await requestAi({
       personId: person.id,
       kind: 'suggest',
       input: {
-        behavior: a.input.behavior,
+        behavior: { name: mask(b0.name), definition: mask(b0.definition), intensityCriteria: b0.intensityCriteria.map(mask) },
         adoptedFunctions: a.output.functions.filter((f) => f.count > 0).map((f) => f.func).slice(0, 2),
         hypothesisNote: mask(a.decisionNote),
         likelyConditions: a.output.likelyConditions,
