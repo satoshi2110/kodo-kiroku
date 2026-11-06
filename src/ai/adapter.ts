@@ -28,12 +28,17 @@ export async function requestAi(req: AiRequest): Promise<AiResponse> {
     return { status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` };
   }
   if (provider === 'mock') return mock(req);
-  const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
-  if (!token) return { status: 'error', message: 'AI はログインしてチームに入ってから使えます。' };
+  // サーバーにつながる版はログインの証を付ける。端末内だけの版はログインなしで呼ぶ（回数はサーバーのサイト全体の上限で守る）
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (supabase) {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    if (!token) return { status: 'error', message: 'AI はログインしてチームに入ってから使えます。' };
+    headers.Authorization = `Bearer ${token}`;
+  }
   try {
     const res = await fetch('/api/ai', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers,
       body: JSON.stringify(req),
     });
     const body = (await res.json().catch(() => null)) as AiResponse | null;

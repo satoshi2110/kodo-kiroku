@@ -6,9 +6,10 @@
  * - 入力は画面側で仮名化済み。ここでも形と大きさを確かめ、ABC記録が10件未満なら API を呼ばずに「データ不足」を返す
  * - 出力は JSON スキーマで受け取る
  * - 出力に禁止語（罰・弱化・嫌悪刺激・拘束・隔離・叱責・無視・診断・治療方針 など）があれば捨てて1回だけ作り直し、それでもだめなら結果を出さない
- * - 呼べるのはログインした人だけ（決定84）。画面から受け取ったログインの証（アクセストークン）で Supabase の take_ai_run を呼び、
- *   チームの一員か・閲覧者でないか・AI「あり」か・1人ごと（決定63）・チームごと（決定60）・アプリ全体（14.2 #36、月1600回）の回数が残っているかを確かめてから1回と数える。
- *   Supabase の設定（SUPABASE_URL・SUPABASE_ANON_KEY）がないときは、AI を呼ばずに断る
+ * - Supabase の設定（SUPABASE_URL・SUPABASE_ANON_KEY）があるときは、呼べるのはログインした人だけ（決定84）。画面から受け取ったログインの証（アクセストークン）で Supabase の take_ai_run を呼び、
+ *   チームの一員か・閲覧者でないか・AI「あり」か・1人ごと（決定63）・チームごと（決定60）・アプリ全体（14.2 #36、月1600回）の回数が残っているかを確かめてから1回と数える
+ * - Supabase の設定がない公開（端末内だけの版。審査用のお試し）では、ログインなしで呼べる。そのときは AI_USAGE（KV）が必須で、
+ *   つながっていなければ AI を呼ばずに断る（【暫定】9章）
  * - AI_USAGE（KV）をつないだときは、サイト全体の1日の上限（AI_DAILY_LIMIT、既定 30）も守る
  */
 import Anthropic from '@anthropic-ai/sdk';
@@ -86,12 +87,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` });
   }
   if (!env.ANTHROPIC_API_KEY) return json({ status: 'error', message: 'AI の設定がまだ済んでいません（API キーが未設定）' }, 503);
-  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return json({ status: 'error', message: 'AI の設定がまだ済んでいません（サーバーの設定が未設定）' }, 503);
 
-  const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
-  if (!token) return json({ status: 'error', message: 'ログインしてからお試しください' }, 401);
-  const denied = await takeTeamRun(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token, req.personId, req.kind);
-  if (denied) return denied;
+  if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
+    const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
+    if (!token) return json({ status: 'error', message: 'ログインしてからお試しください' }, 401);
+    const denied = await takeTeamRun(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token, req.personId, req.kind);
+    if (denied) return denied;
+  } else if (!env.AI_USAGE) {
+    // ログインなしで呼べる公開では、サイト全体の1日の上限がないと AI を呼ばない
+    return json({ status: 'error', message: 'AI の設定がまだ済んでいません（1日の回数の上限が未設定）' }, 503);
+  }
 
   if (!(await takeDailyQuota(env))) return json({ status: 'error', message: '今日の AI の回数の上限に達しました。明日またお試しください。' }, 429);
 
@@ -151,7 +156,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   return json({ status: 'error', message: '安全に使える結果が作れませんでした。記録を見直すか、時間をおいてお試しください。' }, 422);
 };
 
-/** サイト全体の1日の上限。KV がつながっていなければ数えない（そのときは Anthropic 側の使用額の上限が守り） */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // take_ai_run（0009）が断ったときの言葉
@@ -187,6 +191,7 @@ async function takeTeamRun(url: string, anonKey: string, token: string, personId
   return json({ status: 'error', message }, status);
 }
 
+/** サイト全体の1日の上限。KV がつながっていなければ数えない（ログインありの公開だけ。そのときは take_ai_run の回数が守り） */
 async function takeDailyQuota(env: Env): Promise<boolean> {
   if (!env.AI_USAGE) return true;
   const limit = Number(env.AI_DAILY_LIMIT ?? 30);
