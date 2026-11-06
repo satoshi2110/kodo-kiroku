@@ -1,6 +1,7 @@
 /**
  * ログイン（画面一覧 1、ワイヤーフレーム 12）。サーバーにつながる設定があるときだけ出る。
- * アプリは一般公開しない（決定44）。アカウントを作っても、招待コードか開始コードがなければチームのデータは見られない。
+ * アプリは一般公開しない（決定44）。アカウントは、使える招待コードか開始コードを入れたときだけ作れる（サーバーでも確かめる、0014）。
+ * 入れたコードはアカウントの情報に残し、ログインしたあとの「招待コード」「開始コード」の欄に最初から入れておく。
  * パスワードを忘れたときは、登録したメールに再設定のリンクを送る（決定62）。
  * 【暫定】「自分専用／共用の端末」・パスキーは次に足す。
  */
@@ -11,10 +12,13 @@ import { Segmented, TopBar } from '../components/ui';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
+const CODE_NG = 'このコードではアカウントを作れません（まちがい・使用済み・期限切れ）。コードを確かめるか、渡した人に聞いてください。';
+
 export default function Login() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
@@ -44,8 +48,20 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) setError(error.message === 'Invalid login credentials' ? 'メールアドレスかパスワードがちがいます。' : error.message);
     } else {
-      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
-      if (error) setError(error.message);
+      // 先に確かめて分かりやすく知らせる。サーバーもアカウントを作る前に確かめる（0014。そのときの文は英語の「Database error …」になる）
+      const { data: ok, error: checkError } = await supabase.rpc('signup_code_ok', { p_code: code });
+      if (checkError) {
+        setError(checkError.message);
+        setBusy(false);
+        return;
+      }
+      if (!ok) {
+        setError(CODE_NG);
+        setBusy(false);
+        return;
+      }
+      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { invite_code: code.trim().toUpperCase() } } });
+      if (error) setError(/database error/i.test(error.message) ? CODE_NG : error.message);
       else if (!data.session) setMessage('確認のメールを送りました（いまは英語のメールです）。メールの中のリンクを押してから、ログインしてください。');
     }
     setBusy(false);
@@ -87,10 +103,16 @@ export default function Login() {
             />
           </label>}
           {mode === 'signup' && (
-            <p className="help">
-              アカウントを作ったあと、招待された人は「招待コード」、新しいチームを作る保護者の方は運営から受け取った「開始コード」を入れます。
-              コードがないと、チームのデータは見られません。
-            </p>
+            <>
+              <label className="field">
+                招待コード または 開始コード
+                <input required value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="off" />
+              </label>
+              <p className="help">
+                招待された人は、招待した人から受け取った「招待コード」を、新しいチームを作る保護者の方は、運営から受け取った「開始コード」を入れます。
+                コードがないと、アカウントは作れません。
+              </p>
+            </>
           )}
           {error && <p className="ai-error" role="alert">{error}</p>}
           {message && <p className="notice-inline" role="status">{message}</p>}

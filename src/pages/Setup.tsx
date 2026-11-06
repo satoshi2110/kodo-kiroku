@@ -5,7 +5,7 @@
  * 招待された人は、ここで招待コードを入れて参加し、管理者・副管理者・支援リーダーの承認を待つ（7.4.2 #3）。
  * 招待で参加した人は、承認されたら場所と「わたしのいつもの時間」だけを案内する（7.1）。
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useApp } from '../state';
@@ -29,6 +29,7 @@ export default function Setup() {
   const [cautions, setCautions] = useState('');
   const [saving, setSaving] = useState(false);
   const [code, setCode] = useState('');
+  useEffect(() => prefillSignupCode(setCode), []);
   const [error, setError] = useState<string | null>(null);
   const { person, userId } = useApp();
   // 招待で参加して、承認を待っているチーム
@@ -204,6 +205,14 @@ export default function Setup() {
   );
 }
 
+/** アカウントを作るときに入れたコード（0014）を、開始コード・招待コードの欄に最初から入れておく */
+function prefillSignupCode(set: (f: (v: string) => string) => void) {
+  supabase?.auth.getSession().then(({ data }) => {
+    const c = data.session?.user.user_metadata?.invite_code;
+    if (typeof c === 'string' && c) set((v) => v || c);
+  });
+}
+
 /** 招待コードで参加する（ワイヤーフレーム 12「招待リンクから開いたとき」） */
 function Join(props: {
   userName: string;
@@ -213,6 +222,7 @@ function Join(props: {
   onBack: () => void;
 }) {
   const [invite, setInvite] = useState('');
+  useEffect(() => prefillSignupCode(setInvite), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function join() {

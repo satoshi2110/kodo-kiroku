@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0013）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0014）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -8,16 +8,18 @@ begin;
 -- ---------- テスト用の人とチーム（管理者として作る。RLS はかからない） ----------
 -- A: チーム1 の管理者 / B: チーム2 の管理者 / L: チーム1 の支援リーダー / V: チーム1 の閲覧者
 -- D: チーム1 の副管理者 / P: チーム1 の承認待ち / S: チーム1 の停止中 / J: これから招待で参加する人 / N: どこにも入っていない人
-insert into auth.users (id, email, aud, role) values
-  ('00000000-0000-0000-0000-0000000000a1', 'rls-a@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000b1', 'rls-b@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000c1', 'rls-l@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000d1', 'rls-v@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000e1', 'rls-p@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000f1', 'rls-s@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000b2', 'rls-d@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000a2', 'rls-j@test.invalid', 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-0000000000a3', 'rls-n@test.invalid', 'authenticated', 'authenticated');
+-- アカウントはコードがないと作れない（0014）。テスト用の人は、この開始コードで作る（コードは確かめるだけで使われない）
+insert into start_codes (code) values ('RLSSIGNUP01');
+insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000a1', 'rls-a@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000b1', 'rls-b@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000c1', 'rls-l@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000d1', 'rls-v@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000e1', 'rls-p@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000f1', 'rls-s@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000b2', 'rls-d@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000a2', 'rls-j@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000a3', 'rls-n@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}');
 
 insert into persons (id, display_name) values
   ('10000000-0000-0000-0000-000000000001', 'テスト1'),
@@ -802,6 +804,10 @@ begin
   perform set_config('rls_test.invite', code, true);
 end $$;
 reset role;
+-- 使える招待コードがあれば、アカウントを作れる（0014）。コードは使われず、次の J のテストでそのまま使える
+insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000a8', 'rls-invited@test.invalid', 'authenticated', 'authenticated',
+   jsonb_build_object('invite_code', lower(current_setting('rls_test.invite'))));
 
 -- ---------- 副管理者（D）は設定を変えられるが、AI と チームの削除 は管理者だけ ----------
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
@@ -925,8 +931,8 @@ reset role;
 
 -- ---------- AI の回数（決定60・63・84、0009） ----------
 -- チーム1 に支援者 X を足す（管理者として作る。RLS はかからない）
-insert into auth.users (id, email, aud, role) values
-  ('00000000-0000-0000-0000-0000000000a4', 'rls-x@test.invalid', 'authenticated', 'authenticated');
+insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000a4', 'rls-x@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}');
 insert into team_members (id, person_id, user_id, display_name, affiliation, role, approved_at) values
   ('20000000-0000-0000-0000-0000000000a4', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a4', 'X', 'facility', 'supporter', now());
 
@@ -1386,6 +1392,40 @@ begin
   begin
     perform create_team('RLSTESTCODE1', 'y', null, '', '', 'N', 'family', 'v');
     raise exception 'NG: 使用済みの開始コードがもう一度使えた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- ---------- コードがないとアカウントを作れない（決定44、0014） ----------
+do $$
+begin
+  begin
+    insert into auth.users (id, email, aud, role) values
+      ('00000000-0000-0000-0000-0000000000a5', 'rls-nocode@test.invalid', 'authenticated', 'authenticated');
+    raise exception 'NG: コードなしでアカウントを作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+      ('00000000-0000-0000-0000-0000000000a6', 'rls-wrongcode@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"WRONGCODE"}');
+    raise exception 'NG: まちがったコードでアカウントを作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    -- 使用済みの開始コード（上で使った）
+    insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+      ('00000000-0000-0000-0000-0000000000a7', 'rls-usedcode@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"rlstestcode1"}');
+    raise exception 'NG: 使用済みの開始コードでアカウントを作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+-- ログイン前（anon）でも、コードが使えるかだけは確かめられる。中身（どのチームか）は分からない
+set local role anon;
+do $$
+begin
+  if not signup_code_ok(' rlssignup01 ') then raise exception 'NG: 使える開始コードが使えないと出た'; end if;
+  if signup_code_ok('RLSTESTCODE1') then raise exception 'NG: 使用済みの開始コードが使えると出た'; end if;
+  if signup_code_ok(null) then raise exception 'NG: 空のコードが使えると出た'; end if;
+  begin
+    perform 1 from start_codes;
+    raise exception 'NG: ログイン前に開始コードの表が読めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 end $$;
 reset role;
