@@ -21,7 +21,7 @@ const CONFIDENCE_LABEL = { high: '高', medium: '中', low: '低' } as const;
 const DECISION_LABEL: Record<AiDecision, string> = { adopted: '採用', modified: '修正して採用', rejected: '却下' };
 
 export default function AI() {
-  const { person, behaviors, members, me, userId, aiEnabled } = useApp();
+  const { person, behaviors, members, me, userId, aiEnabled, teamSettingLoaded } = useApp();
   const problems = behaviors.filter((b) => b.kind === 'problem');
   const [behaviorId, setBehaviorId] = useState<string | null>(null);
   const behavior = problems.find((b) => b.id === behaviorId) ?? problems[0];
@@ -52,7 +52,7 @@ export default function AI() {
     [person?.id],
   );
 
-  if (!person || !userId) return null;
+  if (!person || !userId || !teamSettingLoaded) return null;
   if (!aiEnabled) return <Navigate to="/team" replace />;
   const latest = analyses?.[0];
   const runnable =

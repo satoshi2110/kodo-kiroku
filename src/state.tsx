@@ -14,6 +14,7 @@ interface AppState {
   me: TeamMember | undefined; // いまの対象者のチームでの自分
   members: TeamMember[];
   aiEnabled: boolean; // チームの設定で AI を「あり」にしているか（9章）
+  teamSettingLoaded: boolean; // チームの設定を読み終えたか（読む前は aiEnabled が false に見える）
   places: Place[]; // 非表示を除いた登録場所
   place: Place | undefined; // いまの場所（未設定・登録場所の外なら undefined）
   placeOutside: boolean; // 「登録場所の外」を選んでいる
@@ -51,7 +52,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         : [],
     [personId],
   );
-  const teamSetting = useLiveQuery(async () => (personId ? ((await db.teamSettings.get(personId)) ?? null) : null), [personId]);
+  // どの対象者の設定かも持つ（対象者が決まる前の「なし」を、決まったあとの値と取りちがえないため）
+  const teamSettingOf = useLiveQuery(async () => ({ personId, setting: personId ? ((await db.teamSettings.get(personId)) ?? null) : null }), [personId]);
+  const teamSetting = teamSettingOf?.personId === personId ? teamSettingOf.setting : undefined;
   const places = useLiveQuery(
     async () =>
       personId
@@ -84,6 +87,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       me: members?.find((m) => m.userId === userId),
       members: members ?? [],
       aiEnabled: !!teamSetting?.aiEnabled,
+      teamSettingLoaded: teamSetting !== undefined,
       places: places ?? [],
       place: places?.find((p) => p.id === choice),
       placeOutside: choice === 'outside',
