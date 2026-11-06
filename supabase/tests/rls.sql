@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0010）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0011）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -1016,6 +1016,18 @@ set local role authenticated;
 do $$ begin
   if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'team_day' then
     raise exception 'NG: チームの1日30回を超えて AI を使えた';
+  end if;
+end $$;
+reset role;
+
+-- アプリ全体の月1600回（14.2 #36、0011）: すべてのチームの分で 1600回になったら、だれも使えない
+insert into ai_runs (person_id, user_id, kind)
+  select '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', 'analyze' from generate_series(1, 1600);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'app_month' then
+    raise exception 'NG: アプリ全体の月1600回を超えて AI を使えた';
   end if;
 end $$;
 reset role;
