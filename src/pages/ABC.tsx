@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { addChoiceOption, canRecord, ensureChoiceOptions, hideChoiceOption, saveAbc } from '../db/repo';
+import { RANK, addChoiceOption, canUndoEvent, ensureChoiceOptions, hideChoiceOption, saveAbc } from '../db/repo';
 import { useApp } from '../state';
 import { formatDateTimeJa, formatDuration } from '../lib/date';
 import { isShortNight } from '../lib/sleep';
@@ -90,7 +90,9 @@ function ABC({ eventId }: { eventId: string }) {
   if (!form) return null;
 
   const behavior = behaviors.find((b) => b.id === event.behaviorId);
-  const editable = canRecord(me?.role);
+  // 直せるのは、その記録をした本人と、管理者・副管理者・支援リーダー（6.3.5）。サーバーの RLS も同じ決まり
+  const editable =
+    canUndoEvent(me?.role, event, userId) && (!existing || existing.recorderId === userId || (!!me && RANK[me.role] >= RANK.leader));
   // 続けて押しても取りこぼさないように、いつも最新の状態から作る
   type Form = NonNullable<typeof form>;
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
@@ -128,6 +130,7 @@ function ABC({ eventId }: { eventId: string }) {
       />
 
       <div className="section stack">
+        {!editable && <p className="notice-inline">ほかの人がつけた記録なので、見るだけです。直せるのは、記録した人と支援リーダー以上の人です。</p>}
         <Section letter="A" title="直前に起きていたこと（先行事象）">
           <ChoiceEditor {...optionProps('antecedent', 'antecedentIds')} />
           <label className="field">

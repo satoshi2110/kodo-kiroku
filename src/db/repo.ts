@@ -3,7 +3,7 @@
  * 権限の判定はサーバーの行レベルセキュリティが正（決定45）。ここでの判定は画面の出し分け用。
  */
 import { db } from './db';
-import { newId } from '../lib/id';
+import { fixedId, newId } from '../lib/id';
 import { localDateOf, nowISO } from '../lib/date';
 import {
   CONSENT_TEXT_VERSION,
@@ -434,12 +434,16 @@ export async function deleteReinforcer(id: string, actorId: string) {
 
 /** 選択肢がまだない対象者に、初期テンプレートを入れる */
 export async function ensureChoiceOptions(personId: string, actorId: string) {
+  if ((await db.choiceOptions.where('personId').equals(personId).count()) > 0) return;
+  // id は対象者と項目から決める。チームの2人がそれぞれの端末で入れても、同期したときに二重にならない
+  const kinds = Object.keys(DEFAULT_CHOICES) as ChoiceKind[];
+  const list: ChoiceOption[] = [];
+  for (const kind of kinds)
+    for (const [i, name] of DEFAULT_CHOICES[kind].entries())
+      list.push({ ...base(), id: await fixedId(`choice:${personId}:${kind}:${i}`), personId, kind, name, sortOrder: i, hiddenAt: null });
   // 数えるのと入れるのを1つのトランザクションにして、同時に2回呼ばれても二重に入らないようにする
   await db.transaction('rw', [db.choiceOptions, db.auditLogs], async () => {
     if ((await db.choiceOptions.where('personId').equals(personId).count()) > 0) return;
-    const list: ChoiceOption[] = (Object.keys(DEFAULT_CHOICES) as ChoiceKind[]).flatMap((kind) =>
-      DEFAULT_CHOICES[kind].map((name, i) => ({ ...base(), personId, kind, name, sortOrder: i, hiddenAt: null })),
-    );
     await db.choiceOptions.bulkAdd(list);
     for (const o of list) await audit(personId, 'choiceOption', o.id, 'create', actorId, null, o);
   });

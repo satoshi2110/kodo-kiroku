@@ -38,6 +38,14 @@ insert into events (id, person_id, behavior_id, occurred_at, local_date, recorde
   ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
   ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', now(), current_date, '00000000-0000-0000-0000-0000000000b1', now());
 
+insert into choice_options (id, person_id, kind, name) values
+  ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'antecedent', '選択肢1'),
+  ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'antecedent', '選択肢2');
+
+insert into abc_details (id, person_id, event_id, antecedent_ids, recorder_id, updated_at) values
+  ('60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '{50000000-0000-0000-0000-000000000001}', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '{50000000-0000-0000-0000-000000000002}', '00000000-0000-0000-0000-0000000000b1', now());
+
 insert into start_codes (code) values ('RLSTESTCODE1');
 
 -- ---------- ログインしていない人（anon）は何もできない ----------
@@ -135,6 +143,51 @@ begin
     raise exception 'NG: 開始コードの表を画面側から読めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 
+  -- ABC記録と選択肢（6.3.2）
+  select count(*) into n from choice_options where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 のABCの選択肢を読めた'; end if;
+  select count(*) into n from abc_details where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 のABC記録を読めた'; end if;
+  select count(*) into n from abc_details;
+  if n <> 1 then raise exception 'NG: A が自分のチームのABC記録を読めない'; end if;
+
+  begin
+    insert into choice_options (id, person_id, kind, name)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', 'antecedent', 'x');
+    raise exception 'NG: A がチーム2 にABCの選択肢を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    insert into abc_details (id, person_id, event_id, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 にABC記録を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    insert into abc_details (id, person_id, event_id, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1');
+    raise exception 'NG: A が他人（L）を記録者にしてABC記録を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  update abc_details set note = 'x', updated_at = now() where id = '60000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 のABC記録を書きかえた'; end if;
+
+  update choice_options set name = 'x', updated_at = now() where id = '50000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 のABCの選択肢を書きかえた'; end if;
+
+  begin
+    update abc_details set person_id = '10000000-0000-0000-0000-000000000002', updated_at = now()
+      where id = '60000000-0000-0000-0000-000000000001';
+    raise exception 'NG: A が自分のABC記録をチーム2 に移せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  begin
+    delete from abc_details where id = '60000000-0000-0000-0000-000000000001';
+    raise exception 'NG: ABC記録を消せた（論理削除のみのはず）';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
   -- 古い変更は捨てられる（後から届いた古い記録で上書きしない）
   update events set count = 5, updated_at = now() - interval '2 hours' where id = '40000000-0000-0000-0000-000000000001';
   select count into n from events where id = '40000000-0000-0000-0000-000000000001';
@@ -152,6 +205,10 @@ begin
   if n <> 0 then raise exception 'NG: 承認待ちの人に対象者が見えた'; end if;
   select count(*) into n from events;
   if n <> 0 then raise exception 'NG: 承認待ちの人に記録が見えた'; end if;
+  select count(*) into n from abc_details;
+  if n <> 0 then raise exception 'NG: 承認待ちの人にABC記録が見えた'; end if;
+  select count(*) into n from choice_options;
+  if n <> 0 then raise exception 'NG: 承認待ちの人にABCの選択肢が見えた'; end if;
   select count(*) into n from team_members;
   if n <> 1 then raise exception 'NG: 承認待ちの人に、自分以外のメンバーが見えた（または自分が見えない）'; end if;
   begin
@@ -190,6 +247,16 @@ begin
       values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000d1');
     raise exception 'NG: 閲覧者が記録を書き込めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  select count(*) into n from abc_details;
+  if n <> 1 then raise exception 'NG: 閲覧者に自分のチームのABC記録が見えない'; end if;
+  begin
+    insert into choice_options (id, person_id, kind, name)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'antecedent', 'x');
+    raise exception 'NG: 閲覧者がABCの選択肢を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update abc_details set note = 'x', updated_at = now() where id = '60000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者がABC記録を書きかえた'; end if;
   update events set count = 7, updated_at = now() where id = '40000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者が記録を書きかえた'; end if;
@@ -200,7 +267,7 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
 set local role authenticated;
 do $$
-declare code text;
+declare code text; n int;
 begin
   begin
     update team_members set role = 'subadmin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000c1';
@@ -218,6 +285,10 @@ begin
     update persons set deleted_at = now(), updated_at = now() where id = '10000000-0000-0000-0000-000000000001';
     raise exception 'NG: 支援リーダーがチームの削除を申し込めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  -- 支援リーダーは、ほかの人が書いたABC記録を直せる
+  update abc_details set note = 'リーダーが修正', updated_at = now() where id = '60000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーがチームのABC記録を直せない'; end if;
   -- 支援者としての招待はできる。コードは次の J のテストで使う
   code := create_invite('10000000-0000-0000-0000-000000000001', 'supporter');
   perform set_config('rls_test.invite', code, true);

@@ -3,7 +3,7 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・行動・記録・監査ログ だけ。ほかの表は順に足す。
+ * いまは 対象者・メンバー・行動・記録・ABC記録（選択肢と詳しい内容）・監査ログ だけ。ほかの表は順に足す。
  */
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
@@ -19,12 +19,14 @@ interface SyncTable {
   insert: boolean; // 端末から新しく作ってよいか（対象者とメンバーはサーバーの関数でだけ作る）
 }
 
-/** 送る順番（行動の前に対象者、記録の前に行動） */
+/** 送る順番（行動の前に対象者、記録の前に行動、ABC記録の前に記録） */
 const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
   { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
   { local: db.events, remote: 'events', team: (r) => r.personId, insert: true },
+  { local: db.choiceOptions, remote: 'choice_options', team: (r) => r.personId, insert: true },
+  { local: db.abcDetails, remote: 'abc_details', team: (r) => r.personId, insert: true },
 ];
 
 // ---------- 変更の印 ----------
@@ -123,6 +125,19 @@ async function markSent(t: Table<any, string>, rows: Row[]) { // eslint-disable-
   });
 }
 
+/** サーバーが受け付けなかった行を、サーバーの内容で上書きする。見る権限もない行は端末から消す */
+async function restore(s: SyncTable, ids: string[]) {
+  const { data, error } = await supabase!.from(s.remote).select('*').in('id', ids);
+  if (error) return;
+  await remoteWrite([s.local], async () => {
+    for (const id of ids) {
+      const r = data.find((x) => x.id === id);
+      if (r) await s.local.put(fromRemote(r));
+      else await s.local.delete(id);
+    }
+  });
+}
+
 async function push(uid: string, teams: Set<string>): Promise<string[]> {
   const sb = supabase!;
   const errors: string[] = [];
@@ -132,6 +147,7 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
     const fresh = s.insert ? rows.filter((r) => r._srv !== 1) : [];
     const known = rows.filter((r) => !fresh.includes(r));
     const sent: Row[] = [];
+    const rejected: string[] = [];
     if (fresh.length) {
       const { error } = await sb.from(s.remote).insert(fresh.map(toRemote));
       if (!error) sent.push(...fresh);
@@ -147,11 +163,13 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
         if (!ins.error) sent.push(r);
         else errors.push(`${s.remote}: ${ins.error.message}`);
       } else if (!error) {
-        // 権限がない・古い変更として捨てられた。端末の内容はサーバーから取り直す
+        // 権限がない・古い変更として捨てられた。端末の内容をサーバーの内容に戻す
         sent.push(r);
+        rejected.push(r.id);
       } else errors.push(`${s.remote}: ${error.message}`);
     }
     await markSent(s.local, sent);
+    if (rejected.length) await restore(s, rejected);
   }
   // 監査ログ（追記のみ）。自分の操作で、サーバーのチームのものだけ
   const logs = (await db.auditLogs.filter((r) => (r as unknown as Row)._dirty === 1).toArray()) as unknown as Row[];
