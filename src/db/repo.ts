@@ -613,7 +613,17 @@ export async function updateTeamSetting(personId: string, patch: Partial<Pick<Te
 /** 招待・承認ができるのは 管理者・副管理者・支援リーダー（6.9 の「招待・権限」） */
 export const canInvite = (r?: Role) => !!r && RANK[r] >= RANK.leader;
 
-export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt'>>, actorId: string) {
+/**
+ * 役割の変更と停止ができる相手（7章 #2）。管理者・副管理者・支援リーダーが、承認済みのほかの人に対して行う。
+ * 管理者の行は変えられない。副管理者の行と、副管理者にすることは管理者だけ（サーバーの members_rules と同じ決まり）。
+ */
+export const canManageMember = (me: TeamMember | undefined, m: TeamMember) =>
+  !!me && canInvite(me.role) && m.userId !== me.userId && m.approvedAt != null && m.role !== 'admin' && (me.role === 'admin' || m.role !== 'subadmin');
+
+/** 変えられる役割。副管理者にするのは管理者だけ。管理者にはこの方法ではできない */
+export const assignableRoles = (me?: Role): Role[] => (me === 'admin' ? ['viewer', 'supporter', 'leader', 'subadmin'] : ['viewer', 'supporter', 'leader']);
+
+export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt' | 'role' | 'suspendedAt'>>, actorId: string) {
   const before = await db.teamMembers.get(memberId);
   if (!before) return;
   const after: TeamMember = { ...before, ...patch, updatedAt: nowISO() };
@@ -623,21 +633,39 @@ export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamM
 
 export const TEAM_DELETE_DAYS = 30;
 
+const teamTables = () => [
+  db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
+  db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
+  db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments,
+];
+
 /**
  * チームの削除（申し込みから30日たったら実行）。記録・写真・場所など対象者のデータを消す。
  * 監査ログは追記だけで誰も消せない決まり（7.4.2 #6）なので残し、削除したことを書き足す。
  */
 export async function purgeTeam(personId: string, actorId: string) {
-  const tables = [
-    db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
-    db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
-    db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments,
-  ];
+  const tables = teamTables();
   await db.transaction('rw', [...tables, db.teamSettings, db.persons, db.auditLogs, db.device], async () => {
     for (const t of tables) await t.where('personId').equals(personId).delete();
     await db.teamSettings.delete(personId);
     await db.persons.delete(personId);
     await audit(personId, 'person', personId, 'delete', actorId, null, { purged: true });
+    const dev = await getDevice();
+    if (dev.currentPersonId === personId) await saveDevice({ currentPersonId: null });
+  });
+}
+
+/**
+ * 停止された・チームから外されたときに、この端末に残っているそのチームのデータを消す（7章 #2「端末内データを次回通信時に消去」）。
+ * 監査ログの写しも消す（中身に記録が入っているため）。サーバーの監査ログは残る。
+ */
+export async function forgetTeam(personId: string) {
+  const tables = teamTables();
+  await db.transaction('rw', [...tables, db.teamSettings, db.persons, db.auditLogs, db.device], async () => {
+    for (const t of tables) await t.where('personId').equals(personId).delete();
+    await db.teamSettings.delete(personId);
+    await db.persons.delete(personId);
+    await db.auditLogs.where('personId').equals(personId).delete();
     const dev = await getDevice();
     if (dev.currentPersonId === personId) await saveDevice({ currentPersonId: null });
   });

@@ -36,6 +36,11 @@ export default function Setup() {
     async () => (userId ? (await db.teamMembers.where('userId').equals(userId).toArray()).filter((m) => m.approvedAt === null && !m.deletedAt) : []),
     [userId],
   );
+  // 停止されたチーム（7章 #2）。そのチームのデータはこの端末から消してある
+  const stopped = useLiveQuery(
+    async () => (userId ? (await db.teamMembers.where('userId').equals(userId).toArray()).filter((m) => m.suspendedAt && !m.deletedAt).length : 0),
+    [userId],
+  );
   // 承認を待っているあいだに承認されたら、場所といつもの時間の案内へ（登録できる役割のときだけ）
   const joinedRole = useRef<Role | null>(null);
   if (waiting?.length) joinedRole.current = waiting[0].role;
@@ -87,6 +92,17 @@ export default function Setup() {
           <li key={t} className={i + 1 === step ? 'steps__on' : i + 1 < step ? 'steps__done' : ''}>{i + 1} {t}</li>
         ))}
       </ol>
+      {!!stopped && (waiting ?? []).length === 0 && (
+        <div className="section">
+          <div className="card stack">
+            <span className="card__title">チームでの利用が止められました</span>
+            <p className="help">
+              参加していたチームの管理者か支援リーダーが、あなたの利用を止めました。この端末に残っていたそのチームの記録は消しました。
+              続けて使うときは、そのチームの管理者か支援リーダーに聞いてください。
+            </p>
+          </div>
+        </div>
+      )}
       {(waiting ?? []).length > 0 && (
         <div className="section">
           <div className="card stack">

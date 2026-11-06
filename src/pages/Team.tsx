@@ -1,7 +1,8 @@
 /**
  * チーム（6.9、ワイヤーフレーム 4）。対象者のプロフィール、メンバーの一覧と「家族」の印・睡眠の入力の許可（決定37）、申し送り（6.10）。
  * AI・睡眠不足の判定・書き出し・チームの削除は「チームの設定」にある。
- * サーバーにつながる設定があるときは、招待コードを作り、参加した人を承認できる（決定44、7.4.2 #3）。役割の変更はこのあと足す。
+ * サーバーにつながる設定があるときは、招待コードを作り、参加した人を承認できる（決定44、7.4.2 #3）。
+ * 管理者・副管理者・支援リーダーは、ほかのメンバーの役割を変えたり、停止したりできる（7章 #2）。
  * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
  */
 import { useState, useSyncExternalStore } from 'react';
@@ -9,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
-import { canInvite, canRecord, setMemberFlags } from '../db/repo';
+import { assignableRoles, canInvite, canManageMember, canRecord, setMemberFlags } from '../db/repo';
 import { supabase } from '../server/supabase';
 import { syncStatus, unsentCount } from '../server/sync';
 import { signOut } from '../server/session';
@@ -75,10 +76,11 @@ export default function Team() {
               <span className="row">
                 <span className="badge badge--role">{ROLE_LABEL[m.role]}</span>
                 {m.approvedAt === null && <span className="badge badge--problem">承認待ち</span>}
+                {m.suspendedAt && <span className="badge badge--problem">停止中</span>}
                 {m.approvedAt === null && canInvite(me?.role) && (m.role !== 'subadmin' || isAdmin) && (
                   <button type="button" className="btn btn--sm" onClick={() => setMemberFlags(m.id, { approvedAt: nowISO() }, userId)}>承認する</button>
                 )}
-                {isAdmin && m.approvedAt !== null && <button type="button" className="btn btn--sm" onClick={() => setEditing(m)}>変更</button>}
+                {((isAdmin && m.approvedAt != null) || canManageMember(me, m)) && <button type="button" className="btn btn--sm" onClick={() => setEditing(m)}>変更</button>}
               </span>
             </div>
           ))}
@@ -135,16 +137,46 @@ export default function Team() {
       {current && (
         <Sheet title={`${current.displayName}（${ROLE_LABEL[current.role]}）`} onClose={() => setEditing(null)}>
           <div className="stack">
-            <label className="row row--between">
-              <span className="label">「家族」の印</span>
-              <input type="checkbox" checked={current.familyMark} onChange={(e) => setMemberFlags(current.id, { familyMark: e.target.checked }, userId)} style={{ width: 22, height: 22 }} />
-            </label>
-            <p className="help">父・きょうだいなど。役割とは別の印で、睡眠の入力ができるようになります。ほかの権限は変わりません。</p>
-            <label className="row row--between">
-              <span className="label">睡眠の入力を許可</span>
-              <input type="checkbox" checked={current.sleepInputAllowed} onChange={(e) => setMemberFlags(current.id, { sleepInputAllowed: e.target.checked }, userId)} style={{ width: 22, height: 22 }} />
-            </label>
-            <p className="help">入所施設などで、夜のようすを職員が分かっているときに付けます。</p>
+            {canManageMember(me, current) && (
+              <>
+                <label className="field">
+                  役割
+                  <select value={current.role} onChange={(e) => setMemberFlags(current.id, { role: e.target.value as Role }, userId)}>
+                    {assignableRoles(me?.role).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                  </select>
+                </label>
+                <p className="help">閲覧者は見るだけ、支援者は記録できる、支援リーダーは行動の設定や招待もできます。{isAdmin ? '' : '副管理者にできるのは管理者だけです。'}</p>
+                {current.suspendedAt ? (
+                  <button type="button" className="btn btn--outline btn--block" onClick={() => setMemberFlags(current.id, { suspendedAt: null }, userId)}>停止を外す</button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn--danger btn--block"
+                    onClick={() =>
+                      window.confirm(`${current.displayName}さんを停止しますか？\nすぐにこのチームの記録が見られなくなり、その人の端末に残った記録も次の通信で消えます。あとで停止を外すこともできます。`) &&
+                      setMemberFlags(current.id, { suspendedAt: nowISO() }, userId)
+                    }
+                  >
+                    停止する
+                  </button>
+                )}
+                <p className="help">退職・異動・卒業のときに使います。{current.suspendedAt ? `${formatDateTimeJa(current.suspendedAt)}に停止しました。` : ''}</p>
+              </>
+            )}
+            {isAdmin && (
+              <>
+                <label className="row row--between">
+                  <span className="label">「家族」の印</span>
+                  <input type="checkbox" checked={current.familyMark} onChange={(e) => setMemberFlags(current.id, { familyMark: e.target.checked }, userId)} style={{ width: 22, height: 22 }} />
+                </label>
+                <p className="help">父・きょうだいなど。役割とは別の印で、睡眠の入力ができるようになります。ほかの権限は変わりません。</p>
+                <label className="row row--between">
+                  <span className="label">睡眠の入力を許可</span>
+                  <input type="checkbox" checked={current.sleepInputAllowed} onChange={(e) => setMemberFlags(current.id, { sleepInputAllowed: e.target.checked }, userId)} style={{ width: 22, height: 22 }} />
+                </label>
+                <p className="help">入所施設などで、夜のようすを職員が分かっているときに付けます。</p>
+              </>
+            )}
             <button type="button" className="btn btn--block" onClick={() => setEditing(null)}>閉じる</button>
           </div>
         </Sheet>

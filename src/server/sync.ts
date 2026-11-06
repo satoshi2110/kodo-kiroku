@@ -8,6 +8,7 @@
  */
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
+import { forgetTeam } from '../db/repo';
 import { toLocalISO } from '../lib/date';
 import { supabase } from './supabase';
 
@@ -209,6 +210,8 @@ async function pull(uid: string): Promise<string[]> {
   if (mine.error) return [`team_members: ${mine.error.message}`];
   const teams = mine.data.map((m) => m.person_id as string);
   const known = new Set(dev?.syncTeams ?? []);
+  // 停止された・外されたチームは、この端末に残っているデータを消す（7章 #2）。通信に失敗したときは上で戻るので消さない
+  for (const t of known) if (!teams.includes(t)) await forgetTeam(t);
   if (teams.some((t) => !known.has(t))) since = {};
   for (const s of TABLES) {
     // 同じ時刻に書かれた行を取りこぼさないよう、5分さかのぼって取り直す（同じ行は上書きされるだけ）

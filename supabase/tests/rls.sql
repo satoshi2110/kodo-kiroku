@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0006）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0008）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -824,6 +824,94 @@ begin
     perform join_team(current_setting('rls_test.invite'), 'J', 'school', 'v');
     raise exception 'NG: 使用済みの招待コードがもう一度使えた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- ---------- 役割の変更と停止（7章 #2、0008） ----------
+-- 支援リーダー（L）は閲覧者・支援者・支援リーダーの役割を変えられ、停止もできる。自分は停止できない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  update team_members set role = 'supporter', updated_at = now() where id = '20000000-0000-0000-0000-0000000000d1';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが閲覧者を支援者にできない'; end if;
+  begin
+    update team_members set role = 'subadmin', updated_at = now() where id = '20000000-0000-0000-0000-0000000000d1';
+    raise exception 'NG: 支援リーダーがほかの人を副管理者にできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update team_members set suspended_at = now(), updated_at = now() where id = '20000000-0000-0000-0000-0000000000d1';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーがメンバーを停止できない'; end if;
+  begin
+    update team_members set suspended_at = now(), updated_at = now() where id = '20000000-0000-0000-0000-0000000000c1';
+    raise exception 'NG: 支援リーダーが自分を停止できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update team_members set role = 'leader', updated_at = now() where id = '20000000-0000-0000-0000-0000000000b1';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援リーダーがチーム2 のメンバーの役割を変えた'; end if;
+end $$;
+reset role;
+
+-- 停止された V は、その場でチームのものが何も見えず、自分で停止を外せない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from persons;
+  if n <> 0 then raise exception 'NG: 停止した直後の人に対象者が見えた'; end if;
+  select count(*) into n from events;
+  if n <> 0 then raise exception 'NG: 停止した直後の人に記録が見えた'; end if;
+  update team_members set suspended_at = null, updated_at = now() where id = '20000000-0000-0000-0000-0000000000d1';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 停止された人が自分で停止を外せた'; end if;
+end $$;
+reset role;
+
+-- 停止中の S も、自分の停止を外せない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  update team_members set suspended_at = null, updated_at = now() where id = '20000000-0000-0000-0000-0000000000f1';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 停止中の人が自分で停止を外せた'; end if;
+end $$;
+reset role;
+
+-- 管理者（A）も自分は停止できない。停止を外すことはできる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    update team_members set suspended_at = now(), updated_at = now() where id = '20000000-0000-0000-0000-0000000000a1';
+    raise exception 'NG: 管理者が自分を停止できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update team_members set suspended_at = null, role = 'viewer', updated_at = now() where id = '20000000-0000-0000-0000-0000000000d1';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 管理者が停止を外せない'; end if;
+end $$;
+reset role;
+
+-- 停止を外された V は、また見られる。閲覧者はメンバーの行を変えられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from persons;
+  if n <> 1 then raise exception 'NG: 停止を外したのに対象者が見えない'; end if;
+  update team_members set role = 'leader', updated_at = now() where id = '20000000-0000-0000-0000-0000000000d1';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が自分の役割を変えた'; end if;
+  update team_members set suspended_at = now(), updated_at = now() where id = '20000000-0000-0000-0000-0000000000c1';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者がほかの人を停止した'; end if;
 end $$;
 reset role;
 
