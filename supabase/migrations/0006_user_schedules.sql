@@ -24,3 +24,7 @@ create policy schedules_update on user_schedules for update
   using (user_id = auth.uid() and role_at_least(person_id, 'supporter'))
   with check (user_id = auth.uid() and role_at_least(person_id, 'supporter'));
 create trigger schedules_sync before insert or update on user_schedules for each row execute function sync_guard();
+
+-- ---------- 権限（ログインした人だけ。消す権限は付けない） ----------
+revoke all on user_schedules from anon, authenticated;
+grant select, insert, update on user_schedules to authenticated;
