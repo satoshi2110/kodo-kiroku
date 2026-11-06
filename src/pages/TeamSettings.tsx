@@ -142,10 +142,11 @@ export default function TeamSettings() {
               <button type="button" className="btn btn--outline" onClick={() => exportCsv('records', '記録とABC')}>CSV で書き出す: 記録とABC</button>
               <button type="button" className="btn btn--outline" onClick={() => exportCsv('observations', 'インターバル')}>CSV で書き出す: インターバル・時間サンプリング</button>
               <button type="button" className="btn btn--outline" onClick={() => exportCsv('sleep', '睡眠')}>CSV で書き出す: 睡眠</button>
+              <button type="button" className="btn btn--outline" onClick={() => exportCsv('sessions', '観察時間')}>CSV で書き出す: 観察時間（推定）</button>
             </>
           ) : null}
           <p className="help">
-            書き出せるのは管理者・副管理者・支援リーダー。写真と場所の位置は含みません。書き出したことは履歴に残ります。
+            書き出せるのは管理者・副管理者・支援リーダー。写真と場所の位置は含みません。観察時間は、いつもの時間か記録の最初から最後までで推定した値で、30分に満たない日は空欄です。書き出したことは履歴に残ります。
             {!serverEnabled && 'いまは記録がこの端末の中にだけあるので、ときどき書き出しておくと安心です。'}
           </p>
           {isAdmin &&

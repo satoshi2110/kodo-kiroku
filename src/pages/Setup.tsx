@@ -1,21 +1,21 @@
 /**
  * 初回セットアップ（7.1、ワイヤーフレーム 16）。5つのステップ:
- * 1 同意 → 2 あなたと対象者（呼び名は必須、ほかは任意）→ 3 行動を1つ（行動の追加の画面）→ 4 場所（あとでも可。場所の画面）→ 5 最初の記録（ホームで案内）。
+ * 1 同意 → 2 あなたと対象者（呼び名は必須、ほかは任意）→ 3 行動を1つ（行動の追加の画面）→ 4 場所と「わたしのいつもの時間」（あとでも可。場所の画面）→ 5 最初の記録（ホームで案内）。
  * サーバーにつながる設定があるとき（ログインしている）は、運営が発行した開始コードを確かめてチームを作る（決定44）。
  * 招待された人は、ここで招待コードを入れて参加し、管理者・副管理者・支援リーダーの承認を待つ（7.4.2 #3）。
- * 「わたしのいつもの時間」は観察時間の推定を作るときに足す。
+ * 招待で参加した人は、承認されたら場所と「わたしのいつもの時間」だけを案内する（7.1）。
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useApp } from '../state';
 import { db } from '../db/db';
-import { saveDevice, setupTeam } from '../db/repo';
+import { canEditPlaces, saveDevice, setupTeam } from '../db/repo';
 import { supabase } from '../server/supabase';
 import { runSync } from '../server/sync';
 import { signOut } from '../server/session';
 import { createSampleTeam } from '../db/sample';
-import { AFFILIATION_LABEL, CONSENT_TEXT_VERSION, type Affiliation } from '../db/types';
+import { AFFILIATION_LABEL, CONSENT_TEXT_VERSION, type Affiliation, type Role } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
 
 export default function Setup() {
@@ -36,8 +36,11 @@ export default function Setup() {
     async () => (userId ? (await db.teamMembers.where('userId').equals(userId).toArray()).filter((m) => m.approvedAt === null && !m.deletedAt) : []),
     [userId],
   );
+  // 承認を待っているあいだに承認されたら、場所といつもの時間の案内へ（登録できる役割のときだけ）
+  const joinedRole = useRef<Role | null>(null);
+  if (waiting?.length) joinedRole.current = waiting[0].role;
   // 保存が反映されたら行動の追加へ。済んでいる端末で開いたときはホームへ
-  if (person) return <Navigate to={saving ? '/behaviors/new?from=setup' : '/'} replace />;
+  if (person) return <Navigate to={saving ? '/behaviors/new?from=setup' : joinedRole.current && canEditPlaces(joinedRole.current) ? '/places?from=join' : '/'} replace />;
 
   // 作り終わると対象者ができ、上の Navigate でホームへ移る
   const sample = () => createSampleTeam();
@@ -80,7 +83,7 @@ export default function Setup() {
     <div className="page page--no-nav">
       <TopBar title="はじめに" sub={`ステップ ${step} / 5 ・ 約10分`} />
       <ol className="steps section" aria-label="このあとの流れ">
-        {['同意', '対象者', '行動を1つ', '場所', '最初の記録'].map((t, i) => (
+        {['同意', '対象者', '行動を1つ', '場所と時間', '最初の記録'].map((t, i) => (
           <li key={t} className={i + 1 === step ? 'steps__on' : i + 1 < step ? 'steps__done' : ''}>{i + 1} {t}</li>
         ))}
       </ol>

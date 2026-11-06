@@ -85,13 +85,21 @@ const minuteOf = (iso: string) => {
 const recordTimes = new WeakMap<RecordSet, Map<string, Map<string, number[]>>>();
 const hhmm = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
 
+/** 記録した人ごとの、その日の観察時間帯（分）。method は推定のしかた（いつもの時間／記録の範囲） */
+export interface ObservedSpan {
+  userId: string;
+  start: number;
+  end: number;
+  method: 'template' | 'records';
+  placeName: string | null;
+}
+
 /**
- * その日の観察時間（時間）の推定（6.3.3）。その日に記録した人ごとに、
+ * その日に記録した人ごとの観察時間帯（6.3.3）。
  * (1) いつもの時間にその曜日が入っていれば、その時間帯、(3) なければ、その人のその日の最初の記録から最後の記録まで。
- * 何人かいるときは時間帯を重ねて（足し算ではなく）合わせる。30分に満たない日は推定できないとして null。
  * 【暫定】(2) アプリを開いた時刻はまだ残していないので使わない。
  */
-export function observedHours(d: string, rs: RecordSet): number | null {
+export function observedSpans(d: string, rs: RecordSet): ObservedSpan[] {
   let byDate = recordTimes.get(rs);
   if (!byDate) {
     // 日 → 記録した人 → その日の記録の時刻（分）。同じ記録の組では1回だけ作る
@@ -106,14 +114,23 @@ export function observedHours(d: string, rs: RecordSet): number | null {
     recordTimes.set(rs, byDate);
   }
   const times = byDate.get(d);
-  if (!times) return null;
+  if (!times) return [];
   const wd = parseLocalDate(d).getDay();
-  const spans: [number, number][] = [];
-  for (const [who, ms] of times) {
+  return [...times].map(([who, ms]) => {
     const s = rs.schedules.find((x) => x.userId === who && x.weekdays.includes(wd));
-    if (s) spans.push([hhmm(s.startTime), hhmm(s.endTime)]);
-    else spans.push([Math.min(...ms), Math.max(...ms)]);
-  }
+    return s
+      ? { userId: who, start: hhmm(s.startTime), end: hhmm(s.endTime), method: 'template' as const, placeName: s.placeName }
+      : { userId: who, start: Math.min(...ms), end: Math.max(...ms), method: 'records' as const, placeName: null };
+  });
+}
+
+/**
+ * その日の観察時間（時間）の推定（6.3.3）。記録した人ごとの時間帯（observedSpans）を、
+ * 何人かいるときは重ねて（足し算ではなく）合わせる。30分に満たない日は推定できないとして null。
+ */
+export function observedHours(d: string, rs: RecordSet): number | null {
+  const spans = observedSpans(d, rs).map((x): [number, number] => [x.start, x.end]);
+  if (!spans.length) return null;
   spans.sort((a, b) => a[0] - b[0]);
   let total = 0;
   let [cs, ce] = spans[0];

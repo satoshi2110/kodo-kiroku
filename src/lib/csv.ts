@@ -1,19 +1,22 @@
 /**
  * CSV の書き出し（6.12）。Excel で文字化けしないように UTF-8 の BOM を付ける。
- * 記録とABC（1行が1回の記録）・インターバル／時間サンプリング・睡眠の3種類。写真と場所の座標は入れない。
+ * 記録とABC（1行が1回の記録）・インターバル／時間サンプリング・睡眠・観察時間（推定）の4種類。写真と場所の座標は入れない。
  */
 import { db } from '../db/db';
 import { addDays, formatDateJa, formatTime } from './date';
 import { sleepMinutes } from './sleep';
+import { loadRecordSet, observedHours, observedSpans } from './series';
 import { AFFILIATION_LABEL, FUNCTION_LABEL, KIND_LABEL, METHOD_LABEL, type Person } from '../db/types';
 
-export type CsvKind = 'records' | 'observations' | 'sleep';
+export type CsvKind = 'records' | 'observations' | 'sleep' | 'sessions';
 
 function esc(v: unknown): string {
   if (v == null) return '';
   const s = String(v);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
+
+const clock = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 const toCSV = (rows: unknown[][]) => '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n') + '\r\n';
 
@@ -96,6 +99,24 @@ export async function buildCsv(person: Person, kind: CsvKind): Promise<string> {
       ['日付', '開始', '終了', '行動', '測り方', '区間（秒）', '起きた', '起きなかった', '未観察', '起きた割合（%）', '区間ごとの結果', '記録者'],
       ...rows,
     ]);
+  }
+
+  if (kind === 'sessions') {
+    // 観察時間（6.3.3 の推定）: 1行が「その日・記録した人」。最後の列は、何人かの時間帯を重ねて合わせたその日の観察時間
+    const rs = await loadRecordSet(pid);
+    const rows = [...rs.recordedDays].sort().flatMap((d) => {
+      const h = observedHours(d, rs);
+      return observedSpans(d, rs).map((x) => [
+        d,
+        byUser.get(x.userId) ?? '',
+        clock(x.start),
+        clock(x.end),
+        x.placeName,
+        x.method === 'template' ? 'いつもの時間' : '記録の最初から最後',
+        h == null ? '' : Math.round(h * 10) / 10,
+      ]);
+    });
+    return toCSV([['日付', '記録者', '開始', '終了', '場所', '推定のしかた', 'その日の観察時間（時間）'], ...rows]);
   }
 
   const logs = await db.sleepLogs.where('personId').equals(pid).filter((l) => !l.deletedAt).toArray();

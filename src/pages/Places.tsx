@@ -29,7 +29,8 @@ export default function Places() {
   const [msg, setMsg] = useState('');
   const [explaining, setExplaining] = useState(false);
   const [explained, setExplained] = useState(false);
-  const fromSetup = useSearchParams()[0].get('from') === 'setup';
+  const from = useSearchParams()[0].get('from');
+  const fromSetup = from === 'setup' || from === 'join';
   const [sched, setSched] = useState<ScheduleInput | null>(null);
   const schedules = useLiveQuery(
     async () => (person ? latestSchedules(await db.userSchedules.where('personId').equals(person.id).toArray()) : []),
@@ -97,9 +98,12 @@ export default function Places() {
       {fromSetup && (
         <div className="section">
           <div className="card stack">
-            <span className="label">はじめての設定 4 / 5: 場所（あとでも登録できます）</span>
-            <p className="help">自宅・学校・施設など、記録する場所を登録します。登録すると、記録に場所の名前が付きます。</p>
-            <Link to="/" className="btn btn--primary btn--block">次へ: 最初の記録</Link>
+            <span className="label">{from === 'join' ? 'はじめての設定' : 'はじめての設定 4 / 5'}: 場所といつもの時間（あとでも登録できます）</span>
+            <p className="help">
+              自宅・学校・施設など、記録する場所を登録します。登録すると、記録に場所の名前が付きます。{''}
+              下の「わたしのいつもの時間」には、ふだん対象者と一緒にいる曜日と時間を登録します。グラフの「1時間あたりの回数」に使います。
+            </p>
+            <Link to="/" className="btn btn--primary btn--block">{from === 'join' ? '次へ: ホームへ' : '次へ: 最初の記録'}</Link>
           </div>
         </div>
       )}
