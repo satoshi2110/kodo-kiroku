@@ -6,8 +6,10 @@
  * - 入力は画面側で仮名化済み。ここでも形と大きさを確かめ、ABC記録が10件未満なら API を呼ばずに「データ不足」を返す
  * - 出力は JSON スキーマで受け取る
  * - 出力に禁止語（罰・弱化・嫌悪刺激・拘束・隔離・叱責・無視・診断・治療方針 など）があれば捨てて1回だけ作り直し、それでもだめなら結果を出さない
- * - 使える回数: AI_USAGE（KV）をつないだときは、サイト全体の1日の上限（AI_DAILY_LIMIT、既定 30）を守る。
- *   1人ごとの上限（決定63）はログインができるまで端末側で数える
+ * - 呼べるのはログインした人だけ（決定84）。画面から受け取ったログインの証（アクセストークン）で Supabase の take_ai_run を呼び、
+ *   チームの一員か・閲覧者でないか・AI「あり」か・1人ごと（決定63）とチームごと（決定60）の回数が残っているかを確かめてから1回と数える。
+ *   Supabase の設定（SUPABASE_URL・SUPABASE_ANON_KEY）がないときは、AI を呼ばずに断る
+ * - AI_USAGE（KV）をつないだときは、サイト全体の1日の上限（AI_DAILY_LIMIT、既定 30）も守る
  */
 import Anthropic from '@anthropic-ai/sdk';
 import {
@@ -29,6 +31,8 @@ import {
 
 interface Env {
   ANTHROPIC_API_KEY?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
   AI_DAILY_LIMIT?: string;
   AI_USAGE?: KVNamespace;
 }
@@ -73,6 +77,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const req = (await request.json().catch(() => null)) as AiRequest | null;
   if (!req || (req.kind !== 'analyze' && req.kind !== 'suggest' && req.kind !== 'summarize')) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
+  if (typeof req.personId !== 'string' || !UUID.test(req.personId)) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
 
   const invalid =
     req.kind === 'analyze' ? validateAnalysisInput(req.input) : req.kind === 'suggest' ? validateSuggestionInput(req.input) : validateSummaryInput(req.input);
@@ -81,6 +86,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` });
   }
   if (!env.ANTHROPIC_API_KEY) return json({ status: 'error', message: 'AI の設定がまだ済んでいません（API キーが未設定）' }, 503);
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return json({ status: 'error', message: 'AI の設定がまだ済んでいません（サーバーの設定が未設定）' }, 503);
+
+  const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
+  if (!token) return json({ status: 'error', message: 'ログインしてからお試しください' }, 401);
+  const denied = await takeTeamRun(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token, req.personId, req.kind);
+  if (denied) return denied;
 
   if (!(await takeDailyQuota(env))) return json({ status: 'error', message: '今日の AI の回数の上限に達しました。明日またお試しください。' }, 429);
 
@@ -141,6 +152,40 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 /** サイト全体の1日の上限。KV がつながっていなければ数えない（そのときは Anthropic 側の使用額の上限が守り） */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// take_ai_run（0009）が断ったときの言葉
+const DENIED: Record<string, [string, number]> = {
+  not_member: ['このチームの AI は使えません（チームのメンバーではありません）', 403],
+  viewer: ['閲覧者は AI を使えません', 403],
+  ai_off: ['このチームでは AI が「なし」になっています。管理者が設定で変えられます', 403],
+  bad_kind: ['入力の形が正しくありません', 400],
+  user_day: ['今日のあなたの AI の回数を使い切りました。明日またお試しください', 429],
+  user_month: ['今月のあなたの AI の回数を使い切りました', 429],
+  team_day: ['今日のチームの AI の回数（30回）を使い切りました。明日またお試しください', 429],
+  team_month: ['今月のチームの AI の回数（300回）を使い切りました', 429],
+};
+
+/** ログインした本人の資格で回数を1つ使う。使えたら null、使えなければ断りの応答を返す（わからないときも断る） */
+async function takeTeamRun(url: string, anonKey: string, token: string, personId: string, kind: string): Promise<Response | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/take_ai_run`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_person: personId, p_kind: kind }),
+    });
+  } catch {
+    return json({ status: 'error', message: 'サーバーに接続できませんでした。少し待ってからお試しください' }, 502);
+  }
+  if (res.status === 401) return json({ status: 'error', message: 'ログインの期限が切れました。ログインし直してからお試しください' }, 401);
+  if (!res.ok) return json({ status: 'error', message: `AI の回数を確かめられませんでした（${res.status}）` }, 502);
+  const result = (await res.json().catch(() => null)) as { ok?: boolean; reason?: string } | null;
+  if (result?.ok === true) return null;
+  const [message, status] = DENIED[result?.reason ?? ''] ?? ['AI の回数を確かめられませんでした', 502];
+  return json({ status: 'error', message }, status);
+}
+
 async function takeDailyQuota(env: Env): Promise<boolean> {
   if (!env.AI_USAGE) return true;
   const limit = Number(env.AI_DAILY_LIMIT ?? 30);

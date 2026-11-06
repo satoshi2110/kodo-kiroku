@@ -78,10 +78,12 @@ export interface SummaryOutput {
 /** まとめは短く（受け取る量の上限、14.2 #36） */
 export const SUMMARY_MAX_CHARS = 300;
 
-export type AiRequest =
+/** personId: どのチームの回数として数えるか（サーバーが確かめる、決定84） */
+export type AiRequest = { personId: string } & (
   | { kind: 'analyze'; input: AnalysisInput }
   | { kind: 'suggest'; input: SuggestionInput }
-  | { kind: 'summarize'; input: SummaryInput };
+  | { kind: 'summarize'; input: SummaryInput }
+);
 
 export type AiResponse =
   | { status: 'ok'; kind: 'analyze'; output: AnalysisOutput; model: string }

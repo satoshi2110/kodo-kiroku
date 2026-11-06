@@ -1,6 +1,7 @@
 /**
  * AI 呼び出しのアダプタ層（9章）。画面はここだけを呼ぶ。
- * - server: 同じサイトの /api/ai（Cloudflare Pages Functions）に送る。API キーはサーバー側だけにある
+ * - server: 同じサイトの /api/ai（Cloudflare Pages Functions）に送る。API キーはサーバー側だけにある。
+ *   ログインの証（アクセストークン）を添え、サーバーがチームの一員か・回数が残っているかを確かめる（決定84）
  * - mock: 外に何も送らず、決まった見本の結果を返す（開発中と、キー未設定のとき）
  * AI「なし」のチームでは、画面がそもそもここを呼ばない。
  */
@@ -15,6 +16,7 @@ import {
   type SummaryInput,
   type SummaryOutput,
 } from './schema';
+import { supabase } from '../server/supabase';
 
 type Provider = 'server' | 'mock';
 const provider: Provider = (import.meta.env.VITE_AI_PROVIDER as Provider | undefined) ?? (import.meta.env.DEV ? 'mock' : 'server');
@@ -26,8 +28,14 @@ export async function requestAi(req: AiRequest): Promise<AiResponse> {
     return { status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` };
   }
   if (provider === 'mock') return mock(req);
+  const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
+  if (!token) return { status: 'error', message: 'AI はログインしてチームに入ってから使えます。' };
   try {
-    const res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
+    const res = await fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(req),
+    });
     const body = (await res.json().catch(() => null)) as AiResponse | null;
     if (!body) return { status: 'error', message: `サーバーから返事がありません（${res.status}）` };
     return body;

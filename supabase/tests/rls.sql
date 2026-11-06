@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0008）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0009）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -912,6 +912,111 @@ begin
   update team_members set suspended_at = now(), updated_at = now() where id = '20000000-0000-0000-0000-0000000000c1';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者がほかの人を停止した'; end if;
+end $$;
+reset role;
+
+-- ---------- AI の回数（決定60・63・84、0009） ----------
+-- チーム1 に支援者 X を足す（管理者として作る。RLS はかからない）
+insert into auth.users (id, email, aud, role) values
+  ('00000000-0000-0000-0000-0000000000a4', 'rls-x@test.invalid', 'authenticated', 'authenticated');
+insert into team_members (id, person_id, user_id, display_name, affiliation, role, approved_at) values
+  ('20000000-0000-0000-0000-0000000000a4', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a4', 'X', 'facility', 'supporter', now());
+
+-- 管理者（A）: AI「なし」のあいだは数えない。「あり」に戻すと使える
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  update team_settings set ai_enabled = false, updated_at = now() + interval '10 seconds' where id = '10000000-0000-0000-0000-000000000001';
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'ai_off' then
+    raise exception 'NG: AI「なし」のチームで AI の回数を使えた';
+  end if;
+  update team_settings set ai_enabled = true, updated_at = now() + interval '11 seconds' where id = '10000000-0000-0000-0000-000000000001';
+  if (take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'ok')::boolean is not true then
+    raise exception 'NG: AI「あり」のチームの管理者が AI を使えない';
+  end if;
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'other') ->> 'reason' is distinct from 'bad_kind' then
+    raise exception 'NG: 決まっていない種類で AI の回数を使えた';
+  end if;
+  -- 自分では書けない（数えるのは関数だけ）
+  begin
+    insert into ai_runs (person_id, user_id, kind) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'analyze');
+    raise exception 'NG: AI の回数の表に直接書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    delete from ai_runs;
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: AI の回数を消せた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 支援者（X）: 1日3回まで。チーム2 の分は使えない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a4","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int; r json;
+begin
+  for i in 1..3 loop
+    r := take_ai_run('10000000-0000-0000-0000-000000000001', 'suggest');
+    if (r ->> 'ok')::boolean is not true then raise exception 'NG: 支援者が %回目の AI を使えない（%）', i, r; end if;
+  end loop;
+  if (r ->> 'day_left')::int <> 0 or (r ->> 'team_day_left')::int <> 26 then raise exception 'NG: 残り回数がちがう（%）', r; end if;
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'suggest') ->> 'reason' is distinct from 'user_day' then
+    raise exception 'NG: 支援者が1日に4回 AI を使えた';
+  end if;
+  if take_ai_run('10000000-0000-0000-0000-000000000002', 'analyze') ->> 'reason' is distinct from 'not_member' then
+    raise exception 'NG: 支援者がほかのチームの AI の回数を使えた';
+  end if;
+  select count(*) into n from ai_runs;
+  if n <> 4 then raise exception 'NG: 自分のチームの AI の回数が見えない（% 件）', n; end if;
+end $$;
+reset role;
+
+-- 閲覧者（V）は使えない。どこにも入っていない人（N）とチーム2 の管理者（B）は、使えず見えない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'viewer' then
+    raise exception 'NG: 閲覧者が AI を使えた';
+  end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'not_member' then
+    raise exception 'NG: どこにも入っていない人が AI を使えた';
+  end if;
+  select count(*) into n from ai_runs;
+  if n <> 0 then raise exception 'NG: どこにも入っていない人に AI の回数が見えた'; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'not_member' then
+    raise exception 'NG: チーム2 の管理者がチーム1 の AI を使えた';
+  end if;
+  select count(*) into n from ai_runs;
+  if n <> 0 then raise exception 'NG: チーム2 の管理者にチーム1 の AI の回数が見えた'; end if;
+end $$;
+reset role;
+
+-- チームの1日30回: ほかの人の分で 30回になったら、管理者（A）もその日は使えない
+insert into ai_runs (person_id, user_id, kind)
+  select '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', 'analyze' from generate_series(1, 26);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'team_day' then
+    raise exception 'NG: チームの1日30回を超えて AI を使えた';
+  end if;
 end $$;
 reset role;
 

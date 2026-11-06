@@ -97,7 +97,7 @@ export default function ABCSummary() {
       abcCount: rows.length,
       tallies: tallies.map((t) => ({ title: t.title, items: count(t.items).slice(0, 15).map(([name, n]) => ({ name: mask(name), count: n })) })),
     };
-    const res = await requestAi({ kind: 'summarize', input });
+    const res = await requestAi({ personId: person.id, kind: 'summarize', input });
     if (res.status === 'ok' && res.kind === 'summarize') {
       await saveSummary({ personId: person.id, behaviorId: current.id, periodFrom: range[0], periodTo: range[1], requestedBy: userId, input, output: res.output, model: res.model });
     } else if (res.status !== 'ok') setError(res.message);

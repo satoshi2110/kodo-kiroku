@@ -55,7 +55,7 @@ npm run dev
 
 http://localhost:5173 で開きます。手元では AI は見本の結果（「（見本）」と表示）を返し、外には何も送りません。
 
-本物の AI を手元で試すときは、`.dev.vars` というファイルに `ANTHROPIC_API_KEY=...` を書いて（git には入りません）、次を実行します。
+本物の AI を手元で試すときは、`.dev.vars` というファイルに `ANTHROPIC_API_KEY=...`、`SUPABASE_URL=...`、`SUPABASE_ANON_KEY=...`（`.env` の Supabase の2つと同じ値）を書いて（git には入りません）、次を実行します。AI はログインしてチームに入った人だけが使えます。
 
 ```bash
 npm run pages:dev
@@ -65,7 +65,7 @@ npm run pages:dev
 
 1. Cloudflare の Workers & Pages → 作成 → Pages → Git に接続して、このリポジトリを選ぶ。
 2. ビルドの設定: フレームワークは「なし」、ビルドコマンド `npm run build`、出力ディレクトリ `dist`。
-3. 設定 → 環境変数（本番）に `ANTHROPIC_API_KEY` を **暗号化** して追加する。
+3. 設定 → 環境変数（本番）に `ANTHROPIC_API_KEY` を **暗号化** して追加する。AI を呼べる人をサーバーで確かめるため、`SUPABASE_URL` と `SUPABASE_ANON_KEY` も追加する（これがないと AI は動きません）。
 4. （任意）サイト全体の1日の上限: KV 名前空間を作り、`AI_USAGE` という名前でバインドする。上限は環境変数 `AI_DAILY_LIMIT`（既定 30）。
 
 ## 開発の記録

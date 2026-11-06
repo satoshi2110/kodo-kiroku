@@ -62,7 +62,7 @@ export default function AI() {
     if (!person || !behavior || !input || !userId) return;
     setBusy('analyze');
     setError(null);
-    const res = await requestAi({ kind: 'analyze', input });
+    const res = await requestAi({ personId: person.id, kind: 'analyze', input });
     if (res.status === 'ok' && res.kind === 'analyze') {
       await saveAnalysis({ personId: person.id, behaviorId: behavior.id, requestedBy: userId, input, output: res.output, message: null, model: res.model });
     } else if (res.status === 'insufficient') {
@@ -79,6 +79,7 @@ export default function AI() {
     setError(null);
     const mask = makeMasker(person, members, []);
     const res = await requestAi({
+      personId: person.id,
       kind: 'suggest',
       input: {
         behavior: a.input.behavior,
