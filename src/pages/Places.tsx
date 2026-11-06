@@ -1,7 +1,7 @@
 /**
  * 場所の登録（6.3.3、画面一覧 5、ワイヤーフレーム 11）。ホーム上部の場所ボタンから開く。
- * 「いまここを登録」は、この端末の位置を1回だけ取って中心にする。住所検索と地図は、地図サービスを決めてから足す。
- * 自宅は住所を一覧に出さない（いまは住所を持たない）。削除は非表示で、過去の記録に付いた場所名は残る。
+ * 「いまここを登録」は、この端末の位置を1回だけ取って中心にする。「住所で探す」は国土地理院で住所から中心を決め、地図のピンで直せる（決定85）。
+ * 住所の文字は中心を探すのに使うだけで保存しない（自宅の住所が一覧に出ることもない）。地図は「いまここ」には出さない（現在地を地図サービスに送らないため）。削除は非表示で、過去の記録に付いた場所名は残る。
  * 「わたしのいつもの時間」は記録者ごとの勤務・在宅時間の目安で、グラフの「1時間あたりの回数」の観察時間の推定に使う。
  * チームの全員の分を見られ、直せるのは自分の分だけ。
  */
@@ -14,8 +14,13 @@ import { useApp } from '../state';
 import { getPositionOnce, matchPlace, type Pos } from '../lib/place';
 import { PLACE_KIND_LABEL, WEEKDAY_LABEL, type Place, type PlaceKind, type UserSchedule } from '../db/types';
 import { Chip, Sheet, TopBar } from '../components/ui';
+import PlaceMap from '../components/PlaceMap';
+import { searchAddress, type AddressHit } from '../lib/gsi';
 
-type Form = { id: string | null; name: string; kind: PlaceKind; radiusM: Place['radiusM']; pos: Pos | null };
+/** map: 地図を出すか（住所で探した場所と登録済みの場所だけ。いまここには出さない） */
+type Form = { id: string | null; name: string; kind: PlaceKind; radiusM: Place['radiusM']; pos: Pos | null; map: boolean };
+/** 住所で探す。base は、候補を選んだあとに戻るフォーム */
+type Search = { base: Form; q: string; busy: boolean; hits: AddressHit[] | null; msg: string };
 
 /** 月曜から並べる */
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -25,6 +30,7 @@ const scheduleText = (s: Pick<UserSchedule, 'weekdays' | 'startTime' | 'endTime'
 export default function Places() {
   const { person, me, members, userId, places, place, useLocation } = useApp();
   const [form, setForm] = useState<Form | null>(null);
+  const [search, setSearch] = useState<Search | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [explaining, setExplaining] = useState(false);
@@ -47,13 +53,27 @@ export default function Places() {
     const pos = await getPositionOnce();
     setBusy(false);
     if (!pos) return setMsg('位置を取れませんでした。端末の設定で位置情報を許可するか、「位置なしで登録」を使ってください。');
-    setForm({ id: null, name: '', kind: 'facility', radiusM: 100, pos });
+    setForm({ id: null, name: '', kind: 'facility', radiusM: 100, pos, map: false });
+  }
+
+  async function findAddress() {
+    if (!search || !search.q.trim()) return;
+    setSearch({ ...search, busy: true, msg: '' });
+    const hits = await searchAddress(search.q.trim());
+    if (hits === null) return setSearch({ ...search, busy: false, hits: null, msg: '探せませんでした。通信できるところでもう一度試すか、「位置なしで登録」を使ってください。' });
+    setSearch({ ...search, busy: false, hits, msg: hits.length ? '' : '見つかりませんでした。都道府県から番地まで書いてみてください。' });
+  }
+
+  function pickAddress(hit: AddressHit) {
+    if (!search) return;
+    setForm({ ...search.base, pos: hit.pos, map: true });
+    setSearch(null);
   }
 
   async function save() {
     if (!form || !person || !userId) return;
     const p = await savePlace(form.id, { personId: person.id, name: form.name.trim(), kind: form.kind, radiusM: form.radiusM, lat: form.pos?.lat ?? null, lng: form.pos?.lng ?? null }, userId);
-    if (!form.id && form.pos) await setPlaceChoice(person.id, p.id); // いまここで登録したので、いまの場所にする
+    if (!form.id && form.pos && !form.map) await setPlaceChoice(person.id, p.id); // いまここで登録したので、いまの場所にする（住所で探した場所はしない）
     setForm(null);
   }
 
@@ -126,7 +146,7 @@ export default function Places() {
                 </span>
               </span>
               {editable && (
-                <button type="button" className="btn btn--sm" onClick={() => setForm({ id: p.id, name: p.name, kind: p.kind, radiusM: p.radiusM, pos: p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null })}>
+                <button type="button" className="btn btn--sm" onClick={() => setForm({ id: p.id, name: p.name, kind: p.kind, radiusM: p.radiusM, pos: p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null, map: p.lat != null })}>
                   編集
                 </button>
               )}
@@ -138,7 +158,8 @@ export default function Places() {
       {editable && (
         <div className="section stack">
           <button type="button" className="btn btn--primary btn--block" disabled={busy} onClick={hereNew}>{busy ? '位置を取っています…' : 'いまここを登録'}</button>
-          <button type="button" className="btn btn--block" onClick={() => setForm({ id: null, name: '', kind: 'facility', radiusM: 100, pos: null })}>位置なしで登録（手で選ぶ）</button>
+          <button type="button" className="btn btn--block" onClick={() => setSearch({ base: { id: null, name: '', kind: 'facility', radiusM: 100, pos: null, map: true }, q: '', busy: false, hits: null, msg: '' })}>住所で探す</button>
+          <button type="button" className="btn btn--block" onClick={() => setForm({ id: null, name: '', kind: 'facility', radiusM: 100, pos: null, map: false })}>位置なしで登録（手で選ぶ）</button>
           {msg && <p className="help" role="status">{msg}</p>}
           <p className="help">施設・自宅・学校のように建物ごとに1つ登録します。作業室・食堂などの違いは、記録の「活動」で残します。</p>
         </div>
@@ -263,8 +284,30 @@ export default function Places() {
         </Sheet>
       )}
 
+      {search && (
+        <Sheet title="住所で探す" onClose={() => setSearch(null)}>
+          <form className="stack" onSubmit={(e) => { e.preventDefault(); void findAddress(); }}>
+            <label className="field">
+              住所
+              <input value={search.q} onChange={(e) => setSearch({ ...search, q: e.target.value })} placeholder="例: 東京都千代田区永田町1-7-1" autoFocus />
+            </label>
+            <button type="submit" className="btn btn--primary btn--block" disabled={search.busy || !search.q.trim()}>{search.busy ? '探しています…' : '探す'}</button>
+            <p className="help">入力した住所の文字だけを国土地理院に送って、場所の中心を探します。現在地は送りません。住所は保存しません。</p>
+            {search.msg && <p className="help" role="status">{search.msg}</p>}
+            {search.hits && search.hits.length > 0 && (
+              <>
+                <span className="label">候補（選ぶと地図が出ます）</span>
+                {search.hits.map((h) => (
+                  <button key={`${h.title}-${h.pos.lat}-${h.pos.lng}`} type="button" className="btn btn--block" onClick={() => pickAddress(h)}>{h.title}</button>
+                ))}
+              </>
+            )}
+          </form>
+        </Sheet>
+      )}
+
       {form && (
-        <Sheet title={form.id ? '場所の編集' : form.pos ? '新しい場所（いまここ）' : '新しい場所（位置なし）'} onClose={() => setForm(null)}>
+        <Sheet title={form.id ? '場所の編集' : !form.pos ? '新しい場所（位置なし）' : form.map ? '新しい場所（住所で探した場所）' : '新しい場所（いまここ）'} onClose={() => setForm(null)}>
           <div className="stack">
             <label className="field">
               名前
@@ -286,10 +329,21 @@ export default function Places() {
                 </div>
               </>
             )}
+            {form.pos && form.map && (
+              <>
+                <PlaceMap pos={form.pos} radiusM={form.radiusM} onMove={(pos) => setForm((f) => (f ? { ...f, pos } : f))} />
+                <p className="help">ピンは指で動かせます。地図をタップしても動きます。住所で探した中心は町や番地の目安なので、建物の位置に合わせてください。</p>
+              </>
+            )}
             {form.id && editable && (
-              <button type="button" className="btn btn--sm" onClick={async () => { const pos = await getPositionOnce(); if (pos) setForm({ ...form, pos }); else setMsg('位置を取れませんでした。'); }}>
-                中心を「いまここ」にする
-              </button>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn--sm" onClick={async () => { const pos = await getPositionOnce(); if (pos) setForm({ ...form, pos, map: false }); else setMsg('位置を取れませんでした。'); }}>
+                  中心を「いまここ」にする
+                </button>
+                <button type="button" className="btn btn--sm" onClick={() => { setSearch({ base: form, q: '', busy: false, hits: null, msg: '' }); setForm(null); }}>
+                  住所で探しなおす
+                </button>
+              </div>
             )}
             <button type="button" className="btn btn--primary btn--block" disabled={!form.name.trim()} onClick={save}>保存</button>
             {form.id && <button type="button" className="btn btn--danger btn--block" onClick={remove}>一覧から外す</button>}

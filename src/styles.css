@@ -369,3 +369,7 @@ span.dot { width: 22px; }
   .page { padding: 0 !important; max-width: none !important; min-height: 0 !important; }
   .report { margin: 0; border: none; padding: 0; }
 }
+
+/* 場所の地図（国土地理院のタイル）。シートより前に出ないよう z-index を閉じこめる */
+.place-map { height: 220px; border-radius: 12px; border: 1px solid var(--border-soft); isolation: isolate; z-index: 0; }
+.map-pin span { display: block; width: 28px; height: 28px; background: #d64545; border: 3px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
