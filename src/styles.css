@@ -60,7 +60,7 @@ a { color: var(--primary); }
   text-decoration: none;
 }
 .btn:disabled { opacity: 0.5; cursor: default; }
-.btn--primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn--primary { min-height: 48px; background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn--outline { border-color: var(--primary); color: var(--primary); }
 .btn--dashed { border-style: dashed; border-color: #8a94a3; }
 .btn--danger { color: var(--danger); border-color: var(--danger); }

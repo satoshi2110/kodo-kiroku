@@ -1,6 +1,6 @@
 /**
  * チームの設定（画面一覧 13・16、ワイヤーフレーム 13）。変えられるのは管理者と副管理者（AI とチームの削除は管理者だけ）。
- * 多要素認証と書き出しのメールは、サーバーとログインができてから。身体拘束の見直しの目安は Phase 2。
+ * 多要素認証と書き出しのメールは、このあと足す。身体拘束の見直しの目安は Phase 2。
  */
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -11,6 +11,7 @@ import { useApp } from '../state';
 import { buildCsv, downloadCsv, type CsvKind } from '../lib/csv';
 import { addDays, formatDateJa, localDateOf, nowISO, toLocalDate } from '../lib/date';
 import { Chip, TopBar } from '../components/ui';
+import { serverEnabled } from '../server/supabase';
 
 export default function TeamSettings() {
   const { person, me, members, userId, aiEnabled, shortSleepUnderHours, deleteRequestedAt } = useApp();
@@ -60,7 +61,7 @@ export default function TeamSettings() {
       <div className="section">
         <div className="card stack">
           <span className="label">多要素認証（パスワードのほかにスマホで本人確認）</span>
-          <p className="help">ログインができてから設定できます。いまは、この端末の中だけで動く試用版です。</p>
+          <p className="help">{serverEnabled ? 'まだ設定できません。このあと足します。' : 'ログインができてから設定できます。いまは、この端末の中だけで動く試用版です。'}</p>
         </div>
       </div>
 
@@ -145,7 +146,7 @@ export default function TeamSettings() {
           ) : null}
           <p className="help">
             書き出せるのは管理者・副管理者・支援リーダー。写真と場所の位置は含みません。書き出したことは履歴に残ります。
-            いまは記録がこの端末の中にだけあるので、ときどき書き出しておくと安心です。
+            {!serverEnabled && 'いまは記録がこの端末の中にだけあるので、ときどき書き出しておくと安心です。'}
           </p>
           {isAdmin &&
             (deleteRequestedAt ? (

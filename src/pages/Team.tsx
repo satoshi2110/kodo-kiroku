@@ -153,7 +153,7 @@ export default function Team() {
   );
 }
 
-/** 招待コードを作る。コードは使い切りで7日間有効【暫定】。メールでの招待はこのあと足す */
+/** 招待コードを作る。コードは使い切りで72時間有効（仕様書 7章 #3）。メールでの招待はこのあと足す */
 function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
   const [role, setRole] = useState<Role>('supporter');
   const [code, setCode] = useState<string | null>(null);
@@ -177,7 +177,7 @@ function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
       <button type="button" className="btn btn--outline btn--block" onClick={make}>招待コードを作る</button>
       {code && (
         <p className="notice-inline" role="status">
-          招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}として参加。7日間・1回だけ使えます）
+          招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}として参加。72時間・1回だけ使えます）
         </p>
       )}
       {error && <p className="ai-error" role="alert">{error}</p>}
