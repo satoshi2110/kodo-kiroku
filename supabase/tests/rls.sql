@@ -509,9 +509,11 @@ begin
   update user_schedules set end_time = '17:00', updated_at = now() where id = '89000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'NG: 自分のいつもの時間を直せない'; end if;
-  delete from user_schedules where id = '89000000-0000-0000-0000-000000000001';
-  get diagnostics n = row_count;
-  if n <> 0 then raise exception 'NG: いつもの時間を本当に消せた（論理削除だけのはず）'; end if;
+  begin
+    delete from user_schedules where id = '89000000-0000-0000-0000-000000000001';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: いつもの時間を本当に消せた（論理削除だけのはず）'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 
   -- 写真は JPEG の文字だけ。それ以外の形は受け付けない
   begin
