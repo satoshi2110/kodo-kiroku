@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0012）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0013）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -524,6 +524,12 @@ begin
   insert into reinforcer_photos (id, person_id, data)
     values ('87000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'data:image/jpeg;base64,/9j/AAAA');
 
+  -- AI を「あり」にするには、管理者自身の同意が要る（7.5、0013）。同意がないと「なし」のまま
+  update team_settings set ai_enabled = true, updated_at = now() where id = '10000000-0000-0000-0000-000000000001';
+  select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and ai_enabled;
+  if n <> 0 then raise exception 'NG: 同意がないのに AI を「あり」にできた'; end if;
+  insert into consents (id, person_id, user_id, kind, text_version)
+    values ('4b000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'ai_overseas', 'test');
   -- AI の あり／なし は管理者が変えられる。変えた人はサーバーが送った人にする
   update team_settings set ai_enabled = true, updated_by = '00000000-0000-0000-0000-0000000000d1', updated_at = now() where id = '10000000-0000-0000-0000-000000000001';
   select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and ai_enabled and updated_by = '00000000-0000-0000-0000-0000000000a1';
@@ -808,6 +814,8 @@ begin
   if n <> 1 then raise exception 'NG: 副管理者がチームの設定を変えられない'; end if;
   select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and short_sleep_under_hours = 6 and ai_enabled and delete_requested_at is null;
   if n <> 1 then raise exception 'NG: 副管理者が AI の あり／なし か チームの削除 を変えられた'; end if;
+  select count(*) into n from consents where id = '4b000000-0000-0000-0000-000000000010' and revoked_at is null;
+  if n <> 1 then raise exception 'NG: 副管理者の保存で AI の同意が取り消された'; end if;
 end $$;
 reset role;
 
@@ -929,10 +937,19 @@ do $$
 declare n int;
 begin
   update team_settings set ai_enabled = false, updated_at = now() + interval '10 seconds' where id = '10000000-0000-0000-0000-000000000001';
+  -- 「なし」に戻すと、そのチームの AI の同意が取り消される（7.5、0013）
+  select count(*) into n from consents where id = '4b000000-0000-0000-0000-000000000010' and revoked_at is not null;
+  if n <> 1 then raise exception 'NG: AI を「なし」に戻しても同意が取り消されない'; end if;
   if take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'reason' is distinct from 'ai_off' then
     raise exception 'NG: AI「なし」のチームで AI の回数を使えた';
   end if;
+  -- 取り消した同意では「あり」に戻せない。同意を取り直すと戻せる
   update team_settings set ai_enabled = true, updated_at = now() + interval '11 seconds' where id = '10000000-0000-0000-0000-000000000001';
+  select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and ai_enabled;
+  if n <> 0 then raise exception 'NG: 取り消した同意のまま AI を「あり」にできた'; end if;
+  insert into consents (id, person_id, user_id, kind, text_version)
+    values ('4b000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'ai_overseas', 'test');
+  update team_settings set ai_enabled = true, updated_at = now() + interval '12 seconds' where id = '10000000-0000-0000-0000-000000000001';
   if (take_ai_run('10000000-0000-0000-0000-000000000001', 'analyze') ->> 'ok')::boolean is not true then
     raise exception 'NG: AI「あり」のチームの管理者が AI を使えない';
   end if;
@@ -1111,6 +1128,11 @@ begin
     update consents set text_version = 'x' where id = '4b000000-0000-0000-0000-000000000001';
     get diagnostics n = row_count;
     if n <> 0 then raise exception 'NG: 同意を書きかえられた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update consents set revoked_at = null where id = '4b000000-0000-0000-0000-000000000010';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 取り消した同意を元に戻せた'; end if;
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   begin
     delete from consents where id = '4b000000-0000-0000-0000-000000000001';

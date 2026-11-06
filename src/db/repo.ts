@@ -671,7 +671,10 @@ export async function forgetTeam(personId: string) {
   });
 }
 
-/** AI の あり／なし を切りかえる（管理者のみ）。「あり」にするときは、送り先と仮名化の内容への同意を残す（9章） */
+/**
+ * AI の あり／なし を切りかえる（管理者のみ）。「あり」にするときは、送り先と仮名化の内容への同意を残す（9章）。
+ * 「なし」に戻すのは同意の取り消し（7.5）で、そのチームの AI の同意に取り消しの日時を付ける（サーバーでも 0013 が同じことをする）
+ */
 export async function setAiEnabled(personId: string, enabled: boolean, actorId: string) {
   await db.transaction('rw', [db.teamSettings, db.consents, db.auditLogs], async () => {
     const before = (await db.teamSettings.get(personId)) ?? null;
@@ -682,6 +685,13 @@ export async function setAiEnabled(personId: string, enabled: boolean, actorId: 
       const consent = { ...base(), personId, userId: actorId, kind: 'ai_overseas' as const, textVersion: CONSENT_TEXT_VERSION, revokedAt: null };
       await db.consents.add(consent);
       await audit(personId, 'consent', consent.id, 'create', actorId, null, consent);
+    } else {
+      const open = (await db.consents.where('personId').equals(personId).toArray()).filter((c) => c.kind === 'ai_overseas' && !c.revokedAt);
+      for (const c of open) {
+        const revoked = { ...c, revokedAt: nowISO(), updatedAt: nowISO() };
+        await db.consents.put(revoked);
+        await audit(personId, 'consent', c.id, 'update', actorId, c, revoked);
+      }
     }
   });
 }

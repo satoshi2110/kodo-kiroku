@@ -22,13 +22,13 @@ interface SyncTable {
   appendOnly?: boolean; // 作ったあとは変えない（同意）。送り直しても重ならないように送る
 }
 
-/** 送る順番（行動・場所・睡眠の前に対象者、記録・インターバル記録・「観察していなかった日」の前に行動、ABC記録の前に記録、写真の前に好きなもの、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
+/** 送る順番（行動・場所・睡眠の前に対象者、AI の「あり」の前に同意、記録・インターバル記録・「観察していなかった日」の前に行動、ABC記録の前に記録、写真の前に好きなもの、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
 const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
   { local: db.ownerTransfers, remote: 'owner_transfers', team: (r) => r.personId, insert: false },
-  { local: db.teamSettings, remote: 'team_settings', team: (r) => r.personId, insert: true },
   { local: db.consents, remote: 'consents', team: (r) => r.personId, insert: true, appendOnly: true },
+  { local: db.teamSettings, remote: 'team_settings', team: (r) => r.personId, insert: true },
   { local: db.behaviors, remote: 'behaviors', team: (r) => r.personId, insert: true },
   { local: db.observations, remote: 'observations', team: (r) => r.personId, insert: true },
   { local: db.places, remote: 'places', team: (r) => r.personId, insert: true },
@@ -162,12 +162,19 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
   const errors: string[] = [];
   for (const s of TABLES) {
     if (s.appendOnly) {
-      // 同期を入れる前に端末で取った同意（_srv なし）も送る。送れるのは自分の同意だけ
-      const own = (await s.local.filter((r: Row) => (r._dirty === 1 || r._srv !== 1) && r.userId === uid && teams.has(s.team(r) ?? '')).toArray()) as Row[];
-      if (!own.length) continue;
-      const { error } = await sb.from(s.remote).upsert(own.map(toRemote), { onConflict: 'id', ignoreDuplicates: true });
-      if (!error) await markSent(s.local, own);
-      else errors.push(`${s.remote}: ${error.message}`);
+      // 同期を入れる前に端末で取った同意（_srv なし）も送る。送れるのは自分の同意だけ。
+      // 取り消し（revokedAt）は送らない。サーバーが AI を「なし」にしたときに自分で書く（0013）ので、印だけ外して次に受け取る
+      const rows = (await s.local.filter((r: Row) => (r._dirty === 1 || r._srv !== 1) && teams.has(s.team(r) ?? '')).toArray()) as Row[];
+      if (!rows.length) continue;
+      const own = rows.filter((r) => r.userId === uid);
+      if (own.length) {
+        const { error } = await sb.from(s.remote).upsert(own.map(toRemote), { onConflict: 'id', ignoreDuplicates: true });
+        if (error) {
+          errors.push(`${s.remote}: ${error.message}`);
+          continue;
+        }
+      }
+      await markSent(s.local, rows);
       continue;
     }
     const rows = (await s.local.filter((r: Row) => r._dirty === 1 && teams.has(s.team(r) ?? '')).toArray()) as Row[];

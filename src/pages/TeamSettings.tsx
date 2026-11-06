@@ -104,7 +104,15 @@ export default function TeamSettings() {
             </div>
           )}
           {isAdmin && aiEnabled && (
-            <button type="button" className="btn" onClick={() => setAiEnabled(person.id, false, userId)}>「なし」に戻す</button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                if (window.confirm('AI の同意を取り消して「なし」に戻しますか？\nこれからは外の AI に何も送りません。もう一度使うときは、改めて同意します。')) void setAiEnabled(person.id, false, userId);
+              }}
+            >
+              同意を取り消して「なし」に戻す
+            </button>
           )}
           {!isAdmin && <p className="help">切りかえは管理者が行います。</p>}
         </div>
