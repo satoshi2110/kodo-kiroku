@@ -191,7 +191,8 @@ export default function Team() {
 
 /** 招待コードを作る。コードは使い切りで72時間有効（仕様書 7章 #3）。メールでの招待はこのあと足す */
 function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
-  const [role, setRole] = useState<Role>('supporter');
+  // 初めは一番小さい権限（閲覧者）にしておき、必要なときだけ上げる（仕様書 7.4.2 #3）
+  const [role, setRole] = useState<Role>('viewer');
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const roles: Role[] = isAdmin ? ['subadmin', 'leader', 'supporter', 'viewer'] : ['leader', 'supporter', 'viewer'];
