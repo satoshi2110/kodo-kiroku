@@ -30,6 +30,7 @@ import Report from './pages/Report';
 import MeetingEdit from './pages/MeetingEdit';
 import RestraintEdit from './pages/RestraintEdit';
 import Login from './pages/Login';
+import NewPassword from './pages/NewPassword';
 import { serverEnabled } from './server/supabase';
 import { useSession } from './server/session';
 
@@ -38,11 +39,12 @@ const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/res
 
 function Shell() {
   const { loading, userId, person } = useApp();
-  const { ready, session } = useSession();
+  const { ready, session, recovery } = useSession();
   const loc = useLocation();
   if (loading || !ready) return <div className="empty">読み込み中…</div>;
   // サーバーにつながる設定があるときは、ログインしてから使う（7.4.3）
   if (serverEnabled && !session) return <Login />;
+  if (serverEnabled && recovery) return <NewPassword />;
   if ((!userId || !person) && loc.pathname !== '/setup') return <Navigate to="/setup" replace />;
   return (
     <div className="app">

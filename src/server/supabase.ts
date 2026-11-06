@@ -6,6 +6,15 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * パスワード再設定のメールのリンクから開いたか（決定62）。supabase-js が URL を片付ける前に読んでおく。
+ * reset: 再設定の画面を出す / linkError: リンクの期限切れ・使用済み
+ */
+export const authRedirect = {
+  reset: new URLSearchParams(location.search).has('reset'),
+  linkError: /error_code=|error=/.test(location.hash + location.search) && /otp_expired|access_denied/.test(location.hash + location.search),
+};
+
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
