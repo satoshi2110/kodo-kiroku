@@ -4,6 +4,7 @@
  */
 import { db } from './db';
 import { audit, base, canRecord, RANK } from './repo';
+import { fixedId, newId } from '../lib/id';
 import { addDays, nowISO, toLocalDate } from '../lib/date';
 import type {
   AiSummary,
@@ -59,6 +60,7 @@ export async function getPlan(personId: string): Promise<SupportPlan | undefined
  * 保存（上書き、決定67）。変更は「合意待ち」になり、管理者は必ず合意者に入る（決定69）。
  * 合意待ちの変更がほかにあれば「新しい変更に置きかわった」にする（取り下げと同じく履歴に残る）。
  * 保存した人が合意者に入っていれば、保存と同時に合意したものとする。
+ * 計画の id は対象者から決めるので、2台で初めて保存しても、サーバーでは1つの計画にまとまる。
  */
 export async function savePlan(
   personId: string,
@@ -68,6 +70,10 @@ export async function savePlan(
   me: TeamMember,
   members: TeamMember[],
 ): Promise<PlanChange | null> {
+  // id を決める計算は transaction の外で行う（中で待つと transaction が先に閉じるため）
+  const planId = await fixedId(`plan:${personId}`);
+  const changeId = newId();
+  const signoffId = await fixedId(`signoff:${changeId}:${me.id}`);
   return db.transaction('rw', [db.supportPlans, db.planChanges, db.planSignoffs, db.teamMembers, db.auditLogs], async () => {
     const existing = await getPlan(personId);
     const before = existing?.content ?? null;
@@ -76,7 +82,7 @@ export async function savePlan(
     const t = nowISO();
     const plan: SupportPlan = existing
       ? { ...existing, content, updatedAt: t }
-      : { ...base(), personId, content, activeContent: null, activeSince: null };
+      : { ...base(), id: planId, personId, content, activeContent: null, activeSince: null };
     await db.supportPlans.put(plan);
     await audit(personId, 'supportPlan', plan.id, existing ? 'update' : 'create', me.userId, existing ?? null, plan);
 
@@ -92,6 +98,7 @@ export async function savePlan(
     );
     const change: PlanChange = {
       ...base(),
+      id: changeId,
       personId,
       planId: plan.id,
       savedBy: me.userId,
@@ -106,7 +113,7 @@ export async function savePlan(
     };
     await db.planChanges.add(change);
     await audit(personId, 'planChange', change.id, 'create', me.userId, null, change);
-    if (signers.includes(me.id)) await applySignoff(change.id, me, 'agreed', '');
+    if (signers.includes(me.id)) await applySignoff(change.id, me, 'agreed', '', signoffId);
     return change;
   });
 }
@@ -116,18 +123,22 @@ export async function savePlan(
  * 合意したあとでも意見を送れば「意見あり」に変わる。
  */
 export async function signoff(changeId: string, me: TeamMember, state: 'agreed' | 'opinion', opinion: string) {
+  const signoffId = await fixedId(`signoff:${changeId}:${me.id}`);
   await db.transaction('rw', [db.supportPlans, db.planChanges, db.planSignoffs, db.auditLogs], async () => {
-    await applySignoff(changeId, me, state, opinion);
+    await applySignoff(changeId, me, state, opinion, signoffId);
   });
 }
 
-async function applySignoff(changeId: string, me: TeamMember, state: 'agreed' | 'opinion', opinion: string) {
+/** 返事の id は「変更・メンバー」から決める（2台から返事をしても1件にまとまる） */
+async function applySignoff(changeId: string, me: TeamMember, state: 'agreed' | 'opinion', opinion: string, signoffId: string) {
   const change = await db.planChanges.get(changeId);
   if (!change || !change.signerMemberIds.includes(me.id)) return;
   if (change.status !== 'pending' && change.status !== 'active') return;
   const t = nowISO();
   const prev = await db.planSignoffs.where('changeId').equals(changeId).filter((s) => s.memberId === me.id && !s.deletedAt).first();
-  const rec: PlanSignoff = prev ? { ...prev, state, opinion, updatedAt: t } : { ...base(), personId: change.personId, changeId, memberId: me.id, state, opinion };
+  const rec: PlanSignoff = prev
+    ? { ...prev, state, opinion, updatedAt: t }
+    : { ...base(), id: signoffId, personId: change.personId, changeId, memberId: me.id, state, opinion };
   await db.planSignoffs.put(rec);
   await audit(change.personId, 'planSignoff', rec.id, prev ? 'update' : 'create', me.userId, prev ?? null, rec);
 

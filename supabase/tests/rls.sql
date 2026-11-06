@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001, 0002 …）を順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001, 0002, 0003 …）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -58,6 +58,27 @@ insert into places (id, person_id, name, kind, lat, lng, created_by, updated_at)
   ('72000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '場所1', 'home', 35.0, 139.0, '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
   ('72000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '場所2', 'home', 36.0, 140.0, '00000000-0000-0000-0000-0000000000b1', now());
 
+-- 計画・変更・合意・拘束記録（6.7、6.8）
+insert into support_plans (id, person_id, content, updated_at) values
+  ('80000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '{"goal":"目標1"}', now() - interval '1 hour'),
+  ('80000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '{"goal":"目標2"}', now());
+
+-- 81…01: L が保存した合意待ち（合意者 A・L・V）/ 81…03: A が保存した合意待ち / 81…02: チーム2
+insert into plan_changes (id, person_id, plan_id, saved_by, reason, after, fields, signer_member_ids, status, updated_at) values
+  ('81000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', '理由1', '{"goal":"目標1"}', '{goal}',
+     '{20000000-0000-0000-0000-0000000000a1,20000000-0000-0000-0000-0000000000c1,20000000-0000-0000-0000-0000000000d1}', 'pending', now() - interval '1 hour'),
+  ('81000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', '理由3', '{"goal":"目標3"}', '{goal}',
+     '{20000000-0000-0000-0000-0000000000a1}', 'pending', now() - interval '1 hour'),
+  ('81000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', '理由2', '{"goal":"目標2"}', '{goal}',
+     '{20000000-0000-0000-0000-0000000000b1}', 'pending', now());
+
+insert into plan_signoffs (id, person_id, change_id, member_id, state) values
+  ('82000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '81000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-0000000000b1', 'agreed');
+
+insert into restraint_logs (id, person_id, started_at, ended_at, local_date, checks, recorder_id, updated_at) values
+  ('83000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', now(), now(), current_date, '{"urgency":true,"nonAlternative":true,"temporary":true}', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('83000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', now(), now(), current_date, '{"urgency":true,"nonAlternative":true,"temporary":true}', '00000000-0000-0000-0000-0000000000b1', now());
+
 insert into start_codes (code) values ('RLSTESTCODE1');
 
 -- ---------- ログインしていない人（anon）は何もできない ----------
@@ -66,6 +87,10 @@ do $$ begin
   begin
     perform 1 from persons;
     raise exception 'NG: ログインしていない人が対象者の表を読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform 1 from restraint_logs;
+    raise exception 'NG: ログインしていない人が拘束記録の表を読めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   begin
     perform create_team('RLSTESTCODE1', 'x', null, '', '', 'x', 'family', 'v');
@@ -257,6 +282,76 @@ begin
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'NG: 管理者が睡眠を直せない'; end if;
 
+  -- 支援計画・合意・拘束記録（6.7、6.8）
+  select count(*) into n from support_plans where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 の支援計画を読めた'; end if;
+  select count(*) into n from plan_changes where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: A がチーム2 の計画の変更を読めた'; end if;
+  select count(*) into n from plan_signoffs;
+  if n <> 0 then raise exception 'NG: A がチーム2 の合意を読めた'; end if;
+  select count(*) into n from restraint_logs;
+  if n <> 1 then raise exception 'NG: A に見える拘束記録が自分のチームの1件ではない'; end if;
+
+  begin
+    insert into restraint_logs (id, person_id, started_at, ended_at, local_date, checks, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', now(), now(), current_date, '{}', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 に拘束記録を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into support_plans (id, person_id, content)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '{}');
+    raise exception 'NG: A がチーム2 に支援計画を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update restraint_logs set review = 'x', updated_at = now() where id = '83000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の拘束記録を書きかえた'; end if;
+  update plan_changes set status = 'withdrawn', updated_at = now() where id = '81000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の計画の変更を取り下げた'; end if;
+
+  -- 拘束記録は取り消し・削除できない（6.8）
+  begin
+    delete from restraint_logs where id = '83000000-0000-0000-0000-000000000001';
+    raise exception 'NG: 拘束記録を消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update restraint_logs set deleted_at = now(), updated_at = now() where id = '83000000-0000-0000-0000-000000000001';
+    raise exception 'NG: 拘束記録を取り消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    update restraint_logs set recorder_id = '00000000-0000-0000-0000-0000000000c1', updated_at = now() where id = '83000000-0000-0000-0000-000000000001';
+    raise exception 'NG: 拘束記録の記録者を変えられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  -- 合意は本人の分だけ（ほかの人の名前では書けない）
+  begin
+    insert into plan_signoffs (id, person_id, change_id, member_id, state)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1', 'agreed');
+    raise exception 'NG: A が L の名前で合意できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  insert into plan_signoffs (id, person_id, change_id, member_id, state)
+    values ('82000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000a1', 'agreed');
+
+  -- 変更の中身（履歴）は書きかえられない（決定67）
+  update plan_changes set reason = '書きかえ', updated_at = now() where id = '81000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 計画の変更の履歴を書きかえられた'; end if;
+  begin
+    delete from plan_changes where id = '81000000-0000-0000-0000-000000000001';
+    raise exception 'NG: 計画の変更の履歴を消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+
+  -- 管理者の合意で実施中になる（決定68）。実施中から合意待ちには戻せない
+  update plan_changes set status = 'active', active_since = current_date, updated_at = now() where id = '81000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 管理者が変更を実施中にできない'; end if;
+  update support_plans set active_content = '{"goal":"目標1"}', active_since = current_date, updated_at = now() where id = '80000000-0000-0000-0000-000000000001';
+  select count(*) into n from support_plans where id = '80000000-0000-0000-0000-000000000001' and active_content is not null;
+  if n <> 1 then raise exception 'NG: 管理者が実施中の内容を入れられない'; end if;
+  update plan_changes set status = 'pending', updated_at = now() + interval '1 second' where id = '81000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 実施中の変更を合意待ちに戻せた'; end if;
+
   -- 古い変更は捨てられる（後から届いた古い記録で上書きしない）
   update events set count = 5, updated_at = now() - interval '2 hours' where id = '40000000-0000-0000-0000-000000000001';
   select count into n from events where id = '40000000-0000-0000-0000-000000000001';
@@ -280,6 +375,10 @@ begin
   if n <> 0 then raise exception 'NG: 承認待ちの人に睡眠が見えた'; end if;
   select count(*) into n from places;
   if n <> 0 then raise exception 'NG: 承認待ちの人に場所が見えた'; end if;
+  select count(*) into n from support_plans;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に支援計画が見えた'; end if;
+  select count(*) into n from restraint_logs;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に拘束記録が見えた'; end if;
   select count(*) into n from choice_options;
   if n <> 0 then raise exception 'NG: 承認待ちの人にABCの選択肢が見えた'; end if;
   select count(*) into n from team_members;
@@ -304,6 +403,8 @@ begin
   if n <> 0 then raise exception 'NG: 停止中の人に対象者が見えた'; end if;
   select count(*) into n from events;
   if n <> 0 then raise exception 'NG: 停止中の人に記録が見えた'; end if;
+  select count(*) into n from restraint_logs;
+  if n <> 0 then raise exception 'NG: 停止中の人に拘束記録が見えた'; end if;
 end $$;
 reset role;
 
@@ -332,6 +433,22 @@ begin
   if n <> 0 then raise exception 'NG: 閲覧者がABC記録を書きかえた'; end if;
   select count(*) into n from sleep_logs;
   if n <> 1 then raise exception 'NG: 閲覧者に自分のチームの睡眠が見えない'; end if;
+  select count(*) into n from restraint_logs;
+  if n <> 1 then raise exception 'NG: 閲覧者に自分のチームの拘束記録が見えない'; end if;
+  begin
+    insert into restraint_logs (id, person_id, started_at, ended_at, local_date, checks, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', now(), now(), current_date, '{}', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者が拘束記録を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update support_plans set content = '{"goal":"x"}', updated_at = now() where id = '80000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が支援計画を書きかえた'; end if;
+  -- 閲覧者は合意者に入っていても合意できない（決定69）
+  begin
+    insert into plan_signoffs (id, person_id, change_id, member_id, state)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000d1', 'agreed');
+    raise exception 'NG: 閲覧者が合意できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   update sleep_logs set note = 'x', recorder_id = '00000000-0000-0000-0000-0000000000d1', updated_at = now() where id = '70000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 閲覧者が睡眠を書きかえた'; end if;
@@ -383,6 +500,37 @@ begin
     where id = '71000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'NG: 支援リーダーが「観察していなかった」を戻せない'; end if;
+  -- 支援計画: 支援リーダーは中身を直せるが、実施中の内容は変えられない（決定68）
+  update support_plans set content = '{"goal":"リーダーが修正"}', active_content = '{"goal":"勝手に実施"}', updated_at = now() + interval '2 seconds'
+    where id = '80000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが支援計画を直せない'; end if;
+  select count(*) into n from support_plans where id = '80000000-0000-0000-0000-000000000001' and active_content ->> 'goal' = '目標1' and content ->> 'goal' = 'リーダーが修正';
+  if n <> 1 then raise exception 'NG: 支援リーダーが実施中の内容を変えられた'; end if;
+  begin
+    insert into plan_changes (id, person_id, plan_id, saved_by, reason, after, fields, signer_member_ids, status)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', 'x', '{}', '{goal}', '{}', 'active');
+    raise exception 'NG: 支援リーダーが実施中の変更を作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into plan_changes (id, person_id, plan_id, saved_by, reason, after, fields, signer_member_ids, status)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'x', '{}', '{goal}', '{}', 'pending');
+    raise exception 'NG: 支援リーダーが管理者の名前で変更を保存できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  insert into plan_changes (id, person_id, plan_id, saved_by, reason, after, fields, signer_member_ids, status)
+    values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000c1', 'リーダーの変更', '{}', '{goal}', '{20000000-0000-0000-0000-0000000000a1}', 'pending');
+  -- ほかの人（管理者）が保存した合意待ちは、支援リーダーには取り下げられない
+  update plan_changes set status = 'withdrawn', closed_by = '00000000-0000-0000-0000-0000000000c1', updated_at = now()
+    where id = '81000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援リーダーがほかの人の変更を取り下げた'; end if;
+  -- 合意者に入っている自分の分は合意できる
+  insert into plan_signoffs (id, person_id, change_id, member_id, state, opinion)
+    values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1', 'opinion', '意見');
+  -- 拘束記録: 支援リーダーは、ほかの人が書いた記録を直せる（6.8）
+  update restraint_logs set review = '組織で検討した', updated_at = now() where id = '83000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが拘束記録を直せない'; end if;
   -- 支援者としての招待はできる。コードは次の J のテストで使う
   code := create_invite('10000000-0000-0000-0000-000000000001', 'supporter');
   perform set_config('rls_test.invite', code, true);
@@ -411,6 +559,8 @@ set local role authenticated;
 do $$
 declare pid uuid; n int;
 begin
+  select count(*) into n from restraint_logs;
+  if n <> 0 then raise exception 'NG: どこにも入っていない人に拘束記録が見えた'; end if;
   begin
     perform create_team('WRONGCODE', 'x', null, '', '', 'N', 'family', 'v');
     raise exception 'NG: まちがった開始コードでチームを作れた';
