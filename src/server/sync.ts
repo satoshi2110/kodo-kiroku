@@ -3,7 +3,7 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・行動・記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・支援計画（変更と合意）・身体拘束の記録・監査ログ だけ。ほかの表は順に足す。
+ * いまは 対象者・メンバー・行動・記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・監査ログ だけ。ほかの表は順に足す。
  */
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
@@ -19,7 +19,7 @@ interface SyncTable {
   insert: boolean; // 端末から新しく作ってよいか（対象者とメンバーはサーバーの関数でだけ作る）
 }
 
-/** 送る順番（行動・場所・睡眠の前に対象者、記録と「観察していなかった日」の前に行動、ABC記録の前に記録、変更の前に計画、合意の前に変更） */
+/** 送る順番（行動・場所・睡眠の前に対象者、記録と「観察していなかった日」の前に行動、ABC記録の前に記録、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
 const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
@@ -34,6 +34,8 @@ const TABLES: SyncTable[] = [
   { local: db.planChanges, remote: 'plan_changes', team: (r) => r.personId, insert: true },
   { local: db.planSignoffs, remote: 'plan_signoffs', team: (r) => r.personId, insert: true },
   { local: db.restraintLogs, remote: 'restraint_logs', team: (r) => r.personId, insert: true },
+  { local: db.meetingNotes, remote: 'meeting_notes', team: (r) => r.personId, insert: true },
+  { local: db.comments, remote: 'comments', team: (r) => r.personId, insert: true },
 ];
 
 // ---------- 変更の印 ----------
@@ -265,7 +267,7 @@ export async function runSync(): Promise<void> {
 /** ログアウトしたとき: サーバーのチームのデータをこの端末から消す（端末の紛失・共用への備え、7.4.2 #1）。サンプルは残す */
 export async function clearServerData() {
   const teams = await serverTeams();
-  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.choiceOptions, db.abcDetails, db.teamSettings, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.observations, db.reinforcers, db.reinforcerPhotos, db.meetingNotes, db.comments, db.consents, db.device];
+  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.choiceOptions, db.abcDetails, db.teamSettings, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.observations, db.reinforcers, db.reinforcerPhotos, db.consents, db.device];
   await db.transaction('rw', all, async () => {
     for (const t of all) {
       if (t === db.device) continue;

@@ -79,6 +79,17 @@ insert into restraint_logs (id, person_id, started_at, ended_at, local_date, che
   ('83000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', now(), now(), current_date, '{"urgency":true,"nonAlternative":true,"temporary":true}', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
   ('83000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', now(), now(), current_date, '{"urgency":true,"nonAlternative":true,"temporary":true}', '00000000-0000-0000-0000-0000000000b1', now());
 
+-- 支援会議メモ・申し送り・コメント（6.10）
+-- 84…01: チーム1 の会議メモ（A が書いた）/ 84…02: チーム2
+insert into meeting_notes (id, person_id, held_at, recorder_id, updated_at) values
+  ('84000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', now() - interval '1 day', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('84000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', now() - interval '1 day', '00000000-0000-0000-0000-0000000000b1', now());
+-- 85…01: A の申し送り / 85…03: L の申し送り / 85…02: チーム2
+insert into comments (id, person_id, target, text, author_id, updated_at) values
+  ('85000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'team', '申し送り1', '00000000-0000-0000-0000-0000000000a1', now() - interval '1 hour'),
+  ('85000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'team', '申し送り3', '00000000-0000-0000-0000-0000000000c1', now() - interval '1 hour'),
+  ('85000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'team', '申し送り2', '00000000-0000-0000-0000-0000000000b1', now());
+
 insert into start_codes (code) values ('RLSTESTCODE1');
 
 -- ---------- ログインしていない人（anon）は何もできない ----------
@@ -91,6 +102,10 @@ do $$ begin
   begin
     perform 1 from restraint_logs;
     raise exception 'NG: ログインしていない人が拘束記録の表を読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform 1 from comments;
+    raise exception 'NG: ログインしていない人が申し送りの表を読めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   begin
     perform create_team('RLSTESTCODE1', 'x', null, '', '', 'x', 'family', 'v');
@@ -352,6 +367,60 @@ begin
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 実施中の変更を合意待ちに戻せた'; end if;
 
+  -- 会議メモ・申し送り（6.10）: チーム2 は読めない・書けない
+  select count(*) into n from meeting_notes;
+  if n <> 1 then raise exception 'NG: A に見える会議メモが自分のチームの1件ではない'; end if;
+  select count(*) into n from comments;
+  if n <> 2 then raise exception 'NG: A に見える申し送りが自分のチームの2件ではない'; end if;
+  begin
+    insert into meeting_notes (id, person_id, held_at, recorder_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', now(), '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 に会議メモを書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into comments (id, person_id, target, text, author_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', 'team', 'x', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 に申し送りを書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'meeting', '84000000-0000-0000-0000-000000000002', 'x', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: A がチーム2 の会議メモにコメントを付けられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update meeting_notes set results = 'x', updated_at = now() where id = '84000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の会議メモを書きかえた'; end if;
+  update comments set deleted_at = now(), updated_at = now() where id = '85000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: A がチーム2 の申し送りを消した'; end if;
+
+  -- 会議メモの日時と、会議の日のグラフは変わらない。ほかの欄は直せる
+  update meeting_notes set results = '成果', held_at = now(), charts = '[{"title":"x"}]', updated_at = now() where id = '84000000-0000-0000-0000-000000000001';
+  select count(*) into n from meeting_notes where id = '84000000-0000-0000-0000-000000000001' and results = '成果' and held_at = now() - interval '1 day' and charts = '[]';
+  if n <> 1 then raise exception 'NG: 会議メモの日時かグラフが変わった（または成果を直せない）'; end if;
+
+  -- 申し送りは、書いた人の名前を変えたり、中身を書きかえたりできない。消せるのは書いた人だけ
+  begin
+    insert into comments (id, person_id, target, text, author_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'team', 'x', '00000000-0000-0000-0000-0000000000c1');
+    raise exception 'NG: A が L の名前で申し送りを書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update comments set text = '書きかえ', updated_at = now() where id = '85000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 申し送りの中身を書きかえられた'; end if;
+  update comments set deleted_at = now(), updated_at = now() where id = '85000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 管理者がほかの人の申し送りを消せた'; end if;
+  update comments set deleted_at = now(), updated_at = now() where id = '85000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 自分の申し送りを消せない'; end if;
+  begin
+    delete from comments where id = '85000000-0000-0000-0000-000000000003';
+    raise exception 'NG: 申し送りを本当に消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  insert into comments (id, person_id, target, target_id, text, author_id)
+    values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'meeting', '84000000-0000-0000-0000-000000000001', 'コメント', '00000000-0000-0000-0000-0000000000a1');
+
   -- 古い変更は捨てられる（後から届いた古い記録で上書きしない）
   update events set count = 5, updated_at = now() - interval '2 hours' where id = '40000000-0000-0000-0000-000000000001';
   select count into n from events where id = '40000000-0000-0000-0000-000000000001';
@@ -379,6 +448,10 @@ begin
   if n <> 0 then raise exception 'NG: 承認待ちの人に支援計画が見えた'; end if;
   select count(*) into n from restraint_logs;
   if n <> 0 then raise exception 'NG: 承認待ちの人に拘束記録が見えた'; end if;
+  select count(*) into n from meeting_notes;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に会議メモが見えた'; end if;
+  select count(*) into n from comments;
+  if n <> 0 then raise exception 'NG: 承認待ちの人に申し送りが見えた'; end if;
   select count(*) into n from choice_options;
   if n <> 0 then raise exception 'NG: 承認待ちの人にABCの選択肢が見えた'; end if;
   select count(*) into n from team_members;
@@ -405,6 +478,8 @@ begin
   if n <> 0 then raise exception 'NG: 停止中の人に記録が見えた'; end if;
   select count(*) into n from restraint_logs;
   if n <> 0 then raise exception 'NG: 停止中の人に拘束記録が見えた'; end if;
+  select count(*) into n from comments;
+  if n <> 0 then raise exception 'NG: 停止中の人に申し送りが見えた'; end if;
 end $$;
 reset role;
 
@@ -456,6 +531,16 @@ begin
     insert into places (id, person_id, name, kind, created_by)
       values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'x', 'other', '00000000-0000-0000-0000-0000000000d1');
     raise exception 'NG: 閲覧者が場所を書き込めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  select count(*) into n from meeting_notes;
+  if n <> 1 then raise exception 'NG: 閲覧者に自分のチームの会議メモが見えない'; end if;
+  update meeting_notes set results = 'x', updated_at = now() + interval '1 second' where id = '84000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が会議メモを書きかえた'; end if;
+  begin
+    insert into comments (id, person_id, target, text, author_id)
+      values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'team', 'x', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者が申し送りを書き込めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
   update events set count = 7, updated_at = now() where id = '40000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
@@ -531,6 +616,10 @@ begin
   update restraint_logs set review = '組織で検討した', updated_at = now() where id = '83000000-0000-0000-0000-000000000001';
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'NG: 支援リーダーが拘束記録を直せない'; end if;
+  -- 会議メモ: 支援リーダーは、ほかの人が書いたメモを直せる（6.10）
+  update meeting_notes set decisions = '決めたこと', updated_at = now() + interval '2 seconds' where id = '84000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが会議メモを直せない'; end if;
   -- 支援者としての招待はできる。コードは次の J のテストで使う
   code := create_invite('10000000-0000-0000-0000-000000000001', 'supporter');
   perform set_config('rls_test.invite', code, true);
@@ -561,6 +650,8 @@ declare pid uuid; n int;
 begin
   select count(*) into n from restraint_logs;
   if n <> 0 then raise exception 'NG: どこにも入っていない人に拘束記録が見えた'; end if;
+  select count(*) into n from comments;
+  if n <> 0 then raise exception 'NG: どこにも入っていない人に申し送りが見えた'; end if;
   begin
     perform create_team('WRONGCODE', 'x', null, '', '', 'N', 'family', 'v');
     raise exception 'NG: まちがった開始コードでチームを作れた';

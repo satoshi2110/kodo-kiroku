@@ -116,7 +116,7 @@ export default function Team() {
               )}
             </div>
           ))}
-          <p className="help">責める言い方を避け、できたことや気づいたことを短く書きましょう。いまはこの端末の中だけに残ります（共有はログインができてから）。</p>
+          <p className="help">責める言い方を避け、できたことや気づいたことを短く書きましょう。{supabase ? 'チームの人に共有されます。' : 'いまはこの端末の中だけに残ります（共有はログインができてから）。'}</p>
         </div>
       </div>
 
@@ -205,7 +205,7 @@ function Account() {
           {st.pending > 0 && ` ・ 送れていない変更 ${st.pending} 件`}
         </span>
         {st.error && <p className="ai-error" role="alert">{st.error}</p>}
-        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・行動・記録・ABC記録・睡眠・場所・「観察していなかった日」・支援計画（変更と合意）・身体拘束の記録です。申し送り・支援会議メモ・好きなものなどは、この端末の中だけです（順に足します）。</p>
+        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・行動・記録・ABC記録・睡眠・場所・「観察していなかった日」・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りです。チームの設定・好きなもの・観察などは、この端末の中だけです（順に足します）。</p>
         <button type="button" className="btn btn--block" onClick={logout}>ログアウト</button>
       </div>
     </div>
