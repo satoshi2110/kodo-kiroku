@@ -325,7 +325,7 @@ function Handover({ personId }: { personId: string }) {
               >
                 引き継ぎをお願いする
               </button>
-              <p className="help">指名できるのは、副管理者か「家族」の印がある人です。相手が受けると、あなたは{formerAdminRole({ toUser: to }, members)}になります。</p>
+              <p className="help">指名できるのは、副管理者か「家族」の印がある人です。相手が受けると、あなたは{to ? formerAdminRole({ toUser: to }, members) : '副管理者（ほかに副管理者がいるときは支援リーダー）'}になります。</p>
             </>
           ) : (
             <p className="help">引き継げるのは、副管理者か「家族」の印がある人です。先にメンバーの「変更」で決めてください。</p>
