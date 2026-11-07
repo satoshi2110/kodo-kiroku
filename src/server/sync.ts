@@ -87,6 +87,7 @@ async function remoteWrite(tables: Table[], fn: () => Promise<void>) {
 const snake = (k: string) => k.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
 const camel = (k: string) => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 const TS = /^\d{4}-\d{2}-\d{2}T/;
+const MFA_SYNC_MSG = '多要素認証（MFA）が必要なため、変更をサーバーに送れていません（読むことはできます）。「あなたの設定」で認証アプリを設定するか、コードを入れてログインし直してください。送れていない変更は、この端末に残っています。';
 
 function toRemote(r: Row): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -309,7 +310,10 @@ export async function runSync(): Promise<void> {
       if (await finishDueRequests(uid)) errors.push(...(await pull(uid)));
       errors.push(...(await push(uid, await serverTeams())));
       const pending = await unsentCount();
-      setStatus({ running: false, lastAt: new Date().toISOString(), error: errors.length ? errors.join(' / ') : null, pending });
+      // MFA が要るために送れないときは、表ごとの同じエラーをまとめて1つの知らせにする（送れていない変更は残る）
+      const mfa = errors.some((e) => e.includes('MFA_REQUIRED'));
+      const shown = mfa ? [MFA_SYNC_MSG, ...errors.filter((e) => !e.includes('MFA_REQUIRED'))] : errors;
+      setStatus({ running: false, lastAt: new Date().toISOString(), error: shown.length ? shown.join(' / ') : null, pending });
     } catch (e) {
       setStatus({ running: false, error: e instanceof Error ? e.message : String(e) });
     }

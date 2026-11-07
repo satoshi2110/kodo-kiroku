@@ -1,6 +1,6 @@
 /**
  * チームの設定（画面一覧 13・16、ワイヤーフレーム 13）。変えられるのは管理者と副管理者（AI とチームの削除は管理者だけ）。
- * 多要素認証と書き出しのメールは、このあと足す。身体拘束の見直しの目安は Phase 2。
+ * 多要素認証の基準は管理者が決める（7.4.3。0020 を流したあと、サーバーのチームだけ）。書き出しのメールは、このあと足す。身体拘束の見直しの目安は Phase 2。
  */
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -12,6 +12,7 @@ import { buildCsv, downloadCsv, type CsvKind } from '../lib/csv';
 import { addDays, formatDateJa, localDateOf, nowISO, toLocalDate } from '../lib/date';
 import { Chip, TopBar } from '../components/ui';
 import { serverEnabled } from '../server/supabase';
+import { MFA_RULE_LABEL, type MfaRule } from '../server/mfa';
 
 // AI の同意画面で案内するページ（7.5）。内容は取り込まず、リンクだけを置く
 const PPC_US = 'https://www.ppc.go.jp/enforcement/infoprovision/laws/offshore_report_america/';
@@ -19,7 +20,7 @@ const ANTHROPIC_TRAINING = 'https://privacy.claude.com/en/articles/7996868-is-my
 const ANTHROPIC_RETENTION = 'https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data';
 
 export default function TeamSettings() {
-  const { person, me, members, userId, aiEnabled, shortSleepUnderHours, deleteRequestedAt } = useApp();
+  const { person, me, members, userId, aiEnabled, shortSleepUnderHours, deleteRequestedAt, mfaRule } = useApp();
   const [asking, setAsking] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const personId = person?.id ?? '';
@@ -158,6 +159,25 @@ export default function TeamSettings() {
           <p className="help">年齢によって必要な睡眠時間がちがうため、初期設定は「いつもと比べて」です。短い夜の日の ABC記録には「睡眠不足」が最初から付きます。</p>
         </div>
       </div>
+
+      {mfaRule && (
+        <div className="section">
+          <div className="card stack">
+            <span className="label">多要素認証（MFA）</span>
+            <div className="chips">
+              {(Object.keys(MFA_RULE_LABEL) as MfaRule[]).map((r) => (
+                <Chip key={r} on={mfaRule === r} onClick={isAdmin ? () => updateTeamSetting(person.id, { mfaRule: r }, userId) : undefined}>
+                  {MFA_RULE_LABEL[r]}
+                </Chip>
+              ))}
+            </div>
+            <p className="help">
+              パスワードのほかに、スマホの認証アプリのコードでも確かめるしくみです。管理者と副管理者は、どの基準でも必須です。必須になった人は7日のうちに「あなたの設定」で設定します。過ぎると、設定するまで記録を見ることだけになります。メンバーごとの例外（必須・免除）は、チームの画面のメンバーから付けられます。
+              {!isAdmin && '基準は管理者が決めます。'}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="section">
         <div className="card stack">

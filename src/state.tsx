@@ -21,6 +21,7 @@ interface AppState {
   placeAuto: boolean; // いまの場所を位置で自動判定した（false = 手で選んだ）
   useLocation: boolean; // この端末で位置情報を使う
   shortSleepUnderHours: number | null; // 睡眠不足を「○時間未満」で判定する（null = いつもより2時間以上短い）
+  mfaRule: 'all' | 'leader' | 'optional' | null; // MFA の基準（0020）。null = サーバーから届いていない（0020 の前・端末の中だけ）
   deleteRequestedAt: string | null; // チームの削除の申し込み
   restraintPeriod: RestraintPeriod | null; // 身体拘束の見直しをすすめる目安（決定64・74。初期値なし）
   restraintCount: number | null;
@@ -95,6 +96,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       placeAuto: !!(personId && device?.placeAuto?.[personId]),
       useLocation: !!device?.useLocation,
       shortSleepUnderHours: teamSetting?.shortSleepUnderHours ?? null,
+      mfaRule: teamSetting?.mfaRuleAt ? (teamSetting.mfaRule ?? 'leader') : null,
       deleteRequestedAt: teamSetting?.deleteRequestedAt ?? null,
       restraintPeriod: teamSetting?.restraintPeriod ?? null,
       restraintCount: teamSetting?.restraintCount ?? null,

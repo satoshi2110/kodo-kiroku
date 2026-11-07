@@ -36,18 +36,20 @@ import NewPassword from './pages/NewPassword';
 import { serverEnabled } from './server/supabase';
 import { useSession } from './server/session';
 import { DeviceGuard } from './components/DeviceGuard';
+import { MfaCode } from './components/Mfa';
 
 const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/team/audit', '/me', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
 const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
 
 function Shell() {
   const { loading, userId, person } = useApp();
-  const { ready, session, recovery } = useSession();
+  const { ready, session, recovery, mfaCode } = useSession();
   const loc = useLocation();
   if (loading || !ready) return <div className="empty">読み込み中…</div>;
   // サーバーにつながる設定があるときは、ログインしてから使う（7.4.3）
   if (serverEnabled && !session) return <Login />;
   if (serverEnabled && recovery) return <NewPassword />;
+  if (serverEnabled && mfaCode) return <MfaCode />;
   if ((!userId || !person) && loc.pathname !== '/setup') return <Navigate to="/setup" replace />;
   const body = (
     <>

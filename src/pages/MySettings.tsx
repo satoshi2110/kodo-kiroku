@@ -1,6 +1,6 @@
 /**
  * 個人の設定（画面一覧 16 のうち、自分のアカウントの部分）。
- * 【暫定】（2026-11-07 の試作）名前とメール、自分の同意、文字の大きさの案内、ログアウト、ほかの端末をすべてログアウト。通知の設定はまだない。
+ * 【暫定】（2026-11-07 の試作）名前とメール、自分の同意、文字の大きさの案内、多要素認証（認証アプリ）、ログアウト、ほかの端末をすべてログアウト。通知の設定はまだない。
  * チームを抜ける（決定98、7.6）: 管理者は引き継いでから。抜ける前にまだ送っていない記録を送り、サーバーの leave_team（0019）を呼んで、この端末からそのチームのデータを消す。
  */
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import { signOut, signOutOthers, useSession } from '../server/session';
 import { runSync, unsentCount } from '../server/sync';
 import { forgetTeam, saveDevice } from '../db/repo';
 import { useNavigate } from 'react-router-dom';
+import { MfaCard } from '../components/Mfa';
 
 const CONSENT_LABEL: Record<Consent['kind'], string> = {
   terms_privacy_sensitive: '利用規約・プライバシー・要配慮個人情報の取り扱い',
@@ -129,6 +130,8 @@ export default function MySettings() {
           </p>
         </div>
       </div>
+
+      {supabase && !person.isSample && <MfaCard />}
 
       {supabase && <DeviceKind />}
 

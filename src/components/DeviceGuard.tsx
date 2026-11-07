@@ -16,6 +16,7 @@ import { signOut } from '../server/session';
 import { runSync, unsentCount } from '../server/sync';
 import { PIN_OK, checkPin, hashPin } from '../lib/devicePin';
 import { TopBar } from './ui';
+import { MfaBanner } from './Mfa';
 
 const LOCK_MS = 10 * 60_000;
 const IDLE_DAYS_MS = 90 * 86_400_000;
@@ -96,6 +97,7 @@ export function DeviceGuard({ userId, email, children }: { userId: string; email
         </div>
       )}
       <div ref={body} aria-hidden={locked || undefined} className="app__body">
+        <MfaBanner />
         {children}
       </div>
       {locked && <LockScreen name={name} />}

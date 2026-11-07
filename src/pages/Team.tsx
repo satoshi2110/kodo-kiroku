@@ -205,6 +205,22 @@ export default function Team() {
                   <input type="checkbox" checked={current.sleepInputAllowed} onChange={(e) => setMemberFlags(current.id, { sleepInputAllowed: e.target.checked }, userId)} style={{ width: 22, height: 22 }} />
                 </label>
                 <p className="help">入所施設などで、夜のようすを職員が分かっているときに付けます。</p>
+                {current.mfaOverrideAt && (
+                  <>
+                    <label className="field">
+                      多要素認証（MFA）
+                      <select
+                        value={current.mfaOverride ?? ''}
+                        onChange={(e) => setMemberFlags(current.id, { mfaOverride: (e.target.value || null) as TeamMember['mfaOverride'] }, userId)}
+                      >
+                        <option value="">チームの基準どおり</option>
+                        <option value="required">この人は必須</option>
+                        {current.role !== 'admin' && current.role !== 'subadmin' && <option value="exempt">この人は免除</option>}
+                      </select>
+                    </label>
+                    <p className="help">基準は「同意と設定」で決めます。管理者と副管理者は免除にできません。必須にしたときは、7日のうちに設定してもらいます。</p>
+                  </>
+                )}
               </>
             )}
             <button type="button" className="btn btn--block" onClick={() => setEditing(null)}>閉じる</button>

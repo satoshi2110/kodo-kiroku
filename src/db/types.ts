@@ -55,6 +55,8 @@ export interface TeamMember extends BaseRecord {
   jobTitle?: string; // 職種（例: サービス管理責任者・担任。40文字まで）。権限とは関係ない。0019 より前は無い
   approvedAt?: ISODateTime | null; // サーバーのチームだけ。null = 招待を受けて承認を待っている（7.4.2 #3）
   suspendedAt?: ISODateTime | null; // サーバーのチームだけ。停止（退職・卒業など）
+  mfaOverride?: 'required' | 'exempt' | null; // MFA の例外（管理者が付ける。0020）。管理者・副管理者は免除できない
+  mfaOverrideAt?: ISODateTime; // 例外か役割が変わった時刻（サーバーが付ける。猶予の起点）
 }
 
 /** 強度（付加項目）。段階ごとに観察できる基準を書く（決定23） */
@@ -279,6 +281,8 @@ export interface TeamSetting {
   restraintCount?: number | null; // 目安の件数（この件数を超えたら）。0 なら1件でも記録されたら
   shortSleepUnderHours?: number | null; // 睡眠不足の判定を「○時間未満」にする。null = いつもより2時間以上短い夜（初期設定）
   deleteRequestedAt?: ISODateTime | null; // チームの削除を申し込んだ日時。30日たつと消える
+  mfaRule?: 'all' | 'leader' | 'optional'; // MFA の基準（管理者が決める。0020。既定は支援リーダー以上）
+  mfaRuleAt?: ISODateTime; // 基準を変えた時刻（サーバーが付ける。猶予の起点）
   updatedAt: ISODateTime;
   updatedBy: string;
 }

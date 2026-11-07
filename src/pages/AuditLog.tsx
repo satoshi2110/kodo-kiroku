@@ -75,13 +75,13 @@ const ACTION_LABEL: Record<AuditAction, string> = {
 const KEY_LABEL: Record<string, string> = {
   name: '名前', display_name: '名前', definition: '定義', examples: '例', non_examples: '含まないもの',
   method: '測り方', kind: '種類', role: '役割', approved_at: '承認', suspended_at: '停止', family_mark: '家族の印',
-  sleep_input_allowed: '睡眠の入力', affiliation: '所属', occurred_at: '日時', local_date: '日付', count: '回数',
+  sleep_input_allowed: '睡眠の入力', mfa_rule: 'MFA の基準', mfa_override: 'MFA の例外', affiliation: '所属', occurred_at: '日時', local_date: '日付', count: '回数',
   duration_sec: '時間', intensity: '強度', place_name: '場所', text: '文', note: 'メモ', notes: 'メモ',
   hidden_at: '非表示', sort_order: '並び順', ai_enabled: 'AI の利用', content: '内容', status: '状態',
   reason: '理由', decision: '採否', results: '確かめた成果', decisions: '決めたこと', revoked_at: '取り消し',
   body: '文', decided_by: '決めた人', decided_at: '決めた時刻', bed_at: '寝た時刻', wake_at: '起きた時刻', radius_m: '半径', antecedent: 'A（きっかけ）', consequence: 'C（その後）',
 };
-const IGNORE = new Set(['updated_at', 'server_at', 'created_at', 'deleted_at', 'id']);
+const IGNORE = new Set(['updated_at', 'server_at', 'created_at', 'deleted_at', 'id', 'mfa_rule_at', 'mfa_override_at']);
 const snake = (k: string) => k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 function changedKeys(before: Record<string, unknown> | null, after: Record<string, unknown> | null): string {

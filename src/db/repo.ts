@@ -722,7 +722,7 @@ export async function getTeamSetting(personId: string): Promise<TeamSetting | un
 export const canEditTeamSettings = (r?: Role) => !!r && RANK[r] >= RANK.subadmin;
 
 /** AI 以外のチームの設定を直す。変更は監査ログに残る */
-export async function updateTeamSetting(personId: string, patch: Partial<Pick<TeamSetting, 'shortSleepUnderHours' | 'deleteRequestedAt' | 'restraintPeriod' | 'restraintCount'>>, actorId: string) {
+export async function updateTeamSetting(personId: string, patch: Partial<Pick<TeamSetting, 'shortSleepUnderHours' | 'deleteRequestedAt' | 'restraintPeriod' | 'restraintCount' | 'mfaRule'>>, actorId: string) {
   const before = (await db.teamSettings.get(personId)) ?? null;
   const after: TeamSetting = { aiEnabled: false, ...before, ...patch, id: personId, personId, updatedAt: nowISO(), updatedBy: actorId };
   await db.teamSettings.put(after);
@@ -743,7 +743,7 @@ export const canManageMember = (me: TeamMember | undefined, m: TeamMember) =>
 /** 変えられる役割。副管理者にするのは管理者だけ。管理者にはこの方法ではできない */
 export const assignableRoles = (me?: Role): Role[] => (me === 'admin' ? ['viewer', 'supporter', 'leader', 'subadmin'] : ['viewer', 'supporter', 'leader']);
 
-export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt' | 'role' | 'suspendedAt' | 'jobTitle'>>, actorId: string) {
+export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt' | 'role' | 'suspendedAt' | 'jobTitle' | 'mfaOverride'>>, actorId: string) {
   const before = await db.teamMembers.get(memberId);
   if (!before) return;
   const after: TeamMember = { ...before, ...patch, updatedAt: nowISO() };
