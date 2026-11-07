@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0019）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0020）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2003,6 +2003,235 @@ begin
   if n <> 1 then raise exception 'NG: 観察に場所の名前が残らない'; end if;
   select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000a1' and deleted_at is null;
   if n <> 1 then raise exception 'NG: 管理者の行が変わった'; end if;
+end $$;
+
+-- ---------- 多要素認証（MFA）（0020） ----------
+-- W: チーム1 の支援者（MFA のテスト用）
+select set_config('request.jwt.claims', '', true);
+reset role;
+insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000ab', 'rls-mfa-w@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}');
+insert into team_members (id, person_id, user_id, display_name, affiliation, role, approved_at)
+  values ('20000000-0000-0000-0000-0000000000ab', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000ab', 'W', 'school', 'supporter', now());
+
+-- 必須になってすぐ（7日の猶予のうち）は、MFA を通していなくても書ける（支援リーダー L）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000c1'); end $$;
+
+-- 猶予が過ぎたら（基準「支援リーダー以上」）
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_settings disable trigger settings_mfa;
+update team_settings set mfa_rule_at = now() - interval '8 days', updated_at = updated_at + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+alter table team_settings enable trigger settings_mfa;
+alter table team_members disable trigger members_mfa;
+update team_members set mfa_override_at = now() - interval '8 days', updated_at = updated_at + interval '1 second' where person_id = '10000000-0000-0000-0000-000000000001';
+alter table team_members enable trigger members_mfa;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000c1');
+    raise exception 'NG: 猶予のあと、MFA を通していない支援リーダーが記録を書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like 'MFA_REQUIRED%' then raise exception 'NG: 猶予のあと、MFA を通していない支援リーダーが記録を書けた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000c1'); end $$;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 猶予のあと、MFA を通していない管理者が記録を書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like 'MFA_REQUIRED%' then raise exception 'NG: 猶予のあと、MFA を通していない管理者が記録を書けた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+
+do $$
+begin
+  begin
+    perform create_invite('10000000-0000-0000-0000-000000000001', 'supporter');
+    raise exception 'NG: MFA を通していない管理者が招待コードを作れた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like 'MFA_REQUIRED%' then raise exception 'NG: MFA を通していない管理者が招待コードを作れた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+
+-- 支援者は「支援リーダー以上」の基準では要らない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000ab'); end $$;
+
+-- 読むのはこれまでどおり（閲覧だけになる）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n = 0 then raise exception 'NG: MFA がないと記録が読めなくなった'; end if;
+end $$;
+
+-- 管理者でない人は、基準と例外を変えられない（エラーにせず、前の値のまま）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+update team_members set mfa_override = 'exempt', updated_at = updated_at + interval '1 second' where id = '20000000-0000-0000-0000-0000000000c1';
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000c1' and mfa_override is null;
+  if n <> 1 then raise exception 'NG: 支援リーダーが自分の MFA を免除にできた'; end if;
+end $$;
+-- 副管理者（設定は保存できる）でも、基準は前の値のまま（保存そのものは通る）
+-- 副管理者 D（b2）は前のテストで外したので、ここだけ戻す
+alter table team_members disable trigger user;
+update team_members set deleted_at = null where id = '20000000-0000-0000-0000-0000000000b2';
+alter table team_members enable trigger user;
+create temp table mfa_before as select updated_at from team_settings where id = '10000000-0000-0000-0000-000000000001';
+grant select on mfa_before to authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+update team_settings set mfa_rule = 'optional', updated_at = updated_at + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_settings s where id = '10000000-0000-0000-0000-000000000001' and mfa_rule = 'leader'
+    and s.updated_at > (select updated_at from mfa_before);
+  if n <> 1 then raise exception 'NG: 副管理者が MFA の基準を変えられた（または保存そのものが通らない）'; end if;
+end $$;
+drop table mfa_before;
+alter table team_members disable trigger user;
+update team_members set deleted_at = now() where id = '20000000-0000-0000-0000-0000000000b2';
+alter table team_members enable trigger user;
+
+-- 管理者が「全員必須」にすると、支援者もいる（猶予のあと）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+update team_settings set mfa_rule = 'all', updated_at = updated_at + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and mfa_rule = 'all' and mfa_rule_at > now() - interval '1 minute';
+  if n <> 1 then raise exception 'NG: 管理者が MFA の基準を変えられない（または時刻が付かない）'; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000006', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000ab'); end $$;
+
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_settings disable trigger settings_mfa;
+update team_settings set mfa_rule_at = now() - interval '8 days', updated_at = updated_at + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+alter table team_settings enable trigger settings_mfa;
+alter table team_members disable trigger members_mfa;
+update team_members set mfa_override_at = now() - interval '8 days', updated_at = updated_at + interval '1 second' where person_id = '10000000-0000-0000-0000-000000000001';
+alter table team_members enable trigger members_mfa;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000ab');
+    raise exception 'NG: 「全員必須」の猶予のあと、MFA を通していない支援者が書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like 'MFA_REQUIRED%' then raise exception 'NG: 「全員必須」の猶予のあと、MFA を通していない支援者が書けた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+
+
+-- 管理者が W を免除にすると、すぐ書ける。管理者自身は免除にできない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+update team_members set mfa_override = 'exempt', updated_at = updated_at + interval '1 second' where id in ('20000000-0000-0000-0000-0000000000ab', '20000000-0000-0000-0000-0000000000a1');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000ab'); end $$;
+
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000a1' and mfa_override is null;
+  if n <> 1 then raise exception 'NG: 管理者が MFA を免除にできた'; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 管理者を免除にしようとしたら、MFA なしで書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like 'MFA_REQUIRED%' then raise exception 'NG: 管理者を免除にしようとしたら、MFA なしで書けた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+
+
+-- 自分で MFA を設定した人は、基準が「任意」でも、MFA を通していないログインでは書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+update team_settings set mfa_rule = 'optional', updated_at = updated_at + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+update team_members set mfa_override = null, updated_at = updated_at + interval '1 second' where id = '20000000-0000-0000-0000-0000000000ab';
+select set_config('request.jwt.claims', '', true);
+reset role;
+insert into auth.mfa_factors (id, user_id, factor_type, status, created_at, updated_at)
+  values ('a0200000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000ab', 'totp', 'verified', now(), now());
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000ab');
+    raise exception 'NG: MFA を設定した人が、MFA を通さずに書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like 'MFA_REQUIRED%' then raise exception 'NG: MFA を設定した人が、MFA を通さずに書けた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0200000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000ab'); end $$;
+
+
+-- MFA がなくても、自分からチームを抜けることはできる
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_settings disable trigger settings_mfa;
+update team_settings set mfa_rule = 'leader', mfa_rule_at = now() - interval '8 days', updated_at = updated_at + interval '1 second' where id = '10000000-0000-0000-0000-000000000001';
+alter table team_settings enable trigger settings_mfa;
+alter table team_members disable trigger members_mfa;
+update team_members set mfa_override_at = now() - interval '8 days', updated_at = updated_at + interval '1 second' where person_id = '10000000-0000-0000-0000-000000000001';
+alter table team_members enable trigger members_mfa;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin perform leave_team('10000000-0000-0000-0000-000000000001'); end $$;
+
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000c1' and deleted_at is not null;
+  if n <> 1 then raise exception 'NG: MFA がないとチームを抜けられない'; end if;
 end $$;
 
 rollback;
