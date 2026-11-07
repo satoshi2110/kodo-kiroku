@@ -10,6 +10,7 @@ import { heartbeat } from './devices';
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
 import { forgetTeam } from '../db/repo';
+import { forgetKeys } from '../db/encrypt';
 import { toLocalISO } from '../lib/date';
 import { supabase } from './supabase';
 
@@ -170,7 +171,7 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
     if (s.appendOnly) {
       // 同期を入れる前に端末で取った同意（_srv なし）も送る。送れるのは自分の同意だけ。
       // 取り消し（revokedAt）は送らない。サーバーが AI を「なし」にしたときに自分で書く（0013）ので、印だけ外して次に受け取る
-      const rows = (await s.local.filter((r: Row) => (r._dirty === 1 || r._srv !== 1) && teams.has(s.team(r) ?? '')).toArray()) as Row[];
+      const rows = (await s.local.filter((r: Row) => (r._dirty === 1 || r._srv !== 1) && !r._unreadable && teams.has(s.team(r) ?? '')).toArray()) as Row[];
       if (!rows.length) continue;
       const own = rows.filter((r) => r.userId === uid);
       if (own.length) {
@@ -183,7 +184,8 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
       await markSent(s.local, rows);
       continue;
     }
-    const rows = (await s.local.filter((r: Row) => r._dirty === 1 && teams.has(s.team(r) ?? '')).toArray()) as Row[];
+    // 鍵がなくて読めない行（_unreadable）は送らない（中身が空のまま上書きしないため。encrypt.ts）
+    const rows = (await s.local.filter((r: Row) => r._dirty === 1 && !r._unreadable && teams.has(s.team(r) ?? '')).toArray()) as Row[];
     if (!rows.length) continue;
     const fresh = s.insert ? rows.filter((r) => r._srv !== 1) : [];
     const known = rows.filter((r) => !fresh.includes(r));
@@ -213,7 +215,7 @@ async function push(uid: string, teams: Set<string>): Promise<string[]> {
     if (rejected.length) await restore(s, rejected);
   }
   // 監査ログ（追記のみ）。自分の操作で、サーバーのチームのものだけ
-  const logs = (await db.auditLogs.filter((r) => (r as unknown as Row)._dirty === 1).toArray()) as unknown as Row[];
+  const logs = (await db.auditLogs.filter((r) => (r as unknown as Row)._dirty === 1 && !(r as unknown as Row)._unreadable).toArray()) as unknown as Row[];
   const mine = logs.filter((r) => r.actorId === uid && (r.personId == null || teams.has(r.personId)));
   if (mine.length) {
     const { error } = await supabase!.from('audit_logs').upsert(mine.map(toRemote), { onConflict: 'id', ignoreDuplicates: true });
@@ -339,6 +341,7 @@ export async function clearServerData() {
     // 共用の端末の PIN はその人のものなので、ログアウトしたら消す（次の人が決め直す）
     await db.device.update('device', { userId: null, currentPersonId: null, syncSince: {}, syncTeams: [], pin: null, lockedAt: null, pinFails: 0, pinWaitUntil: null, lastActiveAt: null });
   });
+  forgetKeys(teams); // データを消したあとで、そのチームの鍵も消す（決定108）
 }
 
 /** まだサーバーに送れていない行の数（ログアウトやチームを抜ける前に知らせる）。personId を渡すとそのチームだけ */

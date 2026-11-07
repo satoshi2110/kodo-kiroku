@@ -3,6 +3,7 @@
  * 権限の判定はサーバーの行レベルセキュリティが正（決定45）。ここでの判定は画面の出し分け用。
  */
 import { db } from './db';
+import { forgetKeys } from './encrypt';
 import { fixedId, newId } from '../lib/id';
 import { localDateOf, nowISO } from '../lib/date';
 import { supabase } from '../server/supabase';
@@ -790,6 +791,7 @@ export async function forgetTeam(personId: string) {
     const dev = await getDevice();
     if (dev.currentPersonId === personId) await saveDevice({ currentPersonId: null });
   });
+  forgetKeys([personId]); // データを消したあとで、そのチームの鍵も消す（決定108）
 }
 
 /**

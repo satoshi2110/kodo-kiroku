@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { ENCRYPTED, encryptMiddleware } from './encrypt';
 import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, UserSchedule, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, OwnerTransfer, Person, Proposal, BehaviorRevision, TeamMember, User } from './types';
 
 /**
@@ -93,6 +94,18 @@ export class AppDB extends Dexie {
       proposals: 'id, personId, behaviorId',
       behaviorRevisions: 'id, personId, behaviorId',
     });
+    // 端末の中の暗号化（決定104・108）。書くときに本文を暗号化し、読むときに戻す
+    this.use(encryptMiddleware);
+    // これまでの行を暗号化して書き直す。サーバーから受け取ったときと同じ印を付け、変更として送り直さない（sync.ts の __remote）
+    this.version(11)
+      .stores({})
+      .upgrade(async (tx) => {
+        (tx as unknown as Record<string, unknown>).__remote = true;
+        for (const name of Object.keys(ENCRYPTED)) {
+          const rows = await tx.table(name).toArray();
+          if (rows.length) await tx.table(name).bulkPut(rows);
+        }
+      });
   }
 }
 
