@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0021）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0022）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2506,6 +2506,120 @@ declare n int;
 begin
   select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
   if n = 0 then raise exception 'NG: 自分でログアウトさせていない端末まで読めなくなった（% 件）', n; end if;
+end $$;
+
+-- ---------- チームの削除をサーバーでも行う（0022） ----------
+-- 最後にチーム1（テスト1）を消す。消す前の件数を覚えておく
+select set_config('request.jwt.claims', '', true);
+reset role;
+create temp table purge_before as select
+  (select count(*) from events where person_id = '10000000-0000-0000-0000-000000000001') as ev1,
+  (select count(*) from events where person_id = '10000000-0000-0000-0000-000000000002') as ev2,
+  (select count(*) from team_members where person_id = '10000000-0000-0000-0000-000000000002') as mem2,
+  (select count(*) from restraint_logs where person_id = '10000000-0000-0000-0000-000000000001') as rs1,
+  (select count(*) from audit_logs where person_id = '10000000-0000-0000-0000-000000000001') as au1;
+grant select on purge_before to authenticated;
+do $$ begin
+  if (select ev1 from purge_before) = 0 then raise exception 'NG(試験の準備): チーム1に記録がない'; end if;
+end $$;
+
+-- 削除を申し込んでいないチームは消せない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform purge_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 削除を申し込んでいないのに、チームを消せた';
+  exception when others then
+    if sqlerrm not like '%申し込んでいません%' then raise; end if;
+  end;
+end $$;
+
+-- 申し込んで10日では消せない（30日はサーバーの時計で数える）
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_settings disable trigger user;
+insert into team_settings (id, person_id, delete_requested_at) values
+  ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', now() - interval '10 days')
+  on conflict (id) do update set delete_requested_at = excluded.delete_requested_at;
+alter table team_settings enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform purge_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 申し込みから30日たつ前に、チームを消せた';
+  exception when others then
+    if sqlerrm not like '%30日たってから%' then raise; end if;
+  end;
+end $$;
+
+-- ほかのチームの人（B）は、30日たっていても消せない
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_settings disable trigger user;
+update team_settings set delete_requested_at = now() - interval '31 days' where id = '10000000-0000-0000-0000-000000000001';
+alter table team_settings enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform purge_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: ほかのチームの人が、チームを消せた';
+  exception when others then
+    if sqlerrm not like '%メンバーではありません%' then raise; end if;
+  end;
+end $$;
+
+-- 30日たったら、チームのメンバー（閲覧者でもよい。決めたのは管理者）がアプリを開いたときに消せる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$ begin perform purge_team('10000000-0000-0000-0000-000000000001'); end $$;
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare b purge_before; n int;
+begin
+  select * into b from purge_before;
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、記録が残っている（% 件）', n; end if;
+  select count(*) into n from team_members where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、メンバーが残っている（% 件）', n; end if;
+  select count(*) into n from team_settings where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、設定が残っている'; end if;
+  select count(*) into n from behaviors where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、行動が残っている（% 件）', n; end if;
+  if (select display_name from persons where id = '10000000-0000-0000-0000-000000000001') <> '（削除したチーム）' then
+    raise exception 'NG: チームを消したのに、対象者の名前が残っている';
+  end if;
+  select count(*) into n from restraint_logs where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> b.rs1 then raise exception 'NG: 身体拘束の記録まで消えた（14.3 #11 で決めるまで残す）'; end if;
+  select count(*) into n from audit_logs where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <= b.au1 then raise exception 'NG: 監査ログが減った、または消したことが残っていない'; end if;
+  select count(*) into n from audit_logs where person_id = '10000000-0000-0000-0000-000000000001' and entity = 'person' and after ->> 'purged' = 'true';
+  if n <> 1 then raise exception 'NG: 監査ログに、チームを消したことが1行残っていない（% 件）', n; end if;
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> b.ev2 then raise exception 'NG: ほかのチームの記録まで消えた'; end if;
+  select count(*) into n from team_members where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> b.mem2 then raise exception 'NG: ほかのチームのメンバーまで消えた'; end if;
+end $$;
+
+-- 消したあとは、元の管理者にも何も見えず、もう一度は呼べない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from persons where id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: 消したチームの対象者の行が見える'; end if;
+  select count(*) into n from restraint_logs where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: 消したチームの身体拘束の記録が見える'; end if;
+  begin
+    perform purge_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 消したチームを、もう一度消せた';
+  exception when others then
+    if sqlerrm not like '%メンバーではありません%' then raise; end if;
+  end;
 end $$;
 
 rollback;

@@ -1,8 +1,9 @@
 /** アプリ全体の状態: この端末の人、いま見ている対象者、行動の一覧、自分の役割 */
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db/db';
 import { purgeTeam, saveDevice, TEAM_DELETE_DAYS } from './db/repo';
+import { supabase } from './server/supabase';
 import type { Behavior, Person, Place, RestraintPeriod, TeamMember } from './db/types';
 
 interface AppState {
@@ -72,12 +73,29 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [personId],
   );
 
-  // 削除を申し込んで30日たったチームは、開いたときに消す
+  // 削除を申し込んで30日たったチームは、開いたときに消す。
+  // サーバーで使っているチームは、先にサーバーで消す（0022。30日たったかはサーバーの時計で確かめる）。
+  // サーバーで消せなかったとき（電波がない・30日にまだならない・0022 の前）は、端末の中も消さずに、次に開いたときにもう一度。
+  // 消したあとは、ほかのメンバーの端末も次の同期で、そのチームのデータを消す
   const deleteAt = teamSetting?.deleteRequestedAt;
+  const isSample = !!person?.isSample;
+  const purging = useRef(false);
   useEffect(() => {
-    if (!deleteAt || !personId || !userId) return;
-    if (Date.now() - new Date(deleteAt).getTime() >= TEAM_DELETE_DAYS * 86400_000) purgeTeam(personId, userId);
-  }, [deleteAt, personId, userId]);
+    if (!deleteAt || !personId || !userId || purging.current) return;
+    if (Date.now() - new Date(deleteAt).getTime() < TEAM_DELETE_DAYS * 86400_000) return;
+    purging.current = true;
+    void (async () => {
+      try {
+        if (supabase && !isSample) {
+          const { error } = await supabase.rpc('purge_team', { p_person: personId });
+          if (error && !error.message.includes('メンバーではありません')) return;
+        }
+        await purgeTeam(personId, userId);
+      } finally {
+        purging.current = false;
+      }
+    })();
+  }, [deleteAt, personId, userId, isSample]);
 
   const value = useMemo<AppState>(
     () => ({

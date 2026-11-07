@@ -55,6 +55,9 @@ export default function TeamSettings() {
     setAgreed(false);
   }
 
+  // サーバーで消すときに残すもの（0022。14.3 #10・#11 で決めるまで）
+  const KEPT_NOTE = '監査ログ（誰が・いつ・何をしたか）と身体拘束の記録は、扱いが決まるまでサーバーに残します。チームの人も見られなくなります。';
+
   async function requestDelete() {
     if (!person || !userId) return;
     if (!window.confirm(`チーム「${person.displayName}」の削除を申し込みますか？ ${TEAM_DELETE_DAYS}日間は取り消せます。そのあと記録・写真・場所はすべて消えます。`)) return;
@@ -212,14 +215,15 @@ export default function TeamSettings() {
             (deleteRequestedAt ? (
               <div className="stack">
                 <p className="help" style={{ color: 'var(--danger)' }}>
-                  削除を申し込み中です。{formatDateJa(addDays(localDateOf(deleteRequestedAt), TEAM_DELETE_DAYS))}に、記録・写真・場所がすべて消えます。
+                  削除を申し込み中です。{formatDateJa(addDays(localDateOf(deleteRequestedAt), TEAM_DELETE_DAYS))}のあと、チームのだれかがアプリを開いたときに、記録・写真・場所がすべて消えます。
                 </p>
+                {serverEnabled && <p className="help">{KEPT_NOTE}</p>}
                 <button type="button" className="btn btn--block" onClick={() => updateTeamSetting(person.id, { deleteRequestedAt: null }, userId)}>削除の申し込みを取り消す</button>
               </div>
             ) : (
               <>
                 <button type="button" className="btn btn--danger btn--block" onClick={requestDelete}>チームを削除する（管理者のみ）</button>
-                <p className="help">申し込みから{TEAM_DELETE_DAYS}日間は取り消せます。そのあと記録・写真・場所はすべて消えます。</p>
+                <p className="help">申し込みから{TEAM_DELETE_DAYS}日間は取り消せます。そのあと記録・写真・場所はすべて消えます。{serverEnabled && KEPT_NOTE}</p>
               </>
             ))}
         </div>
