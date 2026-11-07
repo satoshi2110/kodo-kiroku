@@ -1,7 +1,8 @@
 /**
  * 初回セットアップ（7.1、ワイヤーフレーム 16）。5つのステップ:
- * 1 同意 → 2 あなたと対象者（呼び名は必須、ほかは任意）→ 3 行動を1つ（行動の追加の画面）→ 4 場所と「わたしのいつもの時間」（あとでも可。場所の画面）→ 5 最初の記録（ホームで案内）。
- * サーバーにつながる設定があるとき（ログインしている）は、運営が発行した開始コードを確かめてチームを作る（決定44）。
+ * 1 コードと同意 → 2 あなたと対象者（呼び名は必須、ほかは任意）→ 3 行動を1つ（行動の追加の画面）→ 4 場所と「わたしのいつもの時間」（あとでも可。場所の画面）→ 5 最初の記録（ホームで案内）。
+ * サーバーにつながる設定があるとき（ログインしている）は、先に開始コード・招待コードを確かめ、そのあとで同意を取る（7.1）。
+ * チームを作るときは、運営が発行した開始コードでサーバーにチームを作る（決定44）。
  * 招待された人は、ここで招待コードを入れて参加し、管理者・副管理者・支援リーダーの承認を待つ（7.4.2 #3）。
  * 招待で参加した人は、承認されたら場所と「わたしのいつもの時間」だけを案内する（7.1）。
  */
@@ -29,7 +30,19 @@ export default function Setup() {
   const [cautions, setCautions] = useState('');
   const [saving, setSaving] = useState(false);
   const [code, setCode] = useState('');
-  useEffect(() => prefillSignupCode(setCode), []);
+  // コードを確かめたか（null = まだ、true = 使える、false = 使えない）。ログインしないで使うときは要らない
+  const [codeOk, setCodeOk] = useState<boolean | null>(null);
+  const [checking, setChecking] = useState(false);
+  async function checkCode(c: string) {
+    if (!supabase || !c.trim()) return;
+    setChecking(true);
+    const { data, error } = await supabase.rpc('signup_code_ok', { p_code: c });
+    setCodeOk(!error && data === true);
+    setChecking(false);
+  }
+  // アカウントを作るときに入れたコードがあれば、最初から入れて確かめておく
+  useEffect(() => prefillSignupCode((c) => (setCode(c), checkCode(c))), []);
+  const consentOpen = !supabase || codeOk === true;
   const [error, setError] = useState<string | null>(null);
   const { person, userId } = useApp();
   // 招待で参加して、承認を待っているチーム
@@ -89,7 +102,7 @@ export default function Setup() {
     <div className="page page--no-nav">
       <TopBar title="はじめに" sub={`ステップ ${step} / 5 ・ 約10分`} />
       <ol className="steps section" aria-label="このあとの流れ">
-        {['同意', '対象者', '行動を1つ', '場所と時間', '最初の記録'].map((t, i) => (
+        {[supabase ? 'コードと同意' : '同意', '対象者', '行動を1つ', '場所と時間', '最初の記録'].map((t, i) => (
           <li key={t} className={i + 1 === step ? 'steps__on' : i + 1 < step ? 'steps__done' : ''}>{i + 1} {t}</li>
         ))}
       </ol>
@@ -117,7 +130,34 @@ export default function Setup() {
       )}
       {step === 1 && (
         <div className="section stack">
-          <div className="card stack">
+          {supabase && (
+            <div className="card stack">
+              <span className="card__title">はじめに、コードを確かめます</span>
+              <label className="field">
+                開始コード または 招待コード
+                <input
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    setCodeOk(null);
+                  }}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                />
+              </label>
+              <p className="help">新しいチームを作る保護者の方は運営から受け取った「開始コード」を、招待された人は招待した人から受け取った「招待コード」を入れます。</p>
+              {codeOk === true && <p className="notice-inline" role="status">使えるコードです。下の内容を読んで、同意してください。</p>}
+              {codeOk === false && (
+                <p className="ai-error" role="alert">このコードは使えません（まちがい・使用済み・期限切れ）。コードを確かめるか、渡した人に聞いてください。</p>
+              )}
+              {codeOk !== true && (
+                <button type="button" className="btn btn--primary btn--block" disabled={!code.trim() || checking} onClick={() => checkCode(code)}>
+                  コードを確かめる
+                </button>
+              )}
+            </div>
+          )}
+          <div className={`card stack${consentOpen ? '' : ' card--muted'}`} aria-disabled={!consentOpen}>
             <span className="card__title">このアプリで扱う情報について（下書き）</span>
             <p className="help">
               このアプリには、障害に関わる情報（要配慮個人情報）を記録します。記録はチームに招待した人だけが見られます。
@@ -126,16 +166,17 @@ export default function Setup() {
             </p>
             <p className="help">利用規約とプライバシーポリシーは、試用を始める前に専門家の確認を受けて差し替えます。</p>
             <label className="row">
-              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ width: 22, height: 22 }} />
+              <input type="checkbox" checked={agreed} disabled={!consentOpen} onChange={(e) => setAgreed(e.target.checked)} style={{ width: 22, height: 22 }} />
               <span className="label">内容を読み、同意します</span>
             </label>
+            {!consentOpen && <p className="help">コードを確かめると、同意に進めます。</p>}
           </div>
-          <button type="button" className="btn btn--primary btn--block" disabled={!agreed} onClick={() => setStep(2)}>
-            {supabase ? '新しいチームを作る（開始コードのある方）' : '次へ'}
+          <button type="button" className="btn btn--primary btn--block" disabled={!agreed || !consentOpen} onClick={() => setStep(2)}>
+            {supabase ? '新しいチームを作る（開始コードのとき）' : '次へ'}
           </button>
           {supabase && (
-            <button type="button" className="btn btn--outline btn--block" disabled={!agreed} onClick={() => setStep(9)}>
-              招待コードで参加する
+            <button type="button" className="btn btn--outline btn--block" disabled={!agreed || !consentOpen} onClick={() => setStep(9)}>
+              チームに参加する（招待コードのとき）
             </button>
           )}
           <div className="card stack">
@@ -145,19 +186,11 @@ export default function Setup() {
           </div>
         </div>
       )}
-      {step === 9 && <Join userName={userName} setUserName={setUserName} affiliation={affiliation} setAffiliation={setAffiliation} onBack={() => setStep(1)} />}
+      {step === 9 && <Join code={code} userName={userName} setUserName={setUserName} affiliation={affiliation} setAffiliation={setAffiliation} onBack={() => setStep(1)} />}
       {step === 2 && (
         <div className="section stack">
           <div className="card stack">
-            {supabase && (
-              <>
-                <label className="field">
-                  開始コード（運営から受け取ったもの）
-                  <input value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="off" />
-                </label>
-                <p className="help">開始コードは1つで1チーム（対象者1人）。発行から30日で使えなくなります。</p>
-              </>
-            )}
+            {supabase && <p className="help">開始コード {code.trim().toUpperCase()} で、新しいチームを作ります。開始コードは1つで1チーム（対象者1人）です。</p>}
             <label className="field">
               あなたの呼び名（チームの人に表示されます）
               <input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="例: 母" />
@@ -206,23 +239,23 @@ export default function Setup() {
 }
 
 /** アカウントを作るときに入れたコード（0014）を、開始コード・招待コードの欄に最初から入れておく */
-function prefillSignupCode(set: (f: (v: string) => string) => void) {
+function prefillSignupCode(set: (c: string) => void) {
   supabase?.auth.getSession().then(({ data }) => {
     const c = data.session?.user.user_metadata?.invite_code;
-    if (typeof c === 'string' && c) set((v) => v || c);
+    if (typeof c === 'string' && c) set(c);
   });
 }
 
 /** 招待コードで参加する（ワイヤーフレーム 12「招待リンクから開いたとき」） */
 function Join(props: {
+  code: string;
   userName: string;
   setUserName: (v: string) => void;
   affiliation: Affiliation;
   setAffiliation: (a: Affiliation) => void;
   onBack: () => void;
 }) {
-  const [invite, setInvite] = useState('');
-  useEffect(() => prefillSignupCode(setInvite), []);
+  const invite = props.code;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function join() {
@@ -245,10 +278,7 @@ function Join(props: {
   return (
     <div className="section stack">
       <div className="card stack">
-        <label className="field">
-          招待コード（招待した人から受け取ったもの）
-          <input value={invite} onChange={(e) => setInvite(e.target.value)} autoCapitalize="characters" autoComplete="off" />
-        </label>
+        <p className="help">招待コード {invite.trim().toUpperCase()} で、チームに参加します。</p>
         <label className="field">
           あなたの呼び名（チームの人に表示されます）
           <input value={props.userName} onChange={(e) => props.setUserName(e.target.value)} placeholder="例: 〇〇先生" />

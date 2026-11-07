@@ -6,7 +6,7 @@
  * - 参加者への知らせはアプリの通知ができてから（ストア版、6.11）
  */
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
@@ -142,6 +142,8 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
             確かめた成果（できたこと）
             <textarea value={f.results} disabled={!editable} onChange={(e) => set('results', e.target.value)} placeholder="例: 休憩カードが3週続けて増えた" />
           </label>
+          {/* これまでの「できたこと」を見ながら書けるように（決定51） */}
+          <Link to="/wins">これまでの「できたこと」を見る</Link>
           <label className="field">
             決めたこと
             <textarea value={f.decisions} disabled={!editable} onChange={(e) => set('decisions', e.target.value)} placeholder="例: 午前の課題の量を2つ減らし、終わりの合図を写真カードで見せる" />

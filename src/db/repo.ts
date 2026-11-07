@@ -5,6 +5,7 @@
 import { db } from './db';
 import { fixedId, newId } from '../lib/id';
 import { localDateOf, nowISO } from '../lib/date';
+import { supabase } from '../server/supabase';
 import {
   AI_CONSENT_TEXT_VERSION,
   CONSENT_TEXT_VERSION,
@@ -595,21 +596,47 @@ async function aiRuns(filter: { userId?: string; personId?: string }) {
   return [...a, ...s, ...m].filter((x) => x.model !== 'mock' && (!('output' in x) || x.output !== null));
 }
 
+/** 日本時間の今日と今月の始まり（サーバーの take_ai_run と同じ区切り）。ISO の文字列で返す */
+function jstStarts() {
+  const jst = new Date(Date.now() + 9 * 3600_000).toISOString();
+  return {
+    day: new Date(`${jst.slice(0, 10)}T00:00:00+09:00`).toISOString(),
+    month: new Date(`${jst.slice(0, 7)}-01T00:00:00+09:00`).toISOString(),
+  };
+}
+
+/**
+ * ログインして使うときは、サーバーが数えた回数（ai_runs、0009）を読む。チームの全員の分が入っている。
+ * 読めないとき（ログインしていない・電波がない）は null を返し、端末の中の記録で数える
+ */
+async function serverRuns(filter: { userId?: string; personId?: string }): Promise<{ createdAt: string }[] | null> {
+  if (!supabase || !navigator.onLine) return null;
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) return null;
+  let q = supabase.from('ai_runs').select('created_at').gte('created_at', jstStarts().month);
+  if (filter.personId) q = q.eq('person_id', filter.personId);
+  if (filter.userId) q = q.eq('user_id', filter.userId);
+  const { data, error } = await q;
+  if (error || !data) return null;
+  return data.map((x: { created_at: string }) => ({ createdAt: new Date(x.created_at).toISOString() }));
+}
+
 function countRuns(runs: { createdAt: string }[], limit: { day: number; month: number }) {
-  const today = nowISO().slice(0, 10);
-  const month = today.slice(0, 7);
-  const day = runs.filter((x) => x.createdAt.slice(0, 10) === today).length;
-  const mon = runs.filter((x) => x.createdAt.slice(0, 7) === month).length;
+  const { day: dayFrom, month: monthFrom } = jstStarts();
+  const day = runs.filter((x) => new Date(x.createdAt).toISOString() >= dayFrom).length;
+  const mon = runs.filter((x) => new Date(x.createdAt).toISOString() >= monthFrom).length;
   return { dayLeft: Math.max(0, limit.day - day), monthLeft: Math.max(0, limit.month - mon), limit };
 }
 
 export async function aiUsage(userId: string, role: Role | undefined) {
-  return countRuns(await aiRuns({ userId }), canDecideAi(role) ? AI_LIMITS.lead : AI_LIMITS.supporter);
+  const runs = (await serverRuns({ userId })) ?? (await aiRuns({ userId }));
+  return countRuns(runs, canDecideAi(role) ? AI_LIMITS.lead : AI_LIMITS.supporter);
 }
 
-/** チームの残り（月300回・1日30回）。ログインができるまでは、この端末で数えた分だけ */
+/** チームの残り（月300回・1日30回）。ログインして使うときはチームの全員の分、そうでなければこの端末で数えた分 */
 export async function aiTeamUsage(personId: string) {
-  return countRuns(await aiRuns({ personId }), AI_TEAM_LIMIT);
+  const runs = (await serverRuns({ personId })) ?? (await aiRuns({ personId }));
+  return countRuns(runs, AI_TEAM_LIMIT);
 }
 
 export async function getTeamSetting(personId: string): Promise<TeamSetting | undefined> {
