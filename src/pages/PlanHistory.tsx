@@ -54,6 +54,7 @@ export default function PlanHistory() {
                 {saver ? `${saver.displayName}（${ROLE_LABEL[saver.role]}）` : '退会したメンバー'}が保存
                 {c.activeSince ? ` ・ ${formatShortDate(c.activeSince)} から実施` : ''}
                 {c.closedBy && c.status === 'withdrawn' ? ` ・ ${member(c.closedBy)?.displayName ?? ''}が取り下げ` : ''}
+                {c.closedBy && (c.status === 'active' || c.status === 'past') ? `（副管理者の${member(c.closedBy)?.displayName ?? ''}が管理者の代わりに合意）` : ''}
               </span>
             </div>
           </div>

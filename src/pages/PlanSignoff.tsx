@@ -2,13 +2,14 @@
  * 支援計画の合意（6.7、決定68・69・75、ワイヤーフレーム 25）。
  * 返事は「この内容で合意する」か「意見を送る（今は合意しない）」。合意したあとでも、意見を送れば「意見あり」に変わる。
  * 家族（管理者）が合意した日から変更後の計画が「実施中」になる。ほかの人の合意は待たない。
+ * 管理者が操作できないときや引き継ぎ中は、副管理者が「管理者の代わりに合意する」で実施中にできる（決定68）。
  * 合意はチームの中で「内容を確かめた」という記録で、施設の書類への署名の代わりにはしない（決定57）。
  * 通知・メールは送らない。合意待ちの変更は、保存した人と管理者・副管理者が取り下げられる。
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../state';
-import { canWithdraw, signoff, withdrawChange } from '../db/phase2';
+import { canProxySign, canWithdraw, proxySignoff, signoff, withdrawChange } from '../db/phase2';
 import { usePlanData } from '../lib/usePlan';
 import { criterionText, fieldText } from '../lib/planText';
 import { formatShortDate } from '../lib/date';
@@ -35,10 +36,16 @@ export default function PlanSignoff() {
   const saver = members.find((m) => m.userId === change.savedBy);
   const mine = me ? data.signoffs.find((s) => s.changeId === change.id && s.memberId === me.id) : undefined;
   const asked = !!me && change.signerMemberIds.includes(me.id);
+  const proxy = change.status === 'active' && change.closedBy ? members.find((m) => m.userId === change.closedBy) ?? { displayName: '退会したメンバー' } : null;
 
   async function agree() {
     if (!me || !change) return;
     await signoff(change.id, me, 'agreed', '');
+  }
+  async function agreeForAdmin() {
+    if (!me || !change) return;
+    if (!window.confirm('管理者の代わりに合意し、変更後の計画を今日から「実施中」にしますか？ 管理者の返事は「未確認」のまま残り、変更履歴にあなたが代わったことが残ります。')) return;
+    await proxySignoff(change.id, me);
   }
   async function sendOpinion() {
     if (!me || !change || !opinion.trim()) return;
@@ -107,8 +114,8 @@ export default function PlanSignoff() {
           })}
           <p className="help">
             {change.status === 'active'
-              ? `家族（管理者）が合意した日（${formatShortDate(change.activeSince!)}）から、変更後の計画が「実施中」になりました。ほかの人の合意は待たずに始まり、まだの人は「未確認」と出ます。`
-              : '家族（管理者）が合意した日から、変更後の計画が「実施中」になります。それまでは前の計画のままです。'}
+              ? `${proxy ? `副管理者の${proxy.displayName}さんが管理者の代わりに合意した日` : '家族（管理者）が合意した日'}（${formatShortDate(change.activeSince!)}）から、変更後の計画が「実施中」になりました。ほかの人の合意は待たずに始まり、まだの人は「未確認」と出ます。`
+              : '家族（管理者）が合意した日から、変更後の計画が「実施中」になります。それまでは前の計画のままです。管理者が操作できないときや引き継ぎ中は、副管理者が代わりに合意できます。'}
           </p>
         </div>
       </div>
@@ -134,6 +141,16 @@ export default function PlanSignoff() {
               <button type="button" className="btn btn--block" onClick={() => setWriting(true)}>意見を送る（今は合意しない）</button>
             )}
             <p className="help">意見を送ると「意見あり」と出ます。通知やメールは送らず、保存した人と管理者が計画の画面を開いたときに見えます。合意したあとでも、意見を送れば「意見あり」に変わります。</p>
+          </div>
+        </div>
+      )}
+
+      {change.status === 'pending' && canProxySign(me?.role) && (
+        <div className="section">
+          <div className="card stack">
+            <span className="label">管理者の代わりに合意する（副管理者）</span>
+            <p className="help">家族（管理者）が操作できないときや、管理者の引き継ぎ中だけ使います。押すと、変更後の計画が今日から「実施中」になります。</p>
+            <button type="button" className="btn btn--outline btn--block" onClick={agreeForAdmin}>管理者の代わりに合意する</button>
           </div>
         </div>
       )}

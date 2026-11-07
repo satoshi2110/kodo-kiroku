@@ -120,6 +120,7 @@ export async function savePlan(
 
 /**
  * 返事（合意する / 意見を送る、決定69）。管理者が合意した日から、変更後の計画が「実施中」になる（決定68）。
+ * 副管理者の代わりの合意は proxySignoff（ふだんの合意では実施中にしない）。
  * 合意したあとでも意見を送れば「意見あり」に変わる。
  */
 export async function signoff(changeId: string, me: TeamMember, state: 'agreed' | 'opinion', opinion: string) {
@@ -142,23 +143,48 @@ async function applySignoff(changeId: string, me: TeamMember, state: 'agreed' | 
   await db.planSignoffs.put(rec);
   await audit(change.personId, 'planSignoff', rec.id, prev ? 'update' : 'create', me.userId, prev ?? null, rec);
 
-  if (state === 'agreed' && me.role === 'admin' && change.status === 'pending') {
-    const today = toLocalDate();
-    for (const c of await db.planChanges.where('planId').equals(change.planId).filter((c) => c.status === 'active').toArray()) {
-      const after: PlanChange = { ...c, status: 'past', updatedAt: t };
-      await db.planChanges.put(after);
-      await audit(change.personId, 'planChange', c.id, 'update', me.userId, c, after);
-    }
-    const activated: PlanChange = { ...change, status: 'active', activeSince: today, updatedAt: t };
-    await db.planChanges.put(activated);
-    await audit(change.personId, 'planChange', change.id, 'update', me.userId, change, activated);
-    const plan = await db.supportPlans.get(change.planId);
-    if (plan) {
-      const after: SupportPlan = { ...plan, activeContent: change.after, activeSince: today, updatedAt: t };
-      await db.supportPlans.put(after);
-      await audit(change.personId, 'supportPlan', plan.id, 'update', me.userId, plan, after);
-    }
+  if (state === 'agreed' && me.role === 'admin' && change.status === 'pending') await activate(change, me.userId, null);
+}
+
+/**
+ * 変更を「実施中」にする。前の実施中は「過去」になり、その日がグラフの縦線になる（決定68）。
+ * 副管理者が管理者の代わりに行ったときは、だれが代わったかを closedBy に残す。
+ */
+async function activate(change: PlanChange, actorId: string, proxyBy: string | null) {
+  const t = nowISO();
+  const today = toLocalDate();
+  for (const c of await db.planChanges.where('planId').equals(change.planId).filter((c) => c.status === 'active').toArray()) {
+    const after: PlanChange = { ...c, status: 'past', updatedAt: t };
+    await db.planChanges.put(after);
+    await audit(change.personId, 'planChange', c.id, 'update', actorId, c, after);
   }
+  const activated: PlanChange = { ...change, status: 'active', activeSince: today, closedBy: proxyBy, updatedAt: t };
+  await db.planChanges.put(activated);
+  await audit(change.personId, 'planChange', change.id, 'update', actorId, change, activated);
+  const plan = await db.supportPlans.get(change.planId);
+  if (plan) {
+    const after: SupportPlan = { ...plan, activeContent: change.after, activeSince: today, updatedAt: t };
+    await db.supportPlans.put(after);
+    await audit(change.personId, 'supportPlan', plan.id, 'update', actorId, plan, after);
+  }
+}
+
+/** 管理者の代わりに合意できるのは副管理者だけ（決定68。管理者が操作できないときや引き継ぎ中に使う） */
+export const canProxySign = (r?: Role) => r === 'subadmin';
+
+/**
+ * 副管理者が管理者の代わりに合意し、変更を今日から「実施中」にする（決定68）。
+ * 自分が合意者に入っていれば、自分の返事も「合意」にする。管理者の返事は「未確認」のまま残る。
+ */
+export async function proxySignoff(changeId: string, me: TeamMember) {
+  if (!canProxySign(me.role)) return;
+  const signoffId = await fixedId(`signoff:${changeId}:${me.id}`);
+  await db.transaction('rw', [db.supportPlans, db.planChanges, db.planSignoffs, db.auditLogs], async () => {
+    const change = await db.planChanges.get(changeId);
+    if (!change || change.status !== 'pending') return;
+    if (change.signerMemberIds.includes(me.id)) await applySignoff(changeId, me, 'agreed', '', signoffId);
+    await activate(change, me.userId, me.userId);
+  });
 }
 
 /** 合意待ちの変更を取り下げる。計画の中身は、実施中の内容（なければ変更前）に戻る */

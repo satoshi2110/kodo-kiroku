@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0014）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0015）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -765,6 +765,11 @@ begin
     where id = '81000000-0000-0000-0000-000000000003';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'NG: 支援リーダーがほかの人の変更を取り下げた'; end if;
+  -- 支援リーダーは、合意待ちの変更を実施中にできない（決定68。管理者と副管理者だけ、0015）
+  update plan_changes set status = 'active', active_since = current_date, updated_at = now() + interval '1 second'
+    where id = '81000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援リーダーが変更を実施中にできた'; end if;
   -- 合意者に入っている自分の分は合意できる
   insert into plan_signoffs (id, person_id, change_id, member_id, state, opinion)
     values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '81000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000000c1', 'opinion', '意見');
@@ -822,6 +827,31 @@ begin
   if n <> 1 then raise exception 'NG: 副管理者が AI の あり／なし か チームの削除 を変えられた'; end if;
   select count(*) into n from consents where id = '4b000000-0000-0000-0000-000000000010' and revoked_at is null;
   if n <> 1 then raise exception 'NG: 副管理者の保存で AI の同意が取り消された'; end if;
+
+  -- 副管理者は、管理者の代わりに変更を実施中にできる（決定68、0015）。前の実施中は「過去」になる
+  update plan_changes set status = 'past', updated_at = now() + interval '6 seconds' where id = '81000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 副管理者が実施中の変更を過去にできない'; end if;
+  update plan_changes set status = 'active', active_since = current_date, closed_by = '00000000-0000-0000-0000-0000000000b2', updated_at = now() + interval '6 seconds'
+    where id = '81000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 副管理者が変更を実施中にできない'; end if;
+  update support_plans set active_content = '{"goal":"目標3"}', active_since = current_date, updated_at = now() + interval '6 seconds'
+    where id = '80000000-0000-0000-0000-000000000001';
+  select count(*) into n from support_plans where id = '80000000-0000-0000-0000-000000000001' and active_content ->> 'goal' = '目標3';
+  if n <> 1 then raise exception 'NG: 副管理者が実施中の内容を入れられない'; end if;
+  -- 端末で保存と同時に実施中にしたものを、まとめて送れる
+  insert into plan_changes (id, person_id, plan_id, saved_by, reason, after, fields, signer_member_ids, status, active_since, closed_by)
+    values (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b2',
+            '副管理者の変更', '{}', '{goal}', '{20000000-0000-0000-0000-0000000000a1}', 'active', current_date, '00000000-0000-0000-0000-0000000000b2');
+  -- 実施中から合意待ちには戻せない。チーム2 の変更は実施中にできない（見えない）
+  update plan_changes set status = 'pending', updated_at = now() + interval '7 seconds' where id = '81000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 副管理者が実施中の変更を合意待ちに戻せた'; end if;
+  update plan_changes set status = 'active', active_since = current_date, updated_at = now() + interval '6 seconds'
+    where id = '81000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 副管理者がチーム2 の変更を実施中にできた'; end if;
 end $$;
 reset role;
 
