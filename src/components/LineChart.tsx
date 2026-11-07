@@ -1,9 +1,9 @@
 /**
  * 折れ線グラフ（自前の SVG、決定65・66・73）。
- * - 縦軸: 目盛り・補助線・単位つきの軸名。目盛りは記録全体の最大値で固定し、横に動かしても変わらない
+ * - 縦軸: 目盛り・補助線。単位つきの軸名はグラフの左上に書く。目盛りは記録全体の最大値で固定し、横に動かしても変わらない
  * - 横軸: 1日（週・月）ずつの目盛りに日付。文字は最後から数えて1つおき。軸名を右下に書く
  * - 記録がない日は線を切る。条件変更（フェーズ）の前後も線をつながない（決定25）
- * - 線の右端に行動名と最後の値を書く（決定31）。左に入りきらないときは点の右に書く。問題行動は実線、代替行動・望ましい行動は点線（色だけに頼らない）
+ * - 線の右端に行動名と最後の値を、線と同じ色で書く（決定31・65）。線が1本でも行動名を書く。左に入りきらないときは点の右に書く。問題行動は実線、代替行動・望ましい行動は点線（色だけに頼らない）
  * - 横にスクロールでき、縦軸は左に固定。同じ sync を渡したパネルは一緒に動く（決定73）。最初は最後の14区切り、「今日に戻る」で右端へ
  * - staticMode: スクロールしない（支援会議メモ・PDF レポート用。全期間を幅に収める）
  */
@@ -176,7 +176,7 @@ export default function LineChart({
 
   // 線の右端の文字（行動名と最後の値）。重なるときは上下にずらす
   const ends = paths
-    .map((p, k) => (p.last >= 0 ? { k, x: x(p.last), y: y(lines[k].values[p.last]!), text: `${lines.length > 1 ? `${lines[k].name} ` : ''}${format(lines[k].values[p.last]!)}` } : null))
+    .map((p, k) => (p.last >= 0 ? { k, x: x(p.last), y: y(lines[k].values[p.last]!), text: `${lines[k].name} ${format(lines[k].values[p.last]!)}` } : null))
     .filter((e): e is { k: number; x: number; y: number; text: string } => !!e)
     .sort((a, b) => a.y - b.y);
   for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
@@ -257,9 +257,6 @@ export default function LineChart({
 
   const axis = (
     <>
-      <text x={10} y={TOP + PLOT_H / 2} transform={`rotate(-90 10 ${TOP + PLOT_H / 2})`} textAnchor="middle" className="chart__title">
-        {unit}
-      </text>
       {ticks.map((t) => (
         <text key={t} x={AXIS_W - 6} y={y(t) + 4} textAnchor="end" className="chart__tick">{tickFormat(t)}</text>
       ))}
@@ -271,6 +268,7 @@ export default function LineChart({
   if (staticMode) {
     return (
       <div className="chart" ref={wrap}>
+        <div className="chart__ylabel">{unit}</div>
         <svg viewBox={`0 0 ${w} ${H}`} width="100%" role="img" aria-label={label} className="chart__static">
           <g>{axis}</g>
           <g transform={`translate(${AXIS_W} 0)`}>{plot}</g>
@@ -288,6 +286,7 @@ export default function LineChart({
 
   return (
     <div className="chart" ref={wrap}>
+      <div className="chart__ylabel">{unit}</div>
       <div className="chart__row">
         <svg width={AXIS_W} height={H} className="chart__axis" aria-hidden="true">{axis}</svg>
         <div className="chart__scroll" ref={scroller} onScroll={onScroll}>
@@ -300,6 +299,16 @@ export default function LineChart({
         </button>
       )}
     </div>
+  );
+}
+
+/** 見出しに付ける線の見本（問題行動は実線、代替行動・望ましい行動は点線。決定65の前の【決定】） */
+export function LineSwatch({ color, dashed }: { color: string; dashed?: boolean }) {
+  return (
+    <svg width="24" height="10" aria-hidden="true" style={{ flex: 'none' }}>
+      <line x1="1" y1="5" x2="23" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dashed ? '5 3' : undefined} />
+      {dashed ? <rect x="8.5" y="1.5" width="7" height="7" fill={color} /> : <circle cx="12" cy="5" r="3.5" fill={color} />}
+    </svg>
   );
 }
 

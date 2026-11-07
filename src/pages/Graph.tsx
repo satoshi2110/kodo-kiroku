@@ -16,7 +16,7 @@ import { allDates, canRate, useRecordSet, type Granularity } from '../lib/series
 import { buildGroups, groupTitle, sleepPanel, type PanelSpec } from '../lib/panels';
 import { usePlanData } from '../lib/usePlan';
 import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
-import LineChart, { ChartSyncProvider, useNewSync, type Phase } from '../components/LineChart';
+import LineChart, { ChartSyncProvider, LineSwatch, useNewSync, type Phase } from '../components/LineChart';
 import GraphTabs from '../components/GraphTabs';
 
 export default function Graph() {
@@ -94,6 +94,10 @@ export default function Graph() {
                     {grp.behaviors.map((b, i) => (
                       <span key={b.id} className="row" style={{ gap: 6 }}>
                         {i > 0 && <span className="muted">と</span>}
+                        {(() => {
+                          const l = grp.panels.flatMap((p) => p.lines).find((x) => x.name === b.name);
+                          return l ? <LineSwatch color={l.color} dashed={l.dashed} /> : null;
+                        })()}
                         <strong className="graph-name">{b.name}</strong>
                         <KindBadge kind={b.kind} />
                       </span>

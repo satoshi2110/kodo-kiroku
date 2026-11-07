@@ -1,6 +1,6 @@
 /** 保存したグラフ（ChartSnapshot）を、動かない絵として出す。会議メモと PDF レポートで使う */
 import type { ChartSnapshot } from '../db/types';
-import LineChart from './LineChart';
+import LineChart, { LineSwatch } from './LineChart';
 
 export default function SnapshotChart({ s, showTitle = true }: { s: ChartSnapshot; showTitle?: boolean }) {
   return (
@@ -20,7 +20,7 @@ export default function SnapshotChart({ s, showTitle = true }: { s: ChartSnapsho
       <div className="snapshot__legend">
         {s.lines.map((l) => (
           <span key={l.name} className="row" style={{ gap: 4 }}>
-            <svg width="22" height="8" aria-hidden="true"><line x1="0" y1="4" x2="22" y2="4" stroke={l.color} strokeWidth="2.5" strokeDasharray={l.dashed ? '5 3' : undefined} /></svg>
+            <LineSwatch color={l.color} dashed={l.dashed} />
             {l.name}
           </span>
         ))}
