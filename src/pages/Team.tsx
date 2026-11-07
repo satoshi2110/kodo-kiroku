@@ -1,12 +1,14 @@
 /**
  * チーム（6.9、ワイヤーフレーム 4）。対象者のプロフィール、メンバーの一覧と「家族」の印・睡眠の入力の許可（決定37）、申し送り（6.10）。
  * AI・睡眠不足の判定・書き出し・チームの削除は「チームの設定」にある。
- * サーバーにつながる設定があるときは、招待コードを作り、参加した人を承認できる（決定44、7.4.2 #3）。
+ * サーバーにつながる設定があるときは、招待コード・招待リンク・QR を作り、参加した人を承認できる（決定44、7.4.2 #3）。
  * 管理者・副管理者・支援リーダーは、ほかのメンバーの役割を変えたり、停止したりできる（7章 #2）。
  * 管理者の引き継ぎ（6.9）: 管理者が指名して相手が受ける／副管理者が申し込み、14日のあいだ管理者が断らなければ入れかわる。
  * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
  */
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import QRCode from 'qrcode';
+import { inviteUrl } from '../lib/inviteLink';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -189,7 +191,10 @@ export default function Team() {
   );
 }
 
-/** 招待コードを作る。コードは使い切りで72時間有効（仕様書 7章 #3）。メールでの招待はこのあと足す */
+/**
+ * 招待コードを作る。コードは使い切りで72時間有効（仕様書 7章 #3）。
+ * 同じコードを、リンクと QR でも渡せる（6.9）。送るのは端末の共有メニューかコピーで、アプリからは送らない。メールでの招待はこのあと足す
+ */
 function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
   // 初めは一番小さい権限（閲覧者）にしておき、必要なときだけ上げる（仕様書 7.4.2 #3）
   const [role, setRole] = useState<Role>('viewer');
@@ -213,12 +218,66 @@ function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
       </label>
       <button type="button" className="btn btn--outline btn--block" onClick={make}>招待コードを作る</button>
       {code && (
-        <p className="notice-inline" role="status">
-          招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}として参加。72時間・1回だけ使えます）
-        </p>
+        <>
+          <p className="notice-inline" role="status">
+            招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}として参加。72時間・1回だけ使えます）
+          </p>
+          <InviteLink code={code} />
+        </>
       )}
       {error && <p className="ai-error" role="alert">{error}</p>}
-      <p className="help">相手に直接伝えてください。相手は「はじめて使う」でアカウントを作り、このコードを入れます。参加したあと、ここで承認すると記録が見られます。</p>
+      <p className="help">
+        コード・リンク・QR のどれか1つを、相手に直接渡してください。相手はリンクか QR から開くか、「はじめて使う」でコードを入れてアカウントを作ります。
+        参加したあと、ここで承認すると記録が見られます。リンクを知っている人はだれでも参加を申し込めるので、グループのチャットなどには貼らないでください。
+      </p>
+    </div>
+  );
+}
+
+/** 招待リンクと QR。QR はこの端末の中で作る（外のサービスには送らない） */
+function InviteLink({ code }: { code: string }) {
+  const url = inviteUrl(code);
+  const [qr, setQr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(url, { margin: 1, width: 200, errorCorrectionLevel: 'M' })
+      .then((d) => alive && setQr(d))
+      .catch(() => alive && setQr(null));
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  const canShare = typeof navigator.share === 'function';
+  async function share() {
+    try {
+      await navigator.share({ title: '行動の記録への招待', text: 'チームへの招待です。72時間以内に開いてください。', url });
+    } catch {
+      // 閉じたときは何もしない
+    }
+  }
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <div className="stack">
+      <span className="label">招待リンク</span>
+      <input className="input" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="招待リンク" />
+      <div className={canShare ? 'grid-2' : undefined}>
+        {canShare && <button type="button" className="btn btn--primary" onClick={share}>リンクを送る</button>}
+        <button type="button" className="btn btn--outline" onClick={copy}>{copied ? 'コピーしました' : 'リンクをコピー'}</button>
+      </div>
+      {qr && (
+        <div className="stack" style={{ alignItems: 'center' }}>
+          <img src={qr} width={200} height={200} alt={`招待リンクの QR コード（${code}）`} />
+          <span className="help">目の前の人には、この QR を読んでもらえます。</span>
+        </div>
+      )}
     </div>
   );
 }

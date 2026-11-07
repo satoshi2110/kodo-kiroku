@@ -18,6 +18,7 @@ import { signOut } from '../server/session';
 import { createSampleTeam } from '../db/sample';
 import { AFFILIATION_LABEL, CONSENT_TEXT_VERSION, type Affiliation, type Role } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
+import { clearInviteCode, pendingInviteCode } from '../lib/inviteLink';
 
 export default function Setup() {
   const [step, setStep] = useState(1);
@@ -29,7 +30,7 @@ export default function Setup() {
   const [belongs, setBelongs] = useState('');
   const [cautions, setCautions] = useState('');
   const [saving, setSaving] = useState(false);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(pendingInviteCode);
   // コードを確かめたか（null = まだ、true = 使える、false = 使えない）。ログインしないで使うときは要らない
   const [codeOk, setCodeOk] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
@@ -40,8 +41,13 @@ export default function Setup() {
     setCodeOk(!error && data === true);
     setChecking(false);
   }
-  // アカウントを作るときに入れたコードがあれば、最初から入れて確かめておく
-  useEffect(() => prefillSignupCode((c) => (setCode(c), checkCode(c))), []);
+  // 招待リンクのコードか、アカウントを作るときに入れたコードがあれば、最初から入れて確かめておく
+  useEffect(() => {
+    const fromLink = pendingInviteCode();
+    if (fromLink) checkCode(fromLink);
+    else prefillSignupCode((c) => (setCode(c), checkCode(c)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const consentOpen = !supabase || codeOk === true;
   const [error, setError] = useState<string | null>(null);
   const { person, userId } = useApp();
@@ -84,6 +90,7 @@ export default function Setup() {
         setSaving(false);
         return;
       }
+      clearInviteCode();
       await runSync();
       await saveDevice({ currentPersonId: data as string });
       return;
@@ -270,6 +277,7 @@ function Join(props: {
     });
     if (error) setError(error.message);
     else {
+      clearInviteCode();
       await runSync();
       props.onBack();
     }

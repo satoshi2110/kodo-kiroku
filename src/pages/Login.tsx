@@ -9,16 +9,18 @@ import { useEffect, useState } from 'react';
 import { authRedirect, supabase } from '../server/supabase';
 import { clearRecovery, requestPasswordReset } from '../server/session';
 import { Segmented, TopBar } from '../components/ui';
+import { pendingInviteCode } from '../lib/inviteLink';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
 const CODE_NG = 'このコードではアカウントを作れません（まちがい・使用済み・期限切れ）。コードを確かめるか、渡した人に聞いてください。';
 
 export default function Login() {
-  const [mode, setMode] = useState<Mode>('login');
+  // 招待リンクから開いたときは、アカウントを作る画面で、コードを入れた状態から始める
+  const [mode, setMode] = useState<Mode>(() => (pendingInviteCode() ? 'signup' : 'login'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(pendingInviteCode);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
@@ -110,8 +112,9 @@ export default function Login() {
               </label>
               <p className="help">
                 招待された人は、招待した人から受け取った「招待コード」を、新しいチームを作る保護者の方は、運営から受け取った「開始コード」を入れます。
-                コードがないと、アカウントは作れません。
+                コードがないと、アカウントは作れません。招待リンクから開いたときは、コードが最初から入っています。
               </p>
+              {pendingInviteCode() && <p className="help">すでにアカウントがある人は「ログイン」からログインしてください。参加の画面にコードが入っています。</p>}
             </>
           )}
           {error && <p className="ai-error" role="alert">{error}</p>}
