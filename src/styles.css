@@ -394,3 +394,15 @@ span.dot { width: 22px; }
 /* 支援者の提案 */
 .proposal__body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .proposal__form { border-top: 1px solid var(--border); padding-top: 12px; }
+
+/* ---- 共用の端末（7.4.2 #4）: 上の「操作中」の帯とロックの画面 ---- */
+.app__body { flex: 1; display: flex; flex-direction: column; }
+.operator-bar {
+  position: sticky; top: 0; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  box-sizing: border-box; height: calc(36px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0; background: var(--primary); color: #fff; font-size: 0.8125rem;
+}
+.operator-bar__lock { border: 1px solid rgba(255,255,255,.7); background: none; color: inherit; font: inherit; border-radius: 8px; padding: 0 10px; min-height: 28px; cursor: pointer; position: relative; }
+.operator-bar__lock::after { content: ''; position: absolute; inset: -2px 0; }
+.app--shared .topbar { top: calc(36px + env(safe-area-inset-top)); padding-top: 10px; }
+.lock-screen { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; align-items: safe center; overflow-y: auto; justify-content: center; padding: 16px; }
+.lock-screen__box { width: 100%; max-width: 420px; background: var(--surface); border-radius: 16px; padding: 20px 16px; border: 1px solid var(--border-soft); }

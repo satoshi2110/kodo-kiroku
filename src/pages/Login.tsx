@@ -4,9 +4,13 @@
  * 入れたコードはアカウントの情報に残し、ログインしたあとの「招待コード」「開始コード」の欄に最初から入れておく。
  * パスワードを忘れたときは、登録したメールに再設定のリンクを送る（決定62）。
  * 招待コードを入れると、役割・招待した人・期限を出す（決定97。チームの名前はログインしてから）。
- * 【暫定】「自分専用／共用の端末」・パスキーは次に足す。
+ * ログインとアカウントを作るときに「自分専用／共用の端末」を選ぶ（7.4.2 #1、決定61。【暫定】2026-11-07 の試作）。
+ * 90日使われなかったためにログアウトしたときは、そのことを知らせる。
  */
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
+import { saveDevice } from '../db/repo';
 import { authRedirect, supabase } from '../server/supabase';
 import { clearRecovery, requestPasswordReset } from '../server/session';
 import { Segmented, TopBar } from '../components/ui';
@@ -31,6 +35,8 @@ export default function Login() {
   );
 
   useEffect(clearRecovery, []);
+  const dev = useLiveQuery(() => db.device.get('device'), []);
+  const shared = !!dev?.shared;
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -120,6 +126,27 @@ export default function Login() {
               </p>
               {pendingInviteCode() && <p className="help">すでにアカウントがある人は「ログイン」からログインしてください。参加の画面にコードが入っています。</p>}
             </>
+          )}
+          {mode !== 'forgot' && (
+            <>
+              <Segmented<'own' | 'shared'>
+                label="この端末は"
+                value={shared ? 'shared' : 'own'}
+                onChange={(v) => void saveDevice({ shared: v === 'shared' })}
+                options={[
+                  { value: 'own', label: '自分専用' },
+                  { value: 'shared', label: '共用（職場の端末など）' },
+                ]}
+              />
+              <p className="help">
+                {shared
+                  ? '共用の端末では、ログインのあとに PIN を決めます。10分さわらないとロックがかかり、PIN で外します。'
+                  : '自分専用の端末では、アプリのロックはかけず、スマホのロックに任せます。ログインしたままになります（90日使わなければ、もう一度ログイン）。'}
+              </p>
+            </>
+          )}
+          {dev?.relogin === 'idle90' && !error && !message && (
+            <p className="notice-inline" role="status">この端末で90日使われなかったので、ログアウトしました。もう一度ログインしてください。</p>
           )}
           {error && <p className="ai-error" role="alert">{error}</p>}
           {message && <p className="notice-inline" role="status">{message}</p>}

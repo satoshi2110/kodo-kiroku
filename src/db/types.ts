@@ -530,6 +530,14 @@ export interface DeviceSetting {
   placeAuto?: Record<string, boolean>; // その場所を位置で自動判定したか（false / なし = 手で選んだ）。画面に出すだけ
   syncSince?: Record<string, string>; // 表ごとに、サーバーから最後に受け取った時刻（server_at）
   syncTeams?: string[]; // 前回の同期で見えていたチーム（対象者の id）。新しく見えたチームがあれば全部取り直す
+  // ---- 端末の守り（7.4.2 #1・#4、決定61）。【暫定】（2026-11-07 の試作）----
+  shared?: boolean; // 共用の端末（ログインのときに選ぶ。なし = 自分専用）
+  pin?: { userId: string; salt: string; hash: string; iter: number } | null; // 共用の端末のロックを外す PIN（その人のもの。ハッシュだけを残す）
+  lockedAt?: string | null; // ロックした時刻（開き直してもロックのまま）
+  pinFails?: number; // PIN を続けてまちがえた回数
+  pinWaitUntil?: string | null; // 5回まちがえたら、この時刻まで PIN を入れられない
+  lastActiveAt?: string | null; // 最後に操作した時刻（10分ロックと、90日使わなければ再ログインに使う）
+  relogin?: 'idle90' | null; // 90日使われなかったのでログアウトした（ログインの画面で知らせる）
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

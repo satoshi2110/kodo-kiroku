@@ -30,6 +30,7 @@ async function onLogin(session: Session) {
     await db.users.put({ id: uid, createdAt: t, updatedAt: t, deletedAt: null, displayName: '' });
   }
   if (dev.userId !== uid) await saveDevice({ userId: uid, currentPersonId: null });
+  if (dev.relogin) await saveDevice({ relogin: null });
   await runSync();
 }
 

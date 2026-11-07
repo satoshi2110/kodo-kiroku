@@ -13,7 +13,7 @@ import { TopBar } from '../components/ui';
 import { supabase } from '../server/supabase';
 import { signOut, signOutOthers, useSession } from '../server/session';
 import { runSync, unsentCount } from '../server/sync';
-import { forgetTeam } from '../db/repo';
+import { forgetTeam, saveDevice } from '../db/repo';
 import { useNavigate } from 'react-router-dom';
 
 const CONSENT_LABEL: Record<Consent['kind'], string> = {
@@ -130,6 +130,8 @@ export default function MySettings() {
         </div>
       </div>
 
+      {supabase && <DeviceKind />}
+
       {supabase && (
         <div className="section">
           <div className="card stack">
@@ -164,6 +166,39 @@ export default function MySettings() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** この端末を自分専用にするか共用にするか（7.4.2 #1、決定61）。共用なら PIN を決め直せる。【暫定】（2026-11-07 の試作） */
+function DeviceKind() {
+  const dev = useLiveQuery(() => db.device.get('device'), []);
+  if (!dev) return null;
+  const shared = !!dev.shared;
+  return (
+    <div className="section">
+      <div className="card stack">
+        <h2 className="card__title" style={{ margin: 0 }}>この端末</h2>
+        <p className="help" style={{ margin: 0 }}>
+          {shared
+            ? 'いまは「共用の端末」です。10分さわらないとロックがかかり、PIN で外します。画面の上に、操作中の人の名前が出ます。'
+            : 'いまは「自分専用の端末」です。アプリのロックはかけず、スマホのロックに任せます。90日使わなければ、もう一度ログインします。'}
+        </p>
+        {shared ? (
+          <>
+            <button type="button" className="btn btn--block" onClick={() => window.confirm('PIN を決め直しますか？ いまの PIN は使えなくなります。') && void saveDevice({ pin: null })}>
+              PIN を決め直す
+            </button>
+            <button type="button" className="btn btn--outline btn--block" onClick={() => window.confirm('この端末を自分専用にしますか？ アプリのロックをやめ、PIN を消します。') && void saveDevice({ shared: false, pin: null, lockedAt: null })}>
+              自分専用の端末にする
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn btn--outline btn--block" onClick={() => window.confirm('この端末を共用にしますか？ このあと PIN を決めます。') && void saveDevice({ shared: true, pin: null, lockedAt: null })}>
+            共用の端末にする（PIN と10分のロック）
+          </button>
+        )}
+      </div>
     </div>
   );
 }

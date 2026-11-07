@@ -35,6 +35,7 @@ import Login from './pages/Login';
 import NewPassword from './pages/NewPassword';
 import { serverEnabled } from './server/supabase';
 import { useSession } from './server/session';
+import { DeviceGuard } from './components/DeviceGuard';
 
 const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/team/audit', '/me', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
 const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
@@ -48,8 +49,8 @@ function Shell() {
   if (serverEnabled && !session) return <Login />;
   if (serverEnabled && recovery) return <NewPassword />;
   if ((!userId || !person) && loc.pathname !== '/setup') return <Navigate to="/setup" replace />;
-  return (
-    <div className="app">
+  const body = (
+    <>
       <Routes>
         <Route path="/setup" element={<Setup />} />
         <Route path="/" element={<Home />} />
@@ -84,8 +85,11 @@ function Shell() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!hideNav(loc.pathname) && <BottomNav />}
-    </div>
+    </>
   );
+  // ログインして使うときは、共用の端末のロックと「90日使わなければ再ログイン」をかける（7.4.2 #1・#4）
+  if (serverEnabled && session) return <DeviceGuard userId={session.user.id} email={session.user.email ?? ''}>{body}</DeviceGuard>;
+  return <div className="app">{body}</div>;
 }
 
 export default function App() {

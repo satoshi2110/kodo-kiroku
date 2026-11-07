@@ -329,7 +329,8 @@ export async function clearServerData() {
       if (t === db.persons) await t.where('id').anyOf([...teams]).delete();
       else await t.filter((r: Row) => teams.has(r.personId ?? '')).delete();
     }
-    await db.device.update('device', { userId: null, currentPersonId: null, syncSince: {}, syncTeams: [] });
+    // 共用の端末の PIN はその人のものなので、ログアウトしたら消す（次の人が決め直す）
+    await db.device.update('device', { userId: null, currentPersonId: null, syncSince: {}, syncTeams: [], pin: null, lockedAt: null, pinFails: 0, pinWaitUntil: null, lastActiveAt: null });
   });
 }
 
