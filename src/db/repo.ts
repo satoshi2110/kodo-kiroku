@@ -388,7 +388,7 @@ export async function setNotObserved(personId: string, behaviorId: string, local
 // ---------- インターバル記録・時間サンプリング（6.3.1） ----------
 
 /** 観察を始める。区間の結果は区切りごとに保存するので、途中で閉じても答えた分は残る */
-export async function startObservation(b: Behavior, actorId: string): Promise<Observation> {
+export async function startObservation(b: Behavior, actorId: string, placeName: string | null = null): Promise<Observation> {
   const t = nowISO();
   const o: Observation = {
     ...base(),
@@ -401,6 +401,7 @@ export async function startObservation(b: Behavior, actorId: string): Promise<Ob
     localDate: localDateOf(t),
     results: [],
     recorderId: actorId,
+    placeName,
   };
   await db.observations.add(o);
   await audit(o.personId, 'observation', o.id, 'create', actorId, null, o);
@@ -620,7 +621,12 @@ export async function hideChoiceOption(id: string, actorId: string) {
 export type AbcInput = Omit<AbcDetail, keyof BaseRecord | 'personId' | 'eventId' | 'recorderId'>;
 
 /** ABC記録を保存する（1つの記録に1つ。2回目以降は上書きして、前の内容は監査ログに残す） */
-export async function saveAbc(event: Event, input: AbcInput, eventPatch: Partial<Pick<Event, 'intensity' | 'activity' | 'placeName'>>, actorId: string) {
+export async function saveAbc(
+  event: Event,
+  input: AbcInput,
+  eventPatch: Partial<Pick<Event, 'intensity' | 'activity' | 'placeName' | 'occurredAt' | 'localDate' | 'count' | 'durationSec' | 'latencySec'>>,
+  actorId: string,
+) {
   await db.transaction('rw', [db.abcDetails, db.events, db.auditLogs], async () => {
     const before = await db.abcDetails.where('eventId').equals(event.id).filter((d) => !d.deletedAt).first();
     if (before) {
@@ -632,9 +638,9 @@ export async function saveAbc(event: Event, input: AbcInput, eventPatch: Partial
       await db.abcDetails.add(d);
       await audit(event.personId, 'abcDetail', d.id, 'create', actorId, null, d);
     }
-    if (eventPatch.intensity !== event.intensity || eventPatch.activity !== event.activity || eventPatch.placeName !== event.placeName) {
-      await updateEvent(event.id, eventPatch, actorId);
-    }
+    // 変わった項目だけを直す（変わっていなければ記録の行は書きかえない）
+    const changed = (Object.keys(eventPatch) as (keyof typeof eventPatch)[]).filter((k) => eventPatch[k] !== event[k]);
+    if (changed.length) await updateEvent(event.id, Object.fromEntries(changed.map((k) => [k, eventPatch[k]])), actorId);
   });
 }
 
@@ -737,7 +743,7 @@ export const canManageMember = (me: TeamMember | undefined, m: TeamMember) =>
 /** 変えられる役割。副管理者にするのは管理者だけ。管理者にはこの方法ではできない */
 export const assignableRoles = (me?: Role): Role[] => (me === 'admin' ? ['viewer', 'supporter', 'leader', 'subadmin'] : ['viewer', 'supporter', 'leader']);
 
-export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt' | 'role' | 'suspendedAt'>>, actorId: string) {
+export async function setMemberFlags(memberId: string, patch: Partial<Pick<TeamMember, 'familyMark' | 'sleepInputAllowed' | 'approvedAt' | 'role' | 'suspendedAt' | 'jobTitle'>>, actorId: string) {
   const before = await db.teamMembers.get(memberId);
   if (!before) return;
   const after: TeamMember = { ...before, ...patch, updatedAt: nowISO() };

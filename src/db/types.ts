@@ -52,6 +52,7 @@ export interface TeamMember extends BaseRecord {
   role: Role;
   familyMark: boolean; // 「家族」の印（睡眠の入力に使う、決定37）
   sleepInputAllowed: boolean;
+  jobTitle?: string; // 職種（例: サービス管理責任者・担任。40文字まで）。権限とは関係ない。0019 より前は無い
   approvedAt?: ISODateTime | null; // サーバーのチームだけ。null = 招待を受けて承認を待っている（7.4.2 #3）
   suspendedAt?: ISODateTime | null; // サーバーのチームだけ。停止（退職・卒業など）
 }
@@ -111,6 +112,7 @@ export interface Observation extends BaseRecord {
   localDate: LocalDate;
   results: IntervalResult[];
   recorderId: string;
+  placeName?: string | null; // 観察を始めたときの場所の名前（6.3.3。緯度経度は持たない）。0019 より前の記録は空
 }
 
 /** 睡眠ログ（6.3.4、決定36・37）。起きた日（その夜が明けた日）に1件。時刻は 'HH:MM' */
@@ -339,7 +341,8 @@ export interface PlanCriterion {
   behaviorId: string;
   op: 'lte' | 'gte'; // 以下 / 以上
   value: number; // グラフの1日の値と同じ単位（回・分・秒・%）
-  note: string; // 例: 2週連続
+  note: string; // そのほかの条件（自由に書く）
+  weeks?: number | null; // 何週続けて届いたら達成か（2〜4）。空は直近7日だけで判定。【暫定】（2026-11-07 の試作）
   deadline?: LocalDate | null; // 期限（いつまでに達成するか、6.7）。過ぎても未達なら見直しをすすめる
 }
 

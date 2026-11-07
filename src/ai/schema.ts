@@ -20,6 +20,7 @@ export interface AbcRecordInput {
   antecedentNote: string;
   consequences: string[];
   consequenceNote: string;
+  note?: string; // 支援者メモ（置きかえ済み、200文字まで）
   settingEvents: string[];
   place: string; // 「場所A」のように置きかえた名前
   activity: string;

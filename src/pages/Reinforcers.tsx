@@ -136,7 +136,7 @@ export default function Reinforcers() {
             <button type="button" className="btn btn--block" onClick={() => setForm(blank(null))}>写真なしで追加</button>
           </>
         )}
-        <a className="help" href={FBA_LINK} target="_blank" rel="noopener noreferrer">機能分析について（外部のページ）</a>
+        <a className="help ext-link" href={FBA_LINK} target="_blank" rel="noopener noreferrer">機能分析について（外部のページ）</a>
       </div>
 
       {form && (

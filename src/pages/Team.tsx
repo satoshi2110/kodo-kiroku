@@ -6,7 +6,7 @@
  * 管理者の引き継ぎ（6.9）: 管理者が指名して相手が受ける／副管理者が申し込み、14日のあいだ管理者が断らなければ入れかわる。
  * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
  */
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import QRCode from 'qrcode';
 import { inviteUrl } from '../lib/inviteLink';
 import { Link } from 'react-router-dom';
@@ -73,6 +73,7 @@ export default function Team() {
                 </span>
                 <span className="muted">
                   {AFFILIATION_LABEL[m.affiliation]}
+                  {m.jobTitle && ` ・ ${m.jobTitle}`}
                   {m.familyMark && ' ・ 家族の印'}
                   {m.sleepInputAllowed && ' ・ 睡眠の入力を許可'}
                 </span>
@@ -84,7 +85,7 @@ export default function Team() {
                 {m.approvedAt === null && canInvite(me?.role) && (m.role !== 'subadmin' || isAdmin) && (
                   <button type="button" className="btn btn--sm" onClick={() => setMemberFlags(m.id, { approvedAt: nowISO() }, userId)}>承認する</button>
                 )}
-                {((isAdmin && m.approvedAt != null) || canManageMember(me, m)) && <button type="button" className="btn btn--sm" onClick={() => setEditing(m)}>変更</button>}
+                {m.approvedAt !== null && (canInvite(me?.role) || canManageMember(me, m)) && <button type="button" className="btn btn--sm" onClick={() => setEditing(m)}>変更</button>}
               </span>
             </div>
           ))}
@@ -162,6 +163,7 @@ export default function Team() {
       {current && (
         <Sheet title={`${current.displayName}（${ROLE_LABEL[current.role]}）`} onClose={() => setEditing(null)}>
           <div className="stack">
+            {canInvite(me?.role) && <JobTitle key={current.id} member={current} userId={userId} />}
             {canManageMember(me, current) && (
               <>
                 <label className="field">
@@ -464,5 +466,29 @@ function Account() {
         <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・支援者の提案・行動の定義の変更・身体拘束の記録・支援会議メモ・申し送り・管理者の引き継ぎ・AI の分析と提案（採否も）です。ABC集計の AI のまとめは、この端末の中だけです。ログアウトは「あなたの設定」からできます。</p>
       </div>
     </div>
+  );
+}
+
+/** 職種（0019）。支援リーダー以上が書きかえる。権限とは関係ない。入れ終えたとき（欄から離れたとき・シートを閉じたとき）に保存する */
+function JobTitle({ member, userId }: { member: TeamMember; userId: string }) {
+  const [v, setV] = useState(member.jobTitle ?? '');
+  const latest = useRef({ v, saved: member.jobTitle ?? '' });
+  latest.current.v = v;
+  const save = () => {
+    const t = latest.current.v.trim();
+    if (t === latest.current.saved) return;
+    latest.current.saved = t;
+    void setMemberFlags(member.id, { jobTitle: t }, userId);
+  };
+  // シートを閉じると欄が消えるので、そのときにも保存する
+  useEffect(() => save, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      <label className="field">
+        職種（任意）
+        <input className="input" value={v} maxLength={40} placeholder="例: サービス管理責任者・支援員・担任" onChange={(e) => setV(e.target.value)} onBlur={save} />
+      </label>
+      <p className="help">メンバー一覧に「所属 ・ 職種」で出ます。できること（役割）は変わりません。</p>
+    </>
   );
 }

@@ -62,6 +62,7 @@ export default function Home() {
   const nav = useNavigate();
   const [toast, setToast] = useState<{ text: string; abcEventId?: string; restoreEventId?: string; placeBack?: string | null } | null>(null);
   const toastTimer = useRef<number>();
+  const lastToastEvent = useRef<string | undefined>();
   const [flash, setFlash] = useState<{ id: string; good: boolean } | null>(null);
   const [intensityFor, setIntensityFor] = useState<{ event: Event; behavior: Behavior } | null>(null);
   const [timers, setTimers] = useStoredTimers();
@@ -97,8 +98,8 @@ export default function Home() {
   );
 
   // 場所の自動判定（6.3.3）: 開いたときと前面に戻ったときに1回だけ位置を取り、端末の中で照らし合わせる
-  const placeRef = useRef({ places, placeId: place?.id, outside: placeOutside });
-  placeRef.current = { places, placeId: place?.id, outside: placeOutside };
+  const placeRef = useRef({ places, placeId: place?.id, outside: placeOutside, auto: placeAuto });
+  placeRef.current = { places, placeId: place?.id, outside: placeOutside, auto: placeAuto };
   useEffect(() => {
     if (!useLocation || !personId) return;
     let alive = true;
@@ -125,6 +126,7 @@ export default function Home() {
   const recordable = canRecord(me?.role);
 
   function notify(text: string, abcEventId?: string, restoreEventId?: string, placeBack?: string | null) {
+    lastToastEvent.current = abcEventId;
     window.clearTimeout(toastTimer.current);
     setToast({ text, abcEventId, restoreEventId, placeBack });
     toastTimer.current = window.setTimeout(() => setToast(null), abcEventId || restoreEventId ? 5000 : 3000);
@@ -142,12 +144,31 @@ export default function Home() {
     if (!person || !userId) return;
     const e = await createEvent({ personId: person.id, behaviorId: b.id, placeName: place?.name ?? null, ...extra }, userId);
     feedback(b);
-    notify(
+    const msg =
       b.method === 'duration' ? `「${b.name}」${formatDuration(extra.durationSec ?? 0)} を記録しました`
       : b.method === 'latency' ? `「${b.name}」待ち時間 ${formatDuration(extra.latencySec ?? 0)} を記録しました`
-      : `「${b.name}」+1 を記録しました`,
-      e.id,
-    );
+      : `「${b.name}」+1 を記録しました`;
+    notify(msg, e.id);
+    recheckPlace(e, msg);
+  }
+
+  /**
+   * 記録を保存した瞬間にも、場所を1回だけ判定する（6.3.3「記録に付く場所を最新にする」）。
+   * 記録はすぐに保存し（押してから待たせない）、位置が取れて場所が変わっていたら、その記録の場所と、いまの場所を直す。
+   * 手で選んだ場所のときは、選んだ人の判断を優先して変えない。
+   */
+  async function recheckPlace(e: Event, msg: string) {
+    if (!useLocation || !personId || !userId) return;
+    const { places: list, auto, placeId } = placeRef.current;
+    if (!auto && placeId) return;
+    const pos = await getPositionOnce();
+    if (!pos) return;
+    const hit = matchPlace(list, pos);
+    if (!hit || hit.name === e.placeName) return;
+    await updateEvent(e.id, { placeName: hit.name }, userId);
+    await setPlaceChoice(personId, hit.id, true);
+    // まだこの記録の知らせが出ているときだけ、場所を足して出し直す（あとの記録の知らせは消さない）
+    if (lastToastEvent.current === e.id) notify(`${msg}（場所: ${hit.name}）`, e.id);
     if (b.intensity) setIntensityFor({ event: e, behavior: b });
   }
 

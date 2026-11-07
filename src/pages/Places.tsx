@@ -195,7 +195,7 @@ export default function Places() {
 
       <div className="section">
         <div className="card stack">
-          <label className="row row--between">
+          <label className="row row--between" style={{ minHeight: 48 }}>
             <span className="label">この端末で位置情報を使う</span>
             <input type="checkbox" checked={useLocation} onChange={(e) => toggleLocation(e.target.checked)} style={{ width: 22, height: 22 }} />
           </label>

@@ -3,6 +3,7 @@
  * アプリは一般公開しない（決定44）。アカウントは、使える招待コードか開始コードを入れたときだけ作れる（サーバーでも確かめる、0014）。
  * 入れたコードはアカウントの情報に残し、ログインしたあとの「招待コード」「開始コード」の欄に最初から入れておく。
  * パスワードを忘れたときは、登録したメールに再設定のリンクを送る（決定62）。
+ * 招待コードを入れると、役割・招待した人・期限を出す（決定97。チームの名前はログインしてから）。
  * 【暫定】「自分専用／共用の端末」・パスキーは次に足す。
  */
 import { useEffect, useState } from 'react';
@@ -10,6 +11,7 @@ import { authRedirect, supabase } from '../server/supabase';
 import { clearRecovery, requestPasswordReset } from '../server/session';
 import { Segmented, TopBar } from '../components/ui';
 import { pendingInviteCode } from '../lib/inviteLink';
+import { InvitePreview, useInvitePreview } from '../components/InvitePreview';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
@@ -22,6 +24,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState(pendingInviteCode);
   const [busy, setBusy] = useState(false);
+  const preview = useInvitePreview(code);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
     authRedirect.linkError ? 'このリンクは期限が切れたか、すでに使われています。もう一度「パスワードを忘れた」からメールを送ってください。' : null,
@@ -110,6 +113,7 @@ export default function Login() {
                 招待コード または 開始コード
                 <input required value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="off" />
               </label>
+              <InvitePreview info={preview} />
               <p className="help">
                 招待された人は、招待した人から受け取った「招待コード」を、新しいチームを作る保護者の方は、運営から受け取った「開始コード」を入れます。
                 コードがないと、アカウントは作れません。招待リンクから開いたときは、コードが最初から入っています。

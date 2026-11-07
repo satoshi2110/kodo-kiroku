@@ -333,9 +333,10 @@ export async function clearServerData() {
   });
 }
 
-/** まだサーバーに送れていない行の数（ログアウトの前に知らせる） */
-export async function unsentCount(): Promise<number> {
-  const teams = await serverTeams();
+/** まだサーバーに送れていない行の数（ログアウトやチームを抜ける前に知らせる）。personId を渡すとそのチームだけ */
+export async function unsentCount(personId?: string): Promise<number> {
+  const all = await serverTeams();
+  const teams = personId ? new Set([...all].filter((t) => t === personId)) : all;
   let n = 0;
   for (const s of TABLES) n += await s.local.filter((r: Row) => r._dirty === 1 && teams.has(s.team(r) ?? '')).count();
   return n;

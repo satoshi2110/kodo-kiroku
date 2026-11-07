@@ -139,18 +139,27 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
                   </select>
                 </div>
                 <label className="row">
+                  <span className="muted nowrap">続ける期間</span>
+                  <select className="input" value={c.weeks ?? 1} onChange={(e) => setCriterion(i, { weeks: Number(e.target.value) > 1 ? Number(e.target.value) : null })} aria-label="何週続けて届いたら達成か">
+                    <option value={1}>直近7日で見る</option>
+                    <option value={2}>2週連続</option>
+                    <option value={3}>3週連続</option>
+                    <option value={4}>4週連続</option>
+                  </select>
+                </label>
+                <label className="row">
                   <span className="muted nowrap">期限</span>
                   <input className="input" type="date" value={c.deadline ?? ''} onChange={(e) => setCriterion(i, { deadline: e.target.value || null })} aria-label="期限（いつまでに）" />
                 </label>
                 <div className="row">
-                  <input className="input" value={c.note} onChange={(e) => setCriterion(i, { note: e.target.value })} placeholder="例: 2週連続" aria-label="期間などの条件" />
+                  <input className="input" value={c.note} onChange={(e) => setCriterion(i, { note: e.target.value })} placeholder="ほかの条件（任意。例: 学校の日だけ）" aria-label="ほかの条件" />
                   <button type="button" className="btn btn--sm" onClick={() => set('criteria', p.criteria.filter((_, j) => j !== i))}>外す</button>
                 </div>
               </div>
             );
           })}
           <button type="button" className="btn btn--sm" style={{ alignSelf: 'flex-start' }} disabled={behaviors.length === 0} onClick={addCriterion}>+ 達成基準を足す</button>
-          <p className="help">達成基準はグラフに横の点線で出ます。値はグラフと同じ「1日あたり」です。期限を入れると、過ぎても届いていないときに計画の画面で見直しをすすめます。</p>
+          <p className="help">達成基準はグラフに横の点線で出ます。値はグラフと同じ「1日あたり」です。「2週連続」などにすると、7日ごとの平均が続けて届いたときに「達成」と出ます。期限を入れると、過ぎても届いていないときに計画の画面で見直しをすすめます。</p>
         </div>
       </div>
 

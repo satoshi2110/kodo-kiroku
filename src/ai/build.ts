@@ -46,6 +46,8 @@ export async function buildAnalysisInput(person: Person, behavior: Behavior, mem
       antecedentNote: mask(d.antecedentNote),
       consequences: d.consequenceIds.map((id) => mask(optName.get(id) ?? '')).filter(Boolean),
       consequenceNote: mask(d.consequenceNote),
+      // 支援者メモ（6.5「支援者メモ（仮名化済み）」）。入力の大きさを抑えるため1件200文字まで
+      note: mask(d.note ?? '').slice(0, 200),
       settingEvents: d.settingIds.map((id) => mask(optName.get(id) ?? '')).filter(Boolean),
       place: e.placeName ? `場所${letter(places.indexOf(e.placeName))}` : '',
       activity: mask(e.activity ?? ''),

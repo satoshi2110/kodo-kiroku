@@ -23,7 +23,7 @@ const MARK: Record<IntervalResult, string> = { yes: '○', no: '×', missed: '�
 
 export default function Observe() {
   const { behaviorId } = useParams();
-  const { behaviors, me, userId } = useApp();
+  const { behaviors, me, userId, place } = useApp();
   const nav = useNavigate();
   const b = behaviors.find((x) => x.id === behaviorId);
   const [obs, setObs] = useState<Observation | null>(null);
@@ -127,7 +127,7 @@ export default function Observe() {
     // 前に閉じ忘れた観察があれば、答えた分のまま終える
     const open = await db.observations.where('behaviorId').equals(b.id).filter((o) => !o.endedAt && !o.deletedAt).toArray();
     for (const o of open) await endObservation(o.id, o.results, userId);
-    const o = await startObservation(b, userId);
+    const o = await startObservation(b, userId, place?.name ?? null);
     lastIdx.current = 0;
     setResults([]);
     setPreMarked(false);

@@ -76,7 +76,7 @@ npm run pages:dev
 
 ## チームで共有する版（ログインあり）
 
-1. Supabase のプロジェクトを作り、SQL Editor で `supabase/migrations/` の 0001〜0018 を番号の順に流します。0014 から、招待コードか開始コードがないとアカウントを作れません（Supabase の管理画面の「Add user」でも作れなくなります）。
+1. Supabase のプロジェクトを作り、SQL Editor で `supabase/migrations/` の 0001〜0019 を番号の順に流します。0014 から、招待コードか開始コードがないとアカウントを作れません（Supabase の管理画面の「Add user」でも作れなくなります）。
 2. `supabase/tests/rls.sql` を流して、すべて合格することを確かめます（他のチームのデータを読めない・書けない、など）。
 3. `.env.example` を `.env` にコピーして、Supabase の URL と anon key を書きます。
 4. 新しいチームを作るには「開始コード」が要ります。ほかのメンバーは、管理者が出す「招待コード」で入り、管理者が承認します。

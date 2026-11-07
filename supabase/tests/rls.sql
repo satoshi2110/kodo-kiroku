@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0018）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0019）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -1895,6 +1895,114 @@ begin
   if n <> 1 then raise exception 'NG: 印を付けた招待で参加したのに「家族」の印が付かない'; end if;
   select count(*) into n from audit_logs where entity = 'invite' and (after ->> 'familyMark')::boolean;
   if n <> 1 then raise exception 'NG: 印を付けた招待が監査ログに残らない'; end if;
+end $$;
+
+-- ---------- 0019 観察の場所・職種・招待コードの中身・チームを抜ける ----------
+-- 招待コードの中身: ログインしていなければ、チームの名前は出ない。使えないコードは null
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin perform set_config('rls_test.peek', create_invite('10000000-0000-0000-0000-000000000001', 'supporter'), true); end $$;
+reset role;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+set local role anon;
+do $$
+declare j json;
+begin
+  j := invite_preview(current_setting('rls_test.peek'));
+  if j is null or j ->> 'role' <> 'supporter' or j ->> 'inviter' <> 'A' or j ->> 'expires_at' is null then
+    raise exception 'NG: ログイン前に招待コードの役割・招待した人・期限が見られない';
+  end if;
+  if j ->> 'team' is not null then raise exception 'NG: ログイン前にチームの名前が見えた'; end if;
+  if invite_preview('NOSUCHCODE') is not null then raise exception 'NG: 使えないコードで中身が返った'; end if;
+  begin
+    perform leave_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: ログインしていない人が leave_team を呼べた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+-- ログインした人（チームの外の N）には、チームの名前も出る
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  if invite_preview(current_setting('rls_test.peek')) ->> 'team' is distinct from 'テスト1' then
+    raise exception 'NG: ログインしたのにチームの名前が見えない';
+  end if;
+  -- チームの外の人は抜けられない（ほかの人の行は変えられない）
+  begin
+    perform leave_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: チームの外の人が leave_team で何かを変えられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 職種: 支援リーダー（L）は書ける。閲覧者（V）は書けない（行が変わらない）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+update team_members set job_title = '支援員', updated_at = now() + interval '30 seconds' where id = '20000000-0000-0000-0000-0000000000f1';
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}', true);
+set local role authenticated;
+update team_members set job_title = '勝手に', updated_at = now() + interval '31 seconds' where id = '20000000-0000-0000-0000-0000000000c1';
+-- 閲覧者は、自分の行に直接「削除」を付けて抜けることはできない（関数からだけ）
+do $$
+begin
+  begin
+    update team_members set deleted_at = now(), updated_at = now() + interval '32 seconds' where id = '20000000-0000-0000-0000-0000000000d1';
+  exception when others then null; end;
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000f1' and job_title = '支援員';
+  if n <> 1 then raise exception 'NG: 支援リーダーがメンバーの職種を書けない'; end if;
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000c1' and job_title = '';
+  if n <> 1 then raise exception 'NG: 閲覧者がメンバーの職種を書きかえられた'; end if;
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000d1' and deleted_at is null;
+  if n <> 1 then raise exception 'NG: 自分の行に直接「削除」を付けて抜けられた'; end if;
+end $$;
+
+-- 観察の場所の名前が残る（チーム1 の管理者 A）
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+insert into observations (id, person_id, behavior_id, method, interval_sec, started_at, local_date, recorder_id, place_name)
+  values ('a0190000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001',
+          'interval', 60, now(), current_date, '00000000-0000-0000-0000-0000000000a1', '家');
+-- 管理者は抜けられない
+do $$
+begin
+  begin
+    perform leave_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 管理者がチームを抜けられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 閲覧者（V）と副管理者（D）は、自分から抜けられる。抜けたあとはチームのデータが見えない。付けた記録は残る
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin perform leave_team('10000000-0000-0000-0000-000000000001'); end $$;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを抜けたあとも記録が見える'; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin perform leave_team('10000000-0000-0000-0000-000000000001'); end $$;
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_members where id in ('20000000-0000-0000-0000-0000000000d1', '20000000-0000-0000-0000-0000000000b2') and deleted_at is not null;
+  if n <> 2 then raise exception 'NG: 閲覧者か副管理者が、自分から抜けられない'; end if;
+  select count(*) into n from observations where id = 'a0190000-0000-0000-0000-000000000001' and place_name = '家';
+  if n <> 1 then raise exception 'NG: 観察に場所の名前が残らない'; end if;
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000a1' and deleted_at is null;
+  if n <> 1 then raise exception 'NG: 管理者の行が変わった'; end if;
 end $$;
 
 rollback;

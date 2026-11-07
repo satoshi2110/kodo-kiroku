@@ -126,7 +126,7 @@ export default function AI() {
             <div className="ai-note">
               これは <strong>AI による仮説</strong> です（支援者の確認が必要）。診断や治療方針ではありません。採否は管理者・副管理者・支援リーダーが決めます。
             </div>
-            <a className="help" href={FBA_LINK} target="_blank" rel="noopener noreferrer">機能分析について（外部のページ）</a>
+            <a className="help ext-link" href={FBA_LINK} target="_blank" rel="noopener noreferrer">機能分析について（外部のページ）</a>
             {isMockProvider && <p className="help">いまは開発用の「見本の結果」モードです。外の AI には何も送りません。</p>}
             <div className="card stack">
               <div className="stack" style={{ gap: 2 }}>
@@ -229,8 +229,27 @@ function Adopted({ analyses, suggestions, behaviors }: { analyses: AiAnalysis[];
           );
         })}
         {(hyps.length > 0 || plans.length > 0) && <p className="help">支援計画を作るときに、ここから取り込めます（計画の画面の「採用したものから取り込む」）。</p>}
+        <AdoptionRate label="仮説" decisions={analyses.filter((a) => a.output).map((a) => a.decision)} />
+        <AdoptionRate label="提案" decisions={suggestions.map((x) => x.decision)} />
       </div>
     </div>
+  );
+}
+
+/**
+ * 採用率（6.6「採用率をログとして記録し、提案品質の改善に使う」）。【暫定】（2026-11-07 の試作）
+ * 決めたものだけで数える（未決定は入れない）。修正して採用も「採用」に入れる。
+ */
+function AdoptionRate({ label, decisions }: { label: string; decisions: (AiDecision | null)[] }) {
+  const decided = decisions.filter((d): d is AiDecision => d != null);
+  if (decided.length === 0) return null;
+  const n = (d: AiDecision) => decided.filter((x) => x === d).length;
+  const rate = Math.round(((n('adopted') + n('modified')) / decided.length) * 100);
+  return (
+    <span className="muted">
+      AI の{label}の採用率: {rate}%（決めた {decided.length}件のうち 採用 {n('adopted')}・修正して採用 {n('modified')}・却下 {n('rejected')}
+      {decisions.length > decided.length ? `。未決定 ${decisions.length - decided.length}件` : ''}）
+    </span>
   );
 }
 

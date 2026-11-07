@@ -2,7 +2,7 @@
  * 支援計画（6.7、ワイヤーフレーム 4、Phase 2）。下部ナビの「計画」タブ（決定70）。
  * - 実施中の計画を見せる。合意待ちの変更があれば、上に知らせる（実施中は前の内容のまま、決定68）
  * - 機能仮説に合わせた代替行動の定型ヒント（決定27。AI なしでも出す）
- * - 達成基準と直近7日の平均を比べる。見直し日が近づいたら知らせる（通知は出さず、画面に出す）
+ * - 達成基準と直近7日の平均を比べる。「2週連続」などは、7日ごとの平均が続けて届いた週を数える（【暫定】2026-11-07 の試作）。見直し日が近づいたら知らせる（通知は出さず、画面に出す）
  * - 合意の状況、意見あり（保存した人と管理者に出す、決定75）
  * - 身体拘束の記録・支援会議メモ・PDF レポート・できたことへの入口
  * - 機能分析のツール（外部のサイト）へのリンク（決定90）
@@ -149,9 +149,18 @@ export default function Plan() {
               {shown.criteria.map((c, i) => {
                 const b = nameOf(c.behaviorId);
                 if (!b) return null;
-                const vals = dailyMain(b, lastDays(7), rs).filter((v): v is number => v != null);
-                const avg = vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : null;
-                const met = avg != null && (c.op === 'lte' ? avg <= c.value : avg >= c.value);
+                // 7日ごとの平均（今日までの7日、その前の7日…）。続けて届いた週の数を数える（「2週連続」など）
+                const need = Math.max(1, c.weeks ?? 1);
+                const weekAvg = (k: number) => {
+                  const vals = dailyMain(b, lastDays(7, addDays(today, -7 * k)), rs).filter((v): v is number => v != null);
+                  return vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : null;
+                };
+                const hit = (v: number | null) => v != null && (c.op === 'lte' ? v <= c.value : v >= c.value);
+                const avg = weekAvg(0);
+                let streak = 0;
+                while (streak < need && hit(weekAvg(streak))) streak++;
+                const met = streak >= need;
+                const state = met ? (need > 1 ? `${need}週連続で達成` : '達成') : streak > 0 ? `${streak}週目達成` : '未達';
                 // 期限を過ぎても届いていなければ、見直しをすすめる（6.7「一定期間未達なら計画修正」）
                 const overdue = !met && !!c.deadline && c.deadline < today;
                 return (
@@ -159,7 +168,7 @@ export default function Plan() {
                     <div className="row row--between today-row">
                       <span>{criterionText(c, behaviors)}</span>
                       <span className={met ? 'badge badge--owner' : 'badge badge--role'}>
-                        {avg == null ? '記録なし' : `直近7日 ${mainFormat(b)(avg)} ・ ${met ? '達成' : '未達'}`}
+                        {avg == null ? '記録なし' : `直近7日 ${mainFormat(b)(avg)} ・ ${state}`}
                       </span>
                     </div>
                     {met && <span className="help">届いています。できることを広げましょう。</span>}

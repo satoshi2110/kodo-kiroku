@@ -289,7 +289,11 @@ h2.h { font-size: 1rem; font-weight: 700; margin: 0; }
 .dot::after { content: ''; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--primary); box-sizing: border-box; }
 .dot--on::after { background: var(--primary); }
 span.dot { width: 22px; }
-.place-btn { border: none; background: none; padding: 0; font: inherit; color: var(--primary); text-decoration: underline; min-height: 24px; cursor: pointer; }
+.place-btn { border: none; background: none; padding: 0; font: inherit; color: var(--primary); text-decoration: underline; min-height: 24px; cursor: pointer; position: relative; }
+/* 補助ボタンは見た目 24px のまま、押せる範囲を上下に広げて 32px にする */
+.place-btn::after { content: ''; position: absolute; inset: -4px 0; }
+/* 1行だけ置く外部リンクも、押せる範囲を 32px 以上にする */
+.ext-link { display: inline-block; padding: 7px 0; }
 .team-settings-link { text-decoration: none; color: inherit; min-height: var(--tap); }
 .sleep-card > .btn { flex: none; }
 

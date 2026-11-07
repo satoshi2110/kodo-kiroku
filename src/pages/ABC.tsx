@@ -2,6 +2,7 @@
  * ABC記録（6.3.2、ワイヤーフレーム 2）。ホームで付けた記録に「詳しく書く」で A・B・C を足す。
  * A・C・状況要因の選択肢は「編集」でその場で追加・削除できる。削除は非表示だけで、過去の記録の値は残る。
  * 自由記述は端末の音声入力でも書ける（録音は保存しない、決定48）。
+ * 【暫定】（2026-11-07 の試作）記録の日時・回数・持続時間・待ち時間も、ここで直せる（6.3.5。直した人と前後の値は履歴に残る）。未来の日時にはできない。
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -9,7 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { RANK, addChoiceOption, canEditBehaviors, canUndoEvent, ensureChoiceOptions, hideChoiceOption, restoreEvent, saveAbc, undoEvent } from '../db/repo';
 import { useApp } from '../state';
-import { formatDateTimeJa, formatDuration } from '../lib/date';
+import { formatDateTimeJa, fromDateTimeLocalInput, localDateOf, toDateTimeLocalInput } from '../lib/date';
 import { isShortNight } from '../lib/sleep';
 import {
   AFFILIATION_LABEL,
@@ -63,6 +64,10 @@ function ABC({ eventId }: { eventId: string }) {
     intensity: number | null;
     activity: string;
     placeName: string;
+    occurredAt: string;
+    count: string;
+    durationSec: number | null;
+    latencySec: number | null;
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -84,6 +89,10 @@ function ABC({ eventId }: { eventId: string }) {
       intensity: event.intensity,
       activity: event.activity ?? '',
       placeName: event.placeName ?? '',
+      occurredAt: event.occurredAt,
+      count: String(event.count),
+      durationSec: event.durationSec,
+      latencySec: event.latencySec,
     });
   }, [event, existing, form, me, options, sleepLogs]);
 
@@ -121,12 +130,28 @@ function ABC({ eventId }: { eventId: string }) {
   const toggle = (k: 'antecedentIds' | 'consequenceIds' | 'settingIds' | 'involvedMemberIds', id: string) =>
     setForm((f) => (f ? { ...f, [k]: f[k].includes(id) ? f[k].filter((x) => x !== id) : [...f[k], id] } : f));
 
+  // 日時は未来にできない。回数は 1〜999
+  const countNum = Number(form.count);
+  const countOk = Number.isInteger(countNum) && countNum >= 1 && countNum <= 999;
+  const future = new Date(form.occurredAt).getTime() > Date.now() + 60_000;
+  const valid = countOk && !future;
+
   async function save() {
-    if (!form || !event || !userId) return;
+    if (!form || !event || !userId || !valid) return;
     setSaving(true);
-    const { intensity, activity, placeName, ...detail } = form;
+    const { intensity, activity, placeName, occurredAt, count, durationSec, latencySec, ...detail } = form;
     await saveAbc(event, { ...detail, antecedentNote: detail.antecedentNote.trim(), consequenceNote: detail.consequenceNote.trim(), note: detail.note.trim() },
-      { intensity, activity: activity.trim() || null, placeName: placeName || null }, userId);
+      {
+        intensity,
+        activity: activity.trim() || null,
+        placeName: placeName || null,
+        occurredAt,
+        localDate: localDateOf(occurredAt),
+        count: Number(count),
+        durationSec,
+        latencySec,
+      },
+      userId);
     nav('/', { replace: true });
   }
 
@@ -148,7 +173,7 @@ function ABC({ eventId }: { eventId: string }) {
         title="ABC記録"
         sub={<>{formatDateTimeJa(event.occurredAt)}{event.placeName ? ` ・ ${event.placeName}` : ''} ・ {behavior?.name ?? '（非表示の行動）'}</>}
         back="/"
-        right={editable ? <button type="button" className="btn btn--primary btn--sm" disabled={saving} onClick={save}>保存</button> : undefined}
+        right={editable ? <button type="button" className="btn btn--primary btn--sm" disabled={saving || !valid} onClick={save}>保存</button> : undefined}
       />
 
       <div className="section stack">
@@ -169,7 +194,30 @@ function ABC({ eventId }: { eventId: string }) {
             </div>
           )}
           {behavior?.definition && <span className="muted">{behavior.definition}</span>}
-          {event.durationSec != null && <span className="muted">持続: {formatDuration(event.durationSec)}</span>}
+          <label className="field">
+            日時
+            <input
+              type="datetime-local"
+              value={toDateTimeLocalInput(form.occurredAt)}
+              max={toDateTimeLocalInput(new Date().toISOString())}
+              disabled={!editable}
+              onChange={(e) => e.target.value && set('occurredAt', fromDateTimeLocalInput(e.target.value))}
+            />
+          </label>
+          {future && <p className="ai-error" role="alert">未来の日時にはできません。</p>}
+          {(behavior?.method === 'frequency' || event.count !== 1) && (
+            <label className="field">
+              回数
+              <input type="number" inputMode="numeric" min={1} max={999} value={form.count} disabled={!editable} onChange={(e) => set('count', e.target.value)} />
+            </label>
+          )}
+          {!countOk && <p className="ai-error" role="alert">回数は 1〜999 で入れてください。</p>}
+          {event.durationSec != null && (
+            <MinSec label="持続時間" sec={form.durationSec ?? 0} disabled={!editable} onChange={(v) => set('durationSec', v)} />
+          )}
+          {event.latencySec != null && (
+            <MinSec label="待ち時間（潜時）" sec={form.latencySec ?? 0} disabled={!editable} onChange={(v) => set('latencySec', v)} />
+          )}
           {behavior?.intensity && (
             <>
               <div className="row row--between">
@@ -329,6 +377,24 @@ function ChoiceEditor({
           {editing ? '完了' : '選択肢を編集'}
         </button>
       )}
+    </div>
+  );
+}
+
+/** 分と秒で入れる（持続時間・待ち時間）。0〜24時間 */
+function MinSec({ label, sec, disabled, onChange }: { label: string; sec: number; disabled: boolean; onChange: (sec: number) => void }) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const put = (mm: number, ss: number) => onChange(Math.min(24 * 3600, Math.max(0, (Number.isFinite(mm) ? Math.floor(mm) : 0) * 60 + (Number.isFinite(ss) ? Math.floor(ss) : 0))));
+  return (
+    <div className="field">
+      <span>{label}</span>
+      <div className="row">
+        <input type="number" inputMode="numeric" min={0} max={1440} aria-label={`${label}（分）`} value={m} disabled={disabled} onChange={(e) => put(Number(e.target.value), s)} style={{ width: 88 }} />
+        <span>分</span>
+        <input type="number" inputMode="numeric" min={0} max={59} aria-label={`${label}（秒）`} value={s} disabled={disabled} onChange={(e) => put(m, Math.min(59, Number(e.target.value)))} style={{ width: 72 }} />
+        <span>秒</span>
+      </div>
     </div>
   );
 }

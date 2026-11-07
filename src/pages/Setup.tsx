@@ -6,6 +6,7 @@
  * 招待された人は、ここで招待コードを入れて参加し、管理者・副管理者・支援リーダーの承認を待つ（7.4.2 #3）。
  * 招待で参加した人は、承認されたら場所と「わたしのいつもの時間」だけを案内する（7.1）。
  */
+import { InvitePreview, useInvitePreview } from '../components/InvitePreview';
 import { useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -34,6 +35,7 @@ export default function Setup() {
   // コードを確かめたか（null = まだ、true = 使える、false = 使えない）。ログインしないで使うときは要らない
   const [codeOk, setCodeOk] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
+  const preview = useInvitePreview(codeOk ? code : '');
   async function checkCode(c: string) {
     if (!supabase || !c.trim()) return;
     setChecking(true);
@@ -153,7 +155,8 @@ export default function Setup() {
                 />
               </label>
               <p className="help">新しいチームを作る保護者の方は運営から受け取った「開始コード」を、招待された人は招待した人から受け取った「招待コード」を入れます。</p>
-              {codeOk === true && <p className="notice-inline" role="status">使えるコードです。下の内容を読んで、同意してください。</p>}
+              {codeOk === true && (preview ? <InvitePreview info={preview} /> : <p className="notice-inline" role="status">使えるコードです。</p>)}
+              {codeOk === true && <p className="help">下の内容を読んで、同意してください。</p>}
               {codeOk === false && (
                 <p className="ai-error" role="alert">このコードは使えません（まちがい・使用済み・期限切れ）。コードを確かめるか、渡した人に聞いてください。</p>
               )}
@@ -263,6 +266,7 @@ function Join(props: {
   onBack: () => void;
 }) {
   const invite = props.code;
+  const preview = useInvitePreview(invite);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function join() {
@@ -287,6 +291,7 @@ function Join(props: {
     <div className="section stack">
       <div className="card stack">
         <p className="help">招待コード {invite.trim().toUpperCase()} で、チームに参加します。</p>
+        <InvitePreview info={preview} />
         <label className="field">
           あなたの呼び名（チームの人に表示されます）
           <input value={props.userName} onChange={(e) => props.setUserName(e.target.value)} placeholder="例: 〇〇先生" />

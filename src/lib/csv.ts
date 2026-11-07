@@ -92,11 +92,12 @@ export async function buildCsv(person: Person, kind: CsvKind): Promise<string> {
           missed,
           yes + no ? Math.round((yes / (yes + no)) * 100) : '',
           o.results.map((r) => (r === 'yes' ? '○' : r === 'no' ? '×' : '－')).join(''),
+          o.placeName ?? '',
           byUser.get(o.recorderId) ?? '',
         ];
       });
     return toCSV([
-      ['日付', '開始', '終了', '行動', '測り方', '区間（秒）', '起きた', '起きなかった', '未観察', '起きた割合（%）', '区間ごとの結果', '記録者'],
+      ['日付', '開始', '終了', '行動', '測り方', '区間（秒）', '起きた', '起きなかった', '未観察', '起きた割合（%）', '区間ごとの結果', '場所', '記録者'],
       ...rows,
     ]);
   }
