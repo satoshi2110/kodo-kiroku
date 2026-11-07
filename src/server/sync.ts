@@ -6,6 +6,7 @@
  * いまは 対象者・メンバー・チームの設定・同意・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・管理者の引き継ぎ（受け取るだけ）・AI の分析と提案（採否も、決定63・70）・支援者の提案と行動の定義の変更の記録（0017）・監査ログ。
  * ABC集計の AI のまとめ（Phase 3）は、まだこの端末の中だけ。
  */
+import { heartbeat } from './devices';
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
 import { forgetTeam } from '../db/repo';
@@ -306,6 +307,8 @@ export async function runSync(): Promise<void> {
     }
     setStatus({ running: true });
     try {
+      // 遠隔ログアウトを頼まれていたら、データを消してログアウトしたので、ここでやめる（0021）
+      if (await heartbeat()) return;
       const errors = [...(await pull(uid))];
       if (await finishDueRequests(uid)) errors.push(...(await pull(uid)));
       errors.push(...(await push(uid, await serverTeams())));

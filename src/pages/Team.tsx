@@ -21,6 +21,7 @@ import { addComment, removeComment } from '../db/phase2';
 import { formatDateTimeJa, nowISO } from '../lib/date';
 import { AFFILIATION_LABEL, ROLE_LABEL, type Affiliation, type Role, type TeamMember } from '../db/types';
 import { Chip, Sheet, TopBar } from '../components/ui';
+import { DeviceList } from '../components/Devices';
 import { formerAdminRole, isDue, TRANSFER_RESULT_LABEL, useOwnerTransfers } from '../lib/ownerTransfer';
 
 export default function Team() {
@@ -222,6 +223,21 @@ export default function Team() {
                   </>
                 )}
               </>
+            )}
+            {supabase && !person.isSample && canInvite(me?.role) && current.userId !== userId && !current.deletedAt && (
+              <div className="stack">
+                <span className="label">ログインしている端末</span>
+                <DeviceList
+                  key={current.id}
+                  userId={current.userId}
+                  personId={person.id}
+                  mine={false}
+                  canLogout={isAdmin || (current.role !== 'admin' && current.role !== 'subadmin')}
+                />
+                <p className="help">
+                  端末をなくした・盗まれたと連絡があったときに使います。すぐにその端末からはチームのデータが読めなくなり、つながったときに端末の中のデータを消します。管理者・副管理者の端末は、管理者だけがログアウトさせられます。
+                </p>
+              </div>
             )}
             <button type="button" className="btn btn--block" onClick={() => setEditing(null)}>閉じる</button>
           </div>

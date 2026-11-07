@@ -541,7 +541,9 @@ export interface DeviceSetting {
   pinFails?: number; // PIN を続けてまちがえた回数
   pinWaitUntil?: string | null; // 5回まちがえたら、この時刻まで PIN を入れられない
   lastActiveAt?: string | null; // 最後に操作した時刻（10分ロックと、90日使わなければ再ログインに使う）
-  relogin?: 'idle90' | null; // 90日使われなかったのでログアウトした（ログインの画面で知らせる）
+  relogin?: 'idle90' | 'remote' | null; // 90日使われなかった・遠隔ログアウトされたのでログアウトした（ログインの画面で知らせる）
+  deviceId?: string; // この端末の番号（0021 の端末の一覧に使う。ログアウトしても変えない）
+  newDeviceSeenAt?: string | null; // 「新しい端末からのログイン」の知らせを、この時刻まで確かめた
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

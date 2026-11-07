@@ -11,6 +11,7 @@ import { getDevice, saveDevice } from '../db/repo';
 import { authRedirect, supabase } from './supabase';
 import { clearServerData, installSyncHooks, runSync, scheduleSync } from './sync';
 import { needsMfaCode } from './mfa';
+import { resetHeartbeat } from './devices';
 
 interface SessionState {
   ready: boolean; // 最初の確認が終わったか
@@ -34,6 +35,7 @@ async function onLogin(session: Session, mfaCode: boolean) {
   }
   if (dev.userId !== uid) await saveDevice({ userId: uid, currentPersonId: null });
   if (dev.relogin) await saveDevice({ relogin: null });
+  resetHeartbeat(); // ログインしたら、すぐに「この端末でログインしている」を残す
   // コードを入れる前は送っても止められるので、入れてから同期する
   if (!mfaCode) await runSync();
 }
@@ -90,10 +92,10 @@ export function clearRecovery() {
   set({ ...state, recovery: false });
 }
 
-/** ログアウト。この端末からサーバーのチームのデータを消す */
+/** ログアウト。この端末からサーバーのチームのデータを消す。ほかの端末のログインはそのまま（scope: 'local'） */
 export async function signOut() {
   if (!supabase) return;
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
   await clearServerData();
 }
 

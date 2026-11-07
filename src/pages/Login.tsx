@@ -148,6 +148,11 @@ export default function Login() {
           {dev?.relogin === 'idle90' && !error && !message && (
             <p className="notice-inline" role="status">この端末で90日使われなかったので、ログアウトしました。もう一度ログインしてください。</p>
           )}
+          {dev?.relogin === 'remote' && !error && !message && (
+            <p className="notice-inline" role="status">
+              この端末は、あなたか、チームの管理者・支援リーダーが遠隔でログアウトしました。この端末からチームのデータを消しました。続けて使うときは、もう一度ログインしてください。
+            </p>
+          )}
           {error && <p className="ai-error" role="alert">{error}</p>}
           {message && <p className="notice-inline" role="status">{message}</p>}
         </div>

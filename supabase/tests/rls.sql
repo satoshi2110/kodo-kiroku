@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0020）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0021）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2232,6 +2232,280 @@ declare n int;
 begin
   select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000c1' and deleted_at is not null;
   if n <> 1 then raise exception 'NG: MFA がないとチームを抜けられない'; end if;
+end $$;
+
+
+-- ---------- 端末ごとのログインと遠隔ログアウト（0021） ----------
+-- V（閲覧者）の端末を2つ、A（管理者）の端末を2つ、W（支援者）の端末を1つ作る。V の1つ目は1日前に初めてログインしたことにする
+select set_config('request.jwt.claims', '', true);
+reset role;
+-- V は上のテストでチームから外れているので、メンバーに戻す
+alter table team_members disable trigger user;
+update team_members set deleted_at = null where id = '20000000-0000-0000-0000-0000000000d1';
+alter table team_members enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+declare r json;
+begin
+  r := device_heartbeat('a0210000-0000-0000-0000-0000000000d1', 'iPhone・Safari', false);
+  if (r ->> 'first')::boolean is not true or (r ->> 'logout')::boolean then raise exception 'NG: 初めての端末の記録がおかしい（%）', r; end if;
+end $$;
+select set_config('request.jwt.claims', '', true);
+reset role;
+update device_sessions set created_at = now() - interval '1 day' where device_id = 'a0210000-0000-0000-0000-0000000000d1';
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000102"}', true);
+set local role authenticated;
+do $$
+declare r json;
+begin
+  r := device_heartbeat('a0210000-0000-0000-0000-0000000000d2', 'Mac・Chrome', true);
+  if json_array_length(r -> 'new_devices') <> 0 then raise exception 'NG: 新しい端末に、それより前の端末が「新しい端末」と出た'; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+declare r json;
+begin
+  r := device_heartbeat('a0210000-0000-0000-0000-0000000000d1', 'iPhone・Safari', false);
+  if json_array_length(r -> 'new_devices') <> 1 then raise exception 'NG: 前からある端末に、新しい端末からのログインが知らされない（%）', r; end if;
+  r := device_heartbeat('a0210000-0000-0000-0000-0000000000d1', 'iPhone・Safari', false, now());
+  if json_array_length(r -> 'new_devices') <> 0 then raise exception 'NG: 確かめたあとも、新しい端末の知らせが出る'; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000201","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin perform device_heartbeat('a0210000-0000-0000-0000-0000000000a1', 'iPad・Safari', false); end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin perform device_heartbeat('a0210000-0000-0000-0000-0000000000a2', 'Android・Chrome', false); end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000301","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin perform device_heartbeat('a0210000-0000-0000-0000-0000000000e1', 'iPhone・Safari', false); end $$;
+
+-- 見えるのは自分の端末と、自分が支援リーダー以上のチームのメンバーの端末だけ
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from device_sessions;
+  if n <> 2 then raise exception 'NG: 閲覧者に、自分のほかの人の端末が見える（% 件）', n; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000201","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from device_sessions where user_id = '00000000-0000-0000-0000-0000000000d1';
+  if n <> 2 then raise exception 'NG: 管理者に、チームのメンバーの端末が見えない（% 件）', n; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from device_sessions;
+  if n <> 0 then raise exception 'NG: ほかのチームの管理者に、チーム1 の人の端末が見える（% 件）', n; end if;
+end $$;
+
+-- 端末の行は、関数を通さずに書けない。無効にしたログインの一覧は読めない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    update device_sessions set logout_requested_at = null;
+    raise exception 'NG: 端末の行を直接書き換えられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    insert into device_sessions (device_id, user_id) values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 端末の行を直接足せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    delete from device_sessions;
+    raise exception 'NG: 端末の行を直接消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    perform count(*) from revoked_sessions;
+    raise exception 'NG: 無効にしたログインの一覧を読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+
+-- ほかのチームの管理者・閲覧者は、ログアウトさせられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000d1', '10000000-0000-0000-0000-000000000002');
+    raise exception 'NG: ほかのチームの管理者が、自分のチームの立場で、チーム1 の人の端末をログアウトできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000d1', '10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: ほかのチームの管理者が、チーム1 の人の端末をログアウトできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: ほかの人の端末を、チームの立場なしでログアウトできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000ab', '10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 閲覧者がほかの人の端末をログアウトできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+
+-- 支援リーダーは、管理者の端末をログアウトさせられない。MFA が必須なのに通していなければ、ほかの人の端末もログアウトさせられない（猶予は過ぎている）
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_members disable trigger user;
+update team_members set role = 'leader' where id = '20000000-0000-0000-0000-0000000000d1';
+alter table team_members enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 支援リーダーが管理者の端末をログアウトできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like '%管理者・副管理者の端末%' then raise exception 'NG: 支援リーダーが管理者の端末をログアウトできた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000ab', '10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: MFA を通していない支援リーダーが、ほかの人の端末をログアウトできた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+    if sqlerrm not like '%MFA_REQUIRED%' then raise exception 'NG: MFA を通していない支援リーダーが、ほかの人の端末をログアウトできた（ちがうエラー: %）', sqlerrm; end if;
+  end;
+end $$;
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table team_members disable trigger user;
+update team_members set role = 'viewer' where id = '20000000-0000-0000-0000-0000000000d1';
+alter table team_members enable trigger user;
+
+-- 管理者が V の1つ目の端末をログアウトさせる。そのログインでは、どのチームのデータも読めなくなる。ほかの端末はそのまま
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n = 0 then raise exception 'NG: ログアウトさせる前から記録が見えない（テストの前提がおかしい）（% 件）', n; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000201","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin perform request_device_logout('a0210000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000d1', '10000000-0000-0000-0000-000000000001'); end $$;
+do $$
+declare n int;
+begin
+  select count(*) into n from audit_logs where entity = 'device_logout' and entity_id = 'a0210000-0000-0000-0000-0000000000d1';
+  if n <> 1 then raise exception 'NG: 遠隔ログアウトが監査ログに残らない（% 件）', n; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: 遠隔ログアウトしたログインで、まだ記録が読める（% 件）', n; end if;
+end $$;
+do $$
+declare r json;
+begin
+  r := device_heartbeat('a0210000-0000-0000-0000-0000000000d1', 'iPhone・Safari', false);
+  if (r ->> 'logout')::boolean is not true then raise exception 'NG: 遠隔ログアウトしたのに、端末に知らされない'; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000102"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n = 0 then raise exception 'NG: 遠隔ログアウトしていない端末まで読めなくなった（% 件）', n; end if;
+end $$;
+
+-- その端末でログインし直すと（新しいログイン）、また使える。頼まれたことは終わった印になる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$
+declare r json;
+begin
+  r := device_heartbeat('a0210000-0000-0000-0000-0000000000d1', 'iPhone・Safari', false);
+  if (r ->> 'logout')::boolean then raise exception 'NG: ログインし直しても、ログアウトを頼まれたまま'; end if;
+end $$;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n = 0 then raise exception 'NG: ログインし直しても読めない（% 件）', n; end if;
+end $$;
+do $$
+declare n int;
+begin
+  select count(*) into n from device_sessions where device_id = 'a0210000-0000-0000-0000-0000000000d1' and logout_requested_at is not null;
+  if n <> 0 then raise exception 'NG: ログインし直しても、ログアウトの依頼が残っている（% 件）', n; end if;
+end $$;
+
+-- 自分のほかの端末は、自分でログアウトさせられる（チームの立場なし）。そのログインでは書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin perform request_device_logout('a0210000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a1'); end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000201","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into events (id, person_id, behavior_id, occurred_at, local_date, recorder_id) values ('a0210000-0000-0000-0000-000000000401', '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', now(), current_date, '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 遠隔ログアウトしたログインで、記録を書けた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+do $$
+begin
+  begin
+    perform request_device_logout('a0210000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 遠隔ログアウトしたログインで、ほかの端末をログアウトさせられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from events where person_id = '10000000-0000-0000-0000-000000000001';
+  if n = 0 then raise exception 'NG: 自分でログアウトさせていない端末まで読めなくなった（% 件）', n; end if;
 end $$;
 
 rollback;

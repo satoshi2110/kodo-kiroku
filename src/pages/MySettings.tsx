@@ -1,6 +1,6 @@
 /**
  * 個人の設定（画面一覧 16 のうち、自分のアカウントの部分）。
- * 【暫定】（2026-11-07 の試作）名前とメール、自分の同意、文字の大きさの案内、多要素認証（認証アプリ）、ログアウト、ほかの端末をすべてログアウト。通知の設定はまだない。
+ * 【暫定】（2026-11-07 の試作）名前とメール、自分の同意、文字の大きさの案内、多要素認証（認証アプリ）、ログインしている端末と遠隔ログアウト（0021）、ログアウト、ほかの端末をすべてログアウト。通知の設定はまだない。
  * チームを抜ける（決定98、7.6）: 管理者は引き継いでから。抜ける前にまだ送っていない記録を送り、サーバーの leave_team（0019）を呼んで、この端末からそのチームのデータを消す。
  */
 import { useState } from 'react';
@@ -16,6 +16,7 @@ import { runSync, unsentCount } from '../server/sync';
 import { forgetTeam, saveDevice } from '../db/repo';
 import { useNavigate } from 'react-router-dom';
 import { MfaCard } from '../components/Mfa';
+import { DeviceList } from '../components/Devices';
 
 const CONSENT_LABEL: Record<Consent['kind'], string> = {
   terms_privacy_sensitive: '利用規約・プライバシー・要配慮個人情報の取り扱い',
@@ -135,6 +136,18 @@ export default function MySettings() {
 
       {supabase && <DeviceKind />}
 
+      {supabase && !person.isSample && (
+        <div className="section">
+          <div className="card stack">
+            <h2 className="card__title" style={{ margin: 0 }}>ログインしている端末</h2>
+            <DeviceList userId={userId} mine canLogout />
+            <p className="help" style={{ margin: 0 }}>
+              端末をなくしたときは、ここでその端末をログアウトさせてください。すぐにその端末からはチームのデータが読めなくなり、その端末が次につながったときに、端末の中のデータを消します。手元に端末がないときは、チームの管理者か支援リーダーに頼めば、同じことができます。
+            </p>
+          </div>
+        </div>
+      )}
+
       {supabase && (
         <div className="section">
           <div className="card stack">
@@ -145,7 +158,7 @@ export default function MySettings() {
             </button>
             {error && <p className="ai-error" role="alert">{error}</p>}
             <p className="help">
-              端末をなくしたときは、手元の端末で「ほかの端末をすべてログアウト」を押してください。ほかの端末は、次にログインを更新するとき（長くて1時間ほど）にログアウトされ、その端末からチームのデータが消えます。パスワードを変えたいときは、ログイン画面の「パスワードを忘れた」から変えられます。
+              「この端末からログアウト」は、この端末だけをログアウトします。「ほかの端末をすべてログアウト」は、ほかの端末を、次にログインを更新するとき（長くて1時間ほど）にログアウトさせ、その端末からチームのデータを消します。パスワードを変えたいときは、ログイン画面の「パスワードを忘れた」から変えられます。
             </p>
           </div>
         </div>
