@@ -259,8 +259,9 @@ export async function saveMeeting(id: string | null, input: MeetingInput, actorI
   return after;
 }
 
-export async function addComment(personId: string, target: Comment['target'], targetId: string | null, text: string, authorId: string) {
-  const c: Comment = { ...base(), personId, target, targetId, text, authorId };
+export async function addComment(personId: string, target: Comment['target'], targetId: string | null, text: string, authorId: string, mentions: string[] = []) {
+  // 呼んだ人がいないときは mentions を付けない（0024 を流す前のサーバーでも、申し送りが送れるように）
+  const c: Comment = { ...base(), personId, target, targetId, text, authorId, ...(mentions.length ? { mentions } : {}) };
   await db.comments.add(c);
   await audit(personId, 'comment', c.id, 'create', authorId, null, c);
 }

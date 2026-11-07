@@ -471,12 +471,18 @@ export interface MeetingNote extends BaseRecord {
 }
 
 /** 申し送り（チーム画面）と、会議メモへのコメント */
+/**
+ * 申し送り（team）と、会議メモ・記録・グラフ・支援計画へのコメント（6.10、決定105）。
+ * graph と plan は、申し送りと同じくチームに1つの欄（targetId は null）。event と meeting は、その記録・メモの id。
+ */
+export type CommentTarget = 'team' | 'meeting' | 'event' | 'graph' | 'plan';
 export interface Comment extends BaseRecord {
   personId: string;
-  target: 'team' | 'meeting';
+  target: CommentTarget;
   targetId: string | null;
   text: string;
   authorId: string; // User.id
+  mentions?: string[]; // @ で呼んだ人（User.id）。書いたあとは変えない（サーバーは 0024）
 }
 
 /**
@@ -546,6 +552,7 @@ export interface DeviceSetting {
   newDeviceSeenAt?: string | null; // 「新しい端末からのログイン」の知らせを、この時刻まで確かめた
   viewedOn?: Record<string, string>; // チームごとに、閲覧の記録をサーバーに送った日（1日1回。決定102）
   exportAlertSeen?: Record<string, string>; // チームごとに、「書き出しが多い日」の知らせをこの時刻まで確かめた（決定103）
+  mentionSeenAt?: Record<string, string>; // チームごとに、「あなたが呼ばれました」の知らせをこの時刻まで確かめた（決定105）
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

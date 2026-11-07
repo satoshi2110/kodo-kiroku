@@ -10,8 +10,8 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
-import { addComment, canEditMeeting, removeComment, saveMeeting, type MeetingInput } from '../db/phase2';
-import { canRecord } from '../db/repo';
+import { canEditMeeting, saveMeeting, type MeetingInput } from '../db/phase2';
+import { CommentThread } from '../components/Comments';
 import { addDays, dateRange, formatDateTimeJa, formatShortDate, fromDateTimeLocalInput, localDateOf, nowISO, toDateTimeLocalInput } from '../lib/date';
 import { useRecordSet } from '../lib/series';
 import { usePlanData } from '../lib/usePlan';
@@ -59,18 +59,10 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
         },
   );
   const [saving, setSaving] = useState(false);
-  const [text, setText] = useState('');
   // 新しいメモでは、書いている人を参加者に入れておく（読み込みが後になることがある）
   useEffect(() => {
     if (!note && me) setF((x) => (x.participantIds.length ? x : { ...x, participantIds: [me.id] }));
   }, [note, me]);
-  const comments = useLiveQuery(
-    async () =>
-      note
-        ? (await db.comments.where('[target+targetId]').equals(['meeting', note.id]).filter((c) => !c.deletedAt).toArray()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        : [],
-    [note?.id],
-  );
   if (!person || !userId || !rs || !planData || !revisions) return null;
   if (!me) return null; // 役割の読み込みを待つ（待たずに判定すると、権限なしで戻してしまう）
   const editable = canEditMeeting(me?.role, note ?? undefined, userId);
@@ -81,7 +73,6 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
   // 保存済みのメモは保存したときのグラフ。新しいメモは今の記録から作った見本
   const charts = note ? note.charts : takeSnapshots(behaviors, rs, days, 'week', planNow, planData.phases, revisions);
   const planShown = note ? note.planSnapshot : planNow;
-  const memberName = (uid: string) => members.find((m) => m.userId === uid)?.displayName ?? '退会したメンバー';
   const toggle = (mid: string) => set('participantIds', f.participantIds.includes(mid) ? f.participantIds.filter((x) => x !== mid) : [...f.participantIds, mid]);
 
   async function save() {
@@ -91,12 +82,6 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
     const saved = await saveMeeting(note?.id ?? null, input, userId);
     if (!note) nav(`/meetings/${saved.id}`, { replace: true });
     else setSaving(false);
-  }
-  async function post() {
-    const t = text.trim();
-    if (!t || !note || !userId || !person) return;
-    await addComment(person.id, 'meeting', note.id, t, userId);
-    setText('');
   }
 
   return (
@@ -184,28 +169,7 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
         </div>
       )}
 
-      {note && (
-        <div className="section">
-          <div className="card stack">
-            <h2 className="card__title" style={{ margin: 0 }}>コメント（{(comments ?? []).length}）</h2>
-            {(comments ?? []).map((c) => (
-              <div key={c.id} className="today-row stack" style={{ gap: 2 }}>
-                <span className="muted">{memberName(c.authorId)} ・ {formatDateTimeJa(c.createdAt)}</span>
-                <span>{c.text}</span>
-                {c.authorId === userId && (
-                  <button type="button" className="btn btn--sm" style={{ alignSelf: 'flex-end' }} onClick={() => window.confirm('このコメントを消しますか？（履歴には残ります）') && removeComment(c.id, userId)}>消す</button>
-                )}
-              </div>
-            ))}
-            {canRecord(me?.role) && (
-              <div className="row">
-                <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="コメントを書く" maxLength={300} />
-                <button type="button" className="btn btn--sm" disabled={!text.trim()} onClick={post}>送る</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {note && <CommentThread target="meeting" targetId={note.id} />}
     </div>
   );
 }

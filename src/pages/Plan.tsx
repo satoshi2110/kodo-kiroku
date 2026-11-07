@@ -20,6 +20,7 @@ import { usePlanData } from '../lib/usePlan';
 import { criterionText } from '../lib/planText';
 import { FUNCTION_LABEL, KIND_LABEL, ROLE_LABEL, type PlanChange, type PlanContent } from '../db/types';
 import { KindBadge, TopBar } from '../components/ui';
+import { CommentThread } from '../components/Comments';
 import { FBA_LINK } from '../lib/links';
 import { Proposals } from '../components/Proposals';
 
@@ -200,6 +201,7 @@ export default function Plan() {
 
       {latest && <SignStatus change={latest} />}
       <Proposals kind="plan" />
+      <CommentThread target="plan" targetId={null} title="支援計画へのコメント" />
       <FbaTool />
       <PlanLinks exportable={canExport(me?.role)} />
     </div>

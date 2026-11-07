@@ -21,6 +21,7 @@ import {
   type ChoiceOption,
 } from '../db/types';
 import { Chip, KindBadge, TopBar } from '../components/ui';
+import { CommentThread } from '../components/Comments';
 
 /** 別の記録の ABC に移ったら、画面ごと作り直す（前の記録の読み込み結果や入力を持ち越さない） */
 export default function ABCRoute() {
@@ -292,6 +293,9 @@ function ABC({ eventId }: { eventId: string }) {
         </Section>
 
         {editable && <button type="button" className="btn btn--primary btn--block" disabled={saving} onClick={save}>保存する</button>}
+      </div>
+      <CommentThread target="event" targetId={event.id} title="この記録へのコメント" />
+      <div className="section stack">
         {canUndoEvent(me?.role, event, userId) && (
           <button
             type="button"

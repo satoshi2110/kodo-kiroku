@@ -37,6 +37,7 @@ import { serverEnabled } from './server/supabase';
 import { useSession } from './server/session';
 import { DeviceGuard } from './components/DeviceGuard';
 import { MfaCode } from './components/Mfa';
+import { MentionBanner } from './components/Comments';
 
 const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/team/audit', '/me', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
 const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
@@ -53,6 +54,7 @@ function Shell() {
   if ((!userId || !person) && loc.pathname !== '/setup') return <Navigate to="/setup" replace />;
   const body = (
     <>
+      <MentionBanner />
       <Routes>
         <Route path="/setup" element={<Setup />} />
         <Route path="/" element={<Home />} />

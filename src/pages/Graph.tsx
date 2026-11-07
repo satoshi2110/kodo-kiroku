@@ -17,6 +17,7 @@ import { buildGroups, changeSummary, groupTitle, phasesFor, sleepPanel, type Pan
 import { useRevisions } from '../lib/useRevisions';
 import { usePlanData } from '../lib/usePlan';
 import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
+import { CommentThread } from '../components/Comments';
 import LineChart, { ChartSyncProvider, LineSwatch, useNewSync, type Phase } from '../components/LineChart';
 import GraphTabs from '../components/GraphTabs';
 
@@ -147,6 +148,7 @@ export default function Graph() {
               </div>
             </div>
           </div>
+          <CommentThread target="graph" targetId={null} title="グラフへのコメント" />
         </>
       )}
     </div>

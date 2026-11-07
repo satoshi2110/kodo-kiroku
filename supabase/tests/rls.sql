@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0023）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0024）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2616,6 +2616,81 @@ do $$ begin
     raise exception 'NG: ほかのチームの管理者が、書き出しの知らせを読めた';
   exception when others then
     if sqlerrm not like '%管理者だけ%' then raise; end if;
+  end;
+end $$;
+
+-- ---------- 記録・グラフ・計画へのコメントと @メンション（0024） ----------
+-- A（管理者）は、自分のチームの記録・グラフ・計画にコメントでき、同じチームの V を呼べる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  insert into comments (id, person_id, target, target_id, text, author_id, mentions) values
+    ('c0240000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'event', '40000000-0000-0000-0000-000000000001', '記録へ', '00000000-0000-0000-0000-0000000000a1', '{00000000-0000-0000-0000-0000000000d1}'),
+    ('c0240000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'graph', null, 'グラフへ', '00000000-0000-0000-0000-0000000000a1', '{}'),
+    ('c0240000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'plan', null, '計画へ', '00000000-0000-0000-0000-0000000000a1', '{}');
+  -- ほかのチームの記録には付けられない
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'event', '40000000-0000-0000-0000-000000000002', 'x', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: ほかのチームの記録にコメントを付けられた';
+  exception when insufficient_privilege then null;
+  end;
+  -- グラフ・計画の欄は1つだけ（付けた先の id は入れられない）
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'plan', '40000000-0000-0000-0000-000000000001', 'x', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 計画へのコメントに、付けた先の id を入れられた';
+  exception when insufficient_privilege then null;
+  end;
+  -- ほかのチームの人（B）は呼べない
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id, mentions) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'graph', null, 'x', '00000000-0000-0000-0000-0000000000a1', '{00000000-0000-0000-0000-0000000000b1}');
+    raise exception 'NG: ほかのチームの人を @ で呼べた';
+  exception when insufficient_privilege then null;
+  end;
+  -- 知らない種類には付けられない
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'photo', null, 'x', '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: 知らない種類にコメントを付けられた';
+  exception when check_violation or insufficient_privilege then null;
+  end;
+  -- 呼んだ人は、あとから変えられない
+  update comments set mentions = '{}' where id = 'c0240000-0000-0000-0000-000000000001';
+  select cardinality(mentions) into n from comments where id = 'c0240000-0000-0000-0000-000000000001';
+  if n <> 1 then raise exception 'NG: コメントで呼んだ人を、あとから変えられた'; end if;
+end $$;
+-- 閲覧者（V）は、呼ばれたコメントを読めるが、書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from comments where '00000000-0000-0000-0000-0000000000d1' = any(mentions);
+  if n <> 1 then raise exception 'NG: 呼ばれたコメントが、呼ばれた人に見えない（% 件）', n; end if;
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'graph', null, 'x', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者がコメントを書けた';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+-- ほかのチームの人（B）には、チーム1のコメントは見えず、チーム1に書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from comments where id::text like 'c0240000%';
+  if n <> 0 then raise exception 'NG: ほかのチームのコメントが見える'; end if;
+  begin
+    insert into comments (id, person_id, target, target_id, text, author_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'graph', null, 'x', '00000000-0000-0000-0000-0000000000b1');
+    raise exception 'NG: ほかのチームにコメントを書けた';
+  exception when insufficient_privilege then null;
   end;
 end $$;
 
