@@ -257,7 +257,7 @@ function NotifySettings() {
             <input type="time" value={p.reminderTime} onChange={(e) => set({ reminderTime: e.target.value || DEFAULT_REMINDER })} />
           </label>
         )}
-        <p className="help" style={{ margin: 0 }}>強度3や身体拘束の記録が入っても、すぐの知らせは出しません（決定52）。睡眠の入力も催促しません。</p>
+        <p className="help" style={{ margin: 0 }}>強度3や身体拘束の記録が入っても、すぐの知らせは出しません。睡眠の入力も催促しません。</p>
       </div>
     </div>
   );

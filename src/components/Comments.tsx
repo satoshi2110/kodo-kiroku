@@ -52,7 +52,7 @@ export function CommentThread({ target, targetId, title = 'コメント' }: { ta
       <div className="card stack">
         <h2 className="card__title" style={{ margin: 0 }}>{title}（{(list ?? []).length}）</h2>
         {(list ?? []).map((c) => (
-          <div key={c.id} className="today-row stack" style={{ gap: 2 }}>
+          <div key={c.id} className="today-row note-bubble stack" style={{ gap: 2 }}>
             <span className="muted">{nameOf(c.authorId)} ・ {formatDateTimeJa(c.createdAt)}</span>
             <span style={{ whiteSpace: 'pre-wrap' }}>{c.text}</span>
             {c.authorId === userId && (
@@ -115,8 +115,8 @@ export function MentionBanner() {
   const nameOf = (uid: string) => members.find((m) => m.userId === uid)?.displayName ?? '退会したメンバー';
   const latest = list[0].createdAt;
   return (
-    <div className="section" style={{ paddingBottom: 0 }}>
-      <div className="notice-inline stack" role="status" style={{ margin: 0, gap: 8 }}>
+    <div className="section">
+      <div className="notice-bar" role="status">
         <span>あなたが @ で呼ばれました{list.length > 3 ? `（${list.length}件。新しい3件）` : ''}:</span>
         {list.slice(0, 3).map((c) => (
           <Link key={c.id} to={linkOf(c)} style={{ display: 'block' }}>

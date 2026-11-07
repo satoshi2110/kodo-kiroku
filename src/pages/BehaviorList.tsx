@@ -78,7 +78,7 @@ export default function BehaviorList() {
         const list = shown.filter((b) => b.kind === k);
         if (!list.length) return null;
         return (
-          <div key={k} className="section">
+          <div key={k} className={`section behavior-group behavior-group--${k}`}>
             <h2 className="card__title">{KIND_LABEL[k]}</h2>
             <div className="card">
               {list.map((b) => (

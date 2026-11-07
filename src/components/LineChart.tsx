@@ -15,10 +15,10 @@ const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土'];
 const AXIS_W = 48;
 const TOP = 22;
 const PLOT_H = 160;
-const BOTTOM = 52;
+const BOTTOM = 58;
 const H = TOP + PLOT_H + BOTTOM;
 const VISIBLE = 14;
-const ROW_H = 13; // 縦線の名前の1段の高さ
+const ROW_H = 16; // 縦線の名前の1段の高さ
 const PAD_R = 16;
 const PAD_L = 14; // 最初の日付の文字が左で切れないように
 
@@ -166,7 +166,7 @@ export default function LineChart({
       if (!same.label.split('・').includes(p.label)) same.label += `・${p.label}`;
     } else phaseLines.push({ x: px, label: p.label });
   }
-  const phaseTextW = (t: string) => [...t].reduce((sum, c) => sum + (c.charCodeAt(0) > 0xff ? 10.5 : 6), 0);
+  const phaseTextW = (t: string) => [...t].reduce((sum, c) => sum + (c.charCodeAt(0) > 0xff ? 12.5 : 7), 0);
   const labelItems: { text: string; x0: number; x1: number; anchorStart: boolean }[] = [];
   if (planPhases.length > 0 && dates[0] < planPhases[0].date) labelItems.push({ text: 'ベースライン', x0: 4, x1: 4 + phaseTextW('ベースライン'), anchorStart: true });
   for (const l of [...phaseLines].sort((a, b) => a.x - b.x)) {
@@ -235,6 +235,13 @@ export default function LineChart({
     if (granularity === 'week') return [`${dt.getMonth() + 1}/${dt.getDate()}〜`, null, false];
     return [`${dt.getMonth() + 1}/${dt.getDate()}`, WEEKDAY[dt.getDay()], dt.getDay() === 0];
   };
+  // 日表示の目盛りは、月が変わるところ（と左端）だけ「月/日」、ほかは「日」だけにして文字が重ならないようにする
+  const shortDay = (i: number, full: string) => {
+    if (granularity !== 'day' || staticMode) return full;
+    const prev = i - every;
+    if (prev < 0 || parseLocalDate(dates[prev]).getMonth() !== parseLocalDate(dates[i]).getMonth()) return full;
+    return String(parseLocalDate(dates[i]).getDate());
+  };
 
   // 線の右端の文字（行動名と最後の値）。重なるときは上下にずらす
   const ends = paths
@@ -258,8 +265,8 @@ export default function LineChart({
             <line x1={x(i)} x2={x(i)} y1={top + PLOT_H} y2={top + PLOT_H + 4} className="chart__base" />
             {label && (
               <>
-                <text x={x(i)} y={top + PLOT_H + 16} textAnchor="middle" className="chart__tick">{a}</text>
-                {b && <text x={x(i)} y={top + PLOT_H + 29} textAnchor="middle" className={`chart__tick${sun ? ' chart__tick--sun' : ''}`}>{b}</text>}
+                <text x={x(i)} y={top + PLOT_H + 18} textAnchor="middle" className="chart__tick">{shortDay(i, a)}</text>
+                {b && <text x={x(i)} y={top + PLOT_H + 33} textAnchor="middle" className={`chart__tick${sun ? ' chart__tick--sun' : ''}`}>{b}</text>}
               </>
             )}
           </g>
@@ -280,19 +287,28 @@ export default function LineChart({
         </text>
       ))}
       {gaps.map((gp) =>
-        gp.w >= 16 ? (
+        gp.w >= 30 ? (
           <text key={`gap-${gp.cx}`} x={gp.cx} y={top + PLOT_H - 5} textAnchor="middle" className="chart__gap">未記録</text>
         ) : null,
       )}
       {targets.map((t, i) => (
         <g key={i}>
           <line x1={0} x2={plotW} y1={y(t.value)} y2={y(t.value)} stroke={t.color} strokeWidth={1.5} strokeDasharray="6 4" />
-          <text x={plotW - 6} y={y(t.value) + 14 + 13 * targets.slice(0, i).filter((o) => o.value === t.value).length} textAnchor="end" className="chart__target" fill={t.color}>{t.label}</text>
         </g>
       ))}
       {paths.map((p, k) =>
         p.segs.map((d, i) => (
-          <path key={`${k}-${i}`} d={d} fill="none" stroke={lines[k].color} strokeWidth={2.5} strokeLinejoin="round" strokeDasharray={lines[k].dashed ? '6 4' : undefined} />
+          <path
+            key={`${k}-${i}`}
+            d={d}
+            fill="none"
+            stroke={lines[k].color}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            strokeDasharray={lines[k].dashed ? '6 4' : undefined}
+            pathLength={lines[k].dashed ? undefined : 1}
+            className={lines[k].dashed ? undefined : 'chart__draw'}
+          />
         )),
       )}
       {lines.map((l, k) =>
@@ -326,6 +342,19 @@ export default function LineChart({
 
   const label = `${unit}の推移。${lines.map((l, k) => `${l.name} 最後の値 ${paths[k].last >= 0 ? format(l.values[paths[k].last]!) : 'なし'}`).join('、')}`;
 
+  const targetLegend = targets.length > 0 && (
+    <div className="chart__targets">
+      {targets.map((t, i) => (
+        <span key={i} className="chart__target-item" style={{ color: t.color }}>
+          <svg width="22" height="8" aria-hidden="true" style={{ flex: 'none' }}>
+            <line x1="1" y1="4" x2="21" y2="4" stroke={t.color} strokeWidth="2" strokeDasharray="5 3" />
+          </svg>
+          {t.label}
+        </span>
+      ))}
+    </div>
+  );
+
   if (staticMode) {
     return (
       <div className="chart" ref={wrap}>
@@ -334,6 +363,7 @@ export default function LineChart({
           <g>{axis}</g>
           <g transform={`translate(${AXIS_W} 0)`}>{plot}</g>
         </svg>
+        {targetLegend}
       </div>
     );
   }
@@ -354,6 +384,7 @@ export default function LineChart({
           <svg width={plotW} height={h} role="img" aria-label={label}>{plot}</svg>
         </div>
       </div>
+      {targetLegend}
       {!atEnd && (
         <button type="button" className="btn btn--sm chart__today" onClick={() => scroller.current?.scrollTo({ left: scroller.current.scrollWidth, behavior: 'smooth' })}>
           今日に戻る

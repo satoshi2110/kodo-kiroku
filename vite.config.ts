@@ -15,8 +15,8 @@ export default defineConfig({
         lang: 'ja',
         start_url: '/',
         display: 'standalone',
-        background_color: '#f4f5f7',
-        theme_color: '#1d4ed8',
+        background_color: '#f1f6f8',
+        theme_color: '#1a6a86',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
@@ -24,6 +24,16 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // 丸い書体（Zen Maru Gothic）は文字の範囲ごとに 120 個ほどに分かれている。全部を先に入れると重いので、
+        // 画面で使った分だけを一度読んだら端末にしまい、次からはオフラインでもそこから出す
+        globIgnores: ['**/zen-maru-gothic-*'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/zen-maru-gothic-.*\.woff2?$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'fonts', expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+          },
+        ],
         navigateFallback: '/index.html',
       },
       devOptions: { enabled: false },

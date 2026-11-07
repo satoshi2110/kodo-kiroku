@@ -216,7 +216,7 @@ export default function AuditLog() {
             )}
           </div>
         )}
-        <div className="card">
+        <div className="card audit-list">
           {!loading && rows.length === 0 && !error && <span className="muted">まだありません。</span>}
           {rows.map((r) => {
             const d = detail(r);

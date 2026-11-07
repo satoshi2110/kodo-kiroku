@@ -114,7 +114,7 @@ export default function AI() {
         <p className="empty">問題行動を登録すると、AI で機能の仮説を立てられます。</p>
       ) : (
         <>
-          <div className="section stack">
+          <div className="section stack ai-top">
             {problems.length > 1 && (
               <label className="field">
                 行動
@@ -129,7 +129,7 @@ export default function AI() {
             <a className="help ext-link" href={FBA_LINK} target="_blank" rel="noopener noreferrer">機能分析について（外部のページ）</a>
             {isMockProvider && <p className="help">いまは開発用の「見本の結果」モードです。外の AI には何も送りません。</p>}
             <div className="card stack">
-              <div className="stack" style={{ gap: 2 }}>
+              <div className="stack ai-usage" style={{ gap: 2 }}>
                 <span className="muted">
                   {input ? `${formatShortDate(input.period.from)}〜${formatShortDate(input.period.to)} ・ ABC記録 ${input.abcRecords.length}件` : '読み込み中…'}
                 </span>
@@ -180,7 +180,7 @@ export default function AI() {
                   <div key={a.id} className="row row--between today-row">
                     <span className="muted">{formatDateTimeJa(a.createdAt)}</span>
                     <span style={{ flex: 1 }}>{a.output ? topFunctions(a) : 'データ不足'}</span>
-                    <span className="muted">{a.decision ? DECISION_LABEL[a.decision] : '未決定'}</span>
+                    <span className={`ai-status${a.decision ? '' : ' ai-status--open'}`}>{a.decision ? DECISION_LABEL[a.decision] : '未決定'}</span>
                   </div>
                 ))}
               </div>
@@ -208,9 +208,9 @@ function Adopted({ analyses, suggestions, behaviors }: { analyses: AiAnalysis[];
         <span className="label">採用したもの</span>
         {hyps.length === 0 && plans.length === 0 && <span className="muted">まだありません。採用すると、ここに残ります。</span>}
         {hyps.map((a) => (
-          <div key={a.id} className="today-row stack" style={{ gap: 2 }}>
+          <div key={a.id} className="today-row stack ai-adopted__item" style={{ gap: 2 }}>
             <span>
-              <span className="badge badge--role">採用した仮説</span> {nameOf(a.behaviorId)}: {topFunctions(a)}
+              <span className="badge badge--adopted">採用した仮説</span> {nameOf(a.behaviorId)}: {topFunctions(a)}
             </span>
             {a.decisionNote && <span className="help">修正した内容: {a.decisionNote}</span>}
             <span className="muted">{a.decidedAt ? formatDateTimeJa(a.decidedAt) : ''} ・ {DECISION_LABEL[a.decision!]}</span>
@@ -219,9 +219,9 @@ function Adopted({ analyses, suggestions, behaviors }: { analyses: AiAnalysis[];
         {plans.map((x) => {
           const a = analyses.find((y) => y.id === x.analysisId);
           return (
-            <div key={x.id} className="today-row stack" style={{ gap: 2 }}>
+            <div key={x.id} className="today-row stack ai-adopted__item" style={{ gap: 2 }}>
               <span>
-                <span className="badge badge--role">採用した案</span> {a ? nameOf(a.behaviorId) : ''}: {x.output.alternatives.map((y) => y.behavior).join('、')}
+                <span className="badge badge--adopted">採用した案</span> {a ? nameOf(a.behaviorId) : ''}: {x.output.alternatives.map((y) => y.behavior).join('、')}
               </span>
               {x.decisionNote && <span className="help">修正した内容: {x.decisionNote}</span>}
               <span className="muted">{x.decidedAt ? formatDateTimeJa(x.decidedAt) : ''} ・ {DECISION_LABEL[x.decision!]}</span>
@@ -246,7 +246,7 @@ function AdoptionRate({ label, decisions }: { label: string; decisions: (AiDecis
   const n = (d: AiDecision) => decided.filter((x) => x === d).length;
   const rate = Math.round(((n('adopted') + n('modified')) / decided.length) * 100);
   return (
-    <span className="muted">
+    <span className="muted ai-rate">
       AI の{label}の採用率: {rate}%（決めた {decided.length}件のうち 採用 {n('adopted')}・修正して採用 {n('modified')}・却下 {n('rejected')}
       {decisions.length > decided.length ? `。未決定 ${decisions.length - decided.length}件` : ''}）
     </span>
@@ -286,9 +286,16 @@ function AnalysisCard({
     <>
       <div className="section">
         <div className="card stack">
-          <div className="row row--between">
+          <div className="row row--between ai-hyp__head">
             <span className="label">推定される機能</span>
-            <span className="badge badge--role">確信度: {CONFIDENCE_LABEL[o.confidence]}</span>
+            <span className={`confidence confidence--${o.confidence}`}>
+              <span className="confidence__dots" aria-hidden="true">
+                {(['low', 'medium', 'high'] as const).map((lv, i) => (
+                  <span key={lv} className={i <= ['low', 'medium', 'high'].indexOf(o.confidence) ? 'on' : ''} />
+                ))}
+              </span>
+              確信度: {CONFIDENCE_LABEL[o.confidence]}
+            </span>
           </div>
           {a.model === 'mock' && <span className="badge badge--problem" style={{ alignSelf: 'flex-start' }}>見本の結果（AI は使っていません）</span>}
           {o.functions.map((f) => (
@@ -298,17 +305,21 @@ function AnalysisCard({
                 <span className="tally__bar"><span style={{ width: `${(f.count / max) * 100}%` }} /></span>
                 <span className="tally__n">{f.count}件</span>
               </div>
-              <span className="help">{f.evidence}</span>
+              <span className="help ai-evidence">{f.evidence}</span>
             </div>
           ))}
-          <span className="help">確信度の理由: {o.confidenceReason}</span>
+          <span className="help ai-reason">確信度の理由: {o.confidenceReason}</span>
           <span className="muted">{formatDateTimeJa(a.createdAt)} 作成</span>
         </div>
       </div>
-      <ListCard title="起きやすい条件" items={o.likelyConditions} />
-      <ListCard title="起きにくい条件" items={o.unlikelyConditions} />
-      <ListCard title="仮説を確かめるために次に観察すること" items={o.nextObservations} />
-      <ListCard title="記録に足すとよい項目" items={o.recordSuggestions} />
+      <div className="section">
+        <div className="card ai-points">
+          <ListCard title="起きやすい条件" items={o.likelyConditions} />
+          <ListCard title="起きにくい条件" items={o.unlikelyConditions} />
+          <ListCard title="仮説を確かめるために次に観察すること" items={o.nextObservations} />
+          <ListCard title="記録に足すとよい項目" items={o.recordSuggestions} />
+        </div>
+      </div>
 
       <Decision decision={a.decision} note={a.decisionNote} canDecide={canDecide} onDecide={onDecide} what="この仮説" />
 
@@ -332,7 +343,7 @@ function SuggestionCard({ s, canDecide, onDecide }: { s: AiSuggestion; canDecide
   const o = s.output;
   return (
     <>
-      <div className="card stack">
+      <div className="card stack ai-suggest">
         <span className="label">AI の提案（候補）</span>
         {s.model === 'mock' && <span className="badge badge--problem" style={{ alignSelf: 'flex-start' }}>見本の結果（AI は使っていません）</span>}
         <span className="card__title">代わりの行動</span>
@@ -366,13 +377,11 @@ function SuggestionCard({ s, canDecide, onDecide }: { s: AiSuggestion; canDecide
 function ListCard({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
   return (
-    <div className="section">
-      <div className="card stack">
-        <span className="label">{title}</span>
-        <ul className="ai-list">
-          {items.map((x, i) => <li key={i}>{x}</li>)}
-        </ul>
-      </div>
+    <div className="stack ai-points__item">
+      <span className="label">{title}</span>
+      <ul className="ai-list">
+        {items.map((x, i) => <li key={i}>{x}</li>)}
+      </ul>
     </div>
   );
 }
@@ -397,7 +406,7 @@ function Decision({
   const [text, setText] = useState('');
   const body = decision ? (
     <div className="card stack done-box">
-      <span className="card__title">{what}は「{DECISION_LABEL[decision]}」になりました</span>
+      <span className="card__title done-box__title">{what}は「{DECISION_LABEL[decision]}」になりました</span>
       {note && <span className="help">修正した内容: {note}</span>}
     </div>
   ) : !canDecide ? (
@@ -414,10 +423,13 @@ function Decision({
       </div>
     </div>
   ) : (
-    <div className="ai-decide">
-      <button type="button" className="btn btn--primary" onClick={() => onDecide('adopted', '')}>採用</button>
-      <button type="button" className="btn btn--outline" onClick={() => setEditing(true)}>修正して採用</button>
-      <button type="button" className="btn" onClick={() => onDecide('rejected', '')}>却下</button>
+    <div className="card stack ai-decide-card">
+      <p className="help">採否は管理者・副管理者・支援リーダーが決めます。</p>
+      <div className="ai-decide">
+        <button type="button" className="btn btn--primary" onClick={() => onDecide('adopted', '')}>採用</button>
+        <button type="button" className="btn btn--outline" onClick={() => setEditing(true)}>修正して採用</button>
+        <button type="button" className="btn" onClick={() => onDecide('rejected', '')}>却下</button>
+      </div>
     </div>
   );
   return inline ? body : <div className="section">{body}</div>;

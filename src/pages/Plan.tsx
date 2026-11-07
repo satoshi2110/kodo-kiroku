@@ -168,7 +168,7 @@ export default function Plan() {
                   <div key={i} className="stack">
                     <div className="row row--between today-row">
                       <span>{criterionText(c, behaviors)}</span>
-                      <span className={met ? 'badge badge--owner' : 'badge badge--role'}>
+                      <span className={met ? 'badge badge--done' : 'badge badge--role'}>
                         {avg == null ? '記録なし' : `直近7日 ${mainFormat(b)(avg)} ・ ${state}`}
                       </span>
                     </div>
@@ -221,7 +221,7 @@ export default function Plan() {
             return (
               <div key={id} className="row row--between today-row">
                 <span>{m?.displayName ?? '退会したメンバー'}{m ? `（${ROLE_LABEL[m.role]}）` : ''}</span>
-                <span className={`badge ${s?.state === 'agreed' ? 'badge--owner' : s?.state === 'opinion' ? 'badge--problem' : 'badge--role'}`}>
+                <span className={`badge ${s?.state === 'agreed' ? 'badge--done' : s?.state === 'opinion' ? 'badge--problem' : 'badge--role'}`}>
                   {s?.state === 'agreed' ? `合意 ${formatShortDate(s.updatedAt.slice(0, 10))}` : s?.state === 'opinion' ? '意見あり' : '未確認'}
                 </span>
               </div>

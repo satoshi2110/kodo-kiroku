@@ -292,7 +292,7 @@ function ABC({ eventId }: { eventId: string }) {
           <p className="help">キーボードのマイクで、話して入力することもできます。録音は保存しません。</p>
         </Section>
 
-        {editable && <button type="button" className="btn btn--primary btn--block" disabled={saving} onClick={save}>保存する</button>}
+        {editable && <button type="button" className="btn btn--primary btn--block abc-save" disabled={saving} onClick={save}>保存する</button>}
       </div>
       <CommentThread target="event" targetId={event.id} title="この記録へのコメント" />
       <div className="section stack">
@@ -315,10 +315,10 @@ function ABC({ eventId }: { eventId: string }) {
 
 function Section({ letter, title, children }: { letter?: string; title: string; children: ReactNode }) {
   return (
-    <div className="card stack">
-      <div className="row">
-        {letter && <span className="abc-letter">{letter}</span>}
-        <span className="label">{title}</span>
+    <div className="card stack abc-section">
+      <div className="row abc-section__head">
+        {letter && <span className="abc-letter" aria-hidden="true">{letter}</span>}
+        <span className="abc-section__title">{title}</span>
       </div>
       {children}
     </div>
@@ -377,7 +377,7 @@ function ChoiceEditor({
         </div>
       )}
       {!disabled && (
-        <button type="button" className="btn btn--sm" style={{ alignSelf: 'flex-start' }} onClick={() => setEditing(!editing)}>
+        <button type="button" className="btn btn--sm btn--quiet" style={{ alignSelf: 'flex-start' }} onClick={() => setEditing(!editing)}>
           {editing ? '完了' : '選択肢を編集'}
         </button>
       )}

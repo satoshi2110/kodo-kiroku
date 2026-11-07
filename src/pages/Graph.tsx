@@ -67,7 +67,7 @@ export default function Graph() {
       {empty && <p className="empty">記録がたまると、ここにグラフが出ます。</p>}
       {!empty && (
         <>
-          <div className="section stack">
+          <div className="section stack graph-controls">
             <Segmented
               label="区切り"
               value={g}
@@ -78,53 +78,57 @@ export default function Graph() {
                 { value: 'month', label: '月' },
               ]}
             />
-            {canJoin && (
-              <Segmented
-                label="まとめ方"
-                value={join ? 'together' : 'each'}
-                onChange={(v) => setTogether(v === 'together')}
-                options={[
-                  { value: 'each', label: '行動ごと' },
-                  { value: 'together', label: 'まとめて' },
-                ]}
-              />
-            )}
-            {join && (
-              <p className="help">
-                代替行動のある問題行動は、その代替行動と組で1つのグラフ。代替行動のない問題行動どうし、望ましい行動どうしは、測り方が同じなら1つのグラフに重ねます。線は色と点の形で見分けます。
-              </p>
-            )}
-            {hasFreq && (
-              <Segmented
-                label="頻度の見かた"
-                value={rate ? 'rate' : 'count'}
-                onChange={(v) => setRate(v === 'rate')}
-                options={[
-                  { value: 'count', label: '回数' },
-                  { value: 'rate', label: '1時間あたり' },
-                ]}
-              />
-            )}
-            {rate && hasFreq && (
-              <p className="help">
-                1時間あたり = その日の回数 ÷ 観察していた時間（推定）。観察していた時間は、記録した人の<Link to="/places">「わたしのいつもの時間」</Link>、登録がなければその人のその日の最初の記録から最後の記録まで。何人かいるときは、重なった時間を1回だけ数えます。30分に満たない日は出しません。達成基準は1日の回数で決めているので、横の点線は出しません。
-              </p>
-            )}
-            {phases.length > 0 && (
-              <p className="help">縦の点線 = 条件の変更（{phases.map((p) => `${formatShortDate(p.date)} ${p.label}`).join('、')}）。横の点線 = 支援計画の達成基準。</p>
-            )}
-            {revisions.length > 0 && (
-              <p className="help">「定義の変更」の縦の点線 = その行動の、どんな行動か（定義・例・含まないもの）や測り方・強度の基準を直した日です。前と後は数え方が違うことがあります。</p>
-            )}
             {days.length > 0 && (
-              <p className="help" style={{ margin: 0 }}>
-                <strong>
-                  期間: {formatShortDate(days[0])} 〜 {formatShortDate(days[days.length - 1])}（{days.length}日）
-                </strong>
-                ・ グラフは横にずらすと前の日が見られます。「未記録」は記録のない日です。
+              <p className="graph-period">
+                期間: {formatShortDate(days[0])} 〜 {formatShortDate(days[days.length - 1])}（{days.length}日）
               </p>
             )}
-            {g !== 'day' && <p className="help">週・月は、記録のある日の平均です。</p>}
+            {/* まとめ方・頻度の見かたと線の説明は、たたんでおく（グラフを画面の上の方に出すため） */}
+            <details className="graph-more">
+              <summary>表示の切りかえ・説明</summary>
+              <div className="stack">
+                {canJoin && (
+                  <Segmented
+                    label="まとめ方"
+                    value={join ? 'together' : 'each'}
+                    onChange={(v) => setTogether(v === 'together')}
+                    options={[
+                      { value: 'each', label: '行動ごと' },
+                      { value: 'together', label: 'まとめて' },
+                    ]}
+                  />
+                )}
+                {join && (
+                  <p className="help">
+                    代替行動のある問題行動は、その代替行動と組で1つのグラフ。代替行動のない問題行動どうし、望ましい行動どうしは、測り方が同じなら1つのグラフに重ねます。線は色と点の形で見分けます。
+                  </p>
+                )}
+                {hasFreq && (
+                  <Segmented
+                    label="頻度の見かた"
+                    value={rate ? 'rate' : 'count'}
+                    onChange={(v) => setRate(v === 'rate')}
+                    options={[
+                      { value: 'count', label: '回数' },
+                      { value: 'rate', label: '1時間あたり' },
+                    ]}
+                  />
+                )}
+                {rate && hasFreq && (
+                  <p className="help">
+                    1時間あたり = その日の回数 ÷ 観察していた時間（推定）。観察していた時間は、記録した人の<Link to="/places">「わたしのいつもの時間」</Link>、登録がなければその人のその日の最初の記録から最後の記録まで。何人かいるときは、重なった時間を1回だけ数えます。30分に満たない日は出しません。達成基準は1日の回数で決めているので、横の点線は出しません。
+                  </p>
+                )}
+                {phases.length > 0 && (
+                  <p className="help">縦の点線 = 条件の変更（{phases.map((p) => `${formatShortDate(p.date)} ${p.label}`).join('、')}）。横の点線 = 支援計画の達成基準。</p>
+                )}
+                {revisions.length > 0 && (
+                  <p className="help">「定義の変更」の縦の点線 = その行動の、どんな行動か（定義・例・含まないもの）や測り方・強度の基準を直した日です。前と後は数え方が違うことがあります。</p>
+                )}
+                {days.length > 0 && <p className="help">グラフは横にずらすと前の日が見られます。「未記録」は記録のない日です。</p>}
+                {g !== 'day' && <p className="help">週・月は、記録のある日の平均です。</p>}
+              </div>
+            </details>
           </div>
           <ChartSyncProvider value={sync}>
             {groups.map((grp) => (

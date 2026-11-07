@@ -276,7 +276,7 @@ function HourStrip({ name, events }: { name: string; events: { occurredAt: strin
       <span className="hourstrip__name">{name}</span>
       <div className="hourstrip__cells">
         {hours.map((n, h) => (
-          <span key={h} className="hourstrip__cell" style={{ background: n ? `rgba(194,65,12,${0.15 + 0.85 * (n / max)})` : undefined, color: n / max > 0.5 ? '#fff' : undefined }} title={`${h}時台 ${n}`}>
+          <span key={h} className="hourstrip__cell" style={{ background: n ? `rgba(180,80,45,${0.15 + 0.85 * (n / max)})` : undefined, color: n / max > 0.5 ? '#fff' : undefined }} title={`${h}時台 ${n}`}>
             {n || ''}
           </span>
         ))}

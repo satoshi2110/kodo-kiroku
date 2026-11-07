@@ -287,12 +287,16 @@ export default function Home() {
 
       <div className="section">
         <Link to="/sleep" className="card sleep-card">
-          <span>
+          <span className="sleep-card__body">
             <span className="label">睡眠（昨夜）</span>{' '}
             {lastNight ? (
               <>
-                {lastNight.bedTime} → {lastNight.wakeTime} ・ {formatSleep(sleepMinutes(lastNight))}{wakingsOn && ` ・ 中途覚醒 ${lastNight.wakings}回`}
-                <span className="muted"> ・ {members.find((m) => m.userId === lastNight.recorderId)?.displayName ?? ''} が入力</span>
+                <span className="sleep-card__main">
+                  <span className="nowrap">{lastNight.bedTime} → {lastNight.wakeTime}</span>
+                  <span className="nowrap">{formatSleep(sleepMinutes(lastNight))}</span>
+                  {wakingsOn && <span className="nowrap">中途覚醒 {lastNight.wakings}回</span>}
+                </span>
+                <span className="muted">{members.find((m) => m.userId === lastNight.recorderId)?.displayName ?? ''} が入力</span>
               </>
             ) : (
               <span className="muted">{canEditSleep(me) ? '睡眠を記録（任意）' : 'まだ記録がありません'}</span>
@@ -385,7 +389,7 @@ export default function Home() {
       )}
 
       {toast && (
-        <div className="toast" role="status">
+        <div className={`toast${toast.abcEventId ? ' toast--done' : ''}`} role="status">
           <span>{toast.text}</span>
           {toast.abcEventId && !intensityFor && (
             <button type="button" className="btn btn--sm" onClick={() => nav(`/abc/${toast.abcEventId}`)}>詳しく書く</button>
@@ -486,8 +490,9 @@ function BehaviorCard({
   return (
     <div className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${flash ? ` bcard--flash-${flash}` : ''}`}>
       <button type="button" className="bcard__tap" disabled={disabled} onClick={onTap} aria-label={`${b.name}: ${action}`}>
-        <KindBadge kind={b.kind} of={replaces} />
+        <KindBadge kind={b.kind} />
         <span className="bcard__name">{b.name}</span>
+        {replaces && <span className="bcard__for">「{replaces}」の代わり</span>}
         <span className="bcard__count">
           {b.method === 'frequency' && <>今日 <strong>{total}</strong> 回</>}
           {b.method === 'duration' && <>今日 <strong>{formatDuration(totalSec)}</strong></>}

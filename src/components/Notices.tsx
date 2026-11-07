@@ -61,8 +61,8 @@ export function Notices() {
 
 function Box({ children }: { children: React.ReactNode }) {
   return (
-    <div className="section" style={{ paddingBottom: 0 }}>
-      <div className="notice-inline stack" role="status" style={{ margin: 0, gap: 8 }}>
+    <div className="section">
+      <div className="notice-bar" role="status">
         {children}
       </div>
     </div>

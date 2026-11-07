@@ -104,7 +104,7 @@ export default function PlanSignoff() {
                     {m ? `（${ROLE_LABEL[m.role]}${m.familyMark ? '・家族' : ''}）` : ''}
                     {m?.id === me?.id ? '（あなた）' : ''}
                   </span>
-                  <span className={`badge ${s?.state === 'agreed' ? 'badge--owner' : s?.state === 'opinion' ? 'badge--problem' : 'badge--role'}`}>
+                  <span className={`badge ${s?.state === 'agreed' ? 'badge--done' : s?.state === 'opinion' ? 'badge--problem' : 'badge--role'}`}>
                     {s?.state === 'agreed' ? `合意 ${formatShortDate(s.updatedAt.slice(0, 10))}` : s?.state === 'opinion' ? '意見あり' : '未確認'}
                   </span>
                 </div>

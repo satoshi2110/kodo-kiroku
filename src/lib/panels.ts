@@ -17,10 +17,10 @@ import { bucketize, canRate, dailyIntensity, dailyMain, dailyRate, dailySleepHou
 import type { ChartLine, Marker, Phase, Target } from '../components/LineChart';
 
 /** 色覚の多様性に配慮した色（オレンジと青）。印刷でも線の形（実線・点線）で区別できる */
-export const PROBLEM_COLOR = '#c2410c';
-export const GOOD_COLORS = ['#1d4ed8', '#047857', '#6d28d9'];
+export const PROBLEM_COLOR = '#b4502d';
+export const GOOD_COLORS = ['#1a6a86', '#1f7a55', '#6b4fa0'];
 /** まとめて重ねるときの問題行動の色（オレンジ系・赤紫・茶）。点の形も変える */
-const PROBLEM_COLORS = [PROBLEM_COLOR, '#9d174d', '#854d0e'];
+const PROBLEM_COLORS = [PROBLEM_COLOR, '#a3365e', '#8a5a12'];
 const PROBLEM_MARKERS: Marker[] = ['circle', 'triangle', 'diamond'];
 const GOOD_MARKERS: Marker[] = ['square', 'diamond', 'triangle'];
 
@@ -181,7 +181,7 @@ export function sleepPanel(rs: RecordSet, days: string[], g: Granularity): Panel
     key: 'sleep',
     caption: '睡眠 ・ 起きた日ごと',
     dates: s.dates,
-    lines: [{ name: '睡眠', color: '#475569', values: s.values }],
+    lines: [{ name: '睡眠', color: '#4f6670', values: s.values }],
     unit: g === 'day' ? '睡眠時間（時間）' : '睡眠時間の平均（時間）',
     format: (v) => `${v}時間`,
     targets: [],

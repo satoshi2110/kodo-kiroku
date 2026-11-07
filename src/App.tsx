@@ -46,7 +46,7 @@ function Shell() {
   const { loading, userId, person } = useApp();
   const { ready, session, recovery, mfaCode } = useSession();
   const loc = useLocation();
-  if (loading || !ready) return <div className="empty">読み込み中…</div>;
+  if (loading || !ready) return <div className="empty empty--loading" role="status">読み込み中…</div>;
   // サーバーにつながる設定があるときは、ログインしてから使う（7.4.3）
   if (serverEnabled && !session) return <Login />;
   if (serverEnabled && recovery) return <NewPassword />;

@@ -21,7 +21,7 @@ export default function PlaceMap({ pos, radiusM, onMove }: { pos: Pos; radiusM: 
     const map = L.map(el.current, { center: [pos.lat, pos.lng], zoom: 16, maxZoom: 18, minZoom: 5 });
     L.tileLayer(GSI_TILE_URL, { attribution: GSI_ATTRIBUTION, maxZoom: 18 }).addTo(map);
     map.attributionControl.setPrefix(false);
-    const circle = L.circle([pos.lat, pos.lng], { radius: radiusM, color: '#2f6fd6', weight: 2, fillOpacity: 0.12 }).addTo(map);
+    const circle = L.circle([pos.lat, pos.lng], { radius: radiusM, color: '#1a6a86', weight: 2, fillOpacity: 0.12 }).addTo(map);
     const pin = L.marker([pos.lat, pos.lng], { icon: PIN, draggable: true, keyboard: false }).addTo(map);
     const move = (ll: L.LatLng) => moveRef.current({ lat: ll.lat, lng: ll.lng });
     pin.on('drag', () => circle.setLatLng(pin.getLatLng()));

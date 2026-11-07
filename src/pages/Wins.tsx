@@ -22,7 +22,7 @@ export default function Wins() {
   const months = [...new Set(shown.map((w) => w.date.slice(0, 7)))];
 
   return (
-    <div className="page page--no-nav">
+    <div className="page page--no-nav wins-page">
       <TopBar title="できたこと" sub="これまでの小さな成果を見返す" back="/" />
       {places.length > 0 && (
         <div className="section chips">
@@ -36,7 +36,7 @@ export default function Wins() {
           <div className="card stack">
             <h2 className="card__title">{Number(m.slice(5))}月</h2>
             {shown.filter((w) => w.date.startsWith(m)).map((w, i) => (
-              <div key={i} className="today-row stack" style={{ gap: 2 }}>
+              <div key={i} className="today-row stack win-item" style={{ gap: 2 }}>
                 <span className="win-text">{w.text}</span>
                 <span className="muted">{formatDateJa(w.date)}{w.place ? ` ・ ${w.place}` : ''}</span>
               </div>

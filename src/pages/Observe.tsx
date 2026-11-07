@@ -217,8 +217,8 @@ export default function Observe() {
             </div>
             <ResultRow results={results} pending={pending} current={obs.method === 'interval' && preMarked ? 'yes' : null} />
             <p className="help">
-              ○ 起きた ・ × 起きなかった ・ － 未観察
-              {ratio != null && <> ／ 起きた区間 {ratio}%</>}
+              <span className="nowrap">○ 起きた</span> ・ <span className="nowrap">× 起きなかった</span> ・ <span className="nowrap">－ 未観察</span>
+              {ratio != null && <> ／ <span className="nowrap">起きた区間 {ratio}%</span></>}
             </p>
           </div>
 

@@ -59,7 +59,7 @@ export function TeamNotes({ limit = 30, compact = false }: { limit?: number; com
         )}
         {all.length === 0 && <span className="muted">まだありません。</span>}
         {shown.map((c) => (
-          <div key={c.id} className="today-row stack" style={{ gap: 2 }}>
+          <div key={c.id} className="today-row note-bubble stack" style={{ gap: 2 }}>
             <span className="muted">
               {memberOf(c.authorId)?.displayName ?? '退会したメンバー'}
               {memberOf(c.authorId) ? `（${AFFILIATION_LABEL[memberOf(c.authorId)!.affiliation]}）` : ''} ・ {formatDateTimeJa(c.createdAt)}
