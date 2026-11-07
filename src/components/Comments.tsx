@@ -120,7 +120,7 @@ export function MentionBanner() {
         <span>あなたが @ で呼ばれました{list.length > 3 ? `（${list.length}件。新しい3件）` : ''}:</span>
         {list.slice(0, 3).map((c) => (
           <Link key={c.id} to={linkOf(c)} style={{ display: 'block' }}>
-            {nameOf(c.authorId)}さん・{PLACE[c.target]}（{formatDateTimeJa(c.createdAt)}）: {c.text.length > 40 ? `${c.text.slice(0, 40)}…` : c.text}
+            {nameOf(c.authorId)}さん・{PLACE[c.target]}（{formatDateTimeJa(c.createdAt)}）: {(c.text ?? '').length > 40 ? `${c.text.slice(0, 40)}…` : (c.text ?? '')}
           </Link>
         ))}
         <div className="row" style={{ gap: 8 }}>
