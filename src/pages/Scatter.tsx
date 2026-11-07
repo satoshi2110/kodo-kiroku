@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { useApp } from '../state';
 import { addDays, dateRange, formatShortDate, parseLocalDate, toLocalDate } from '../lib/date';
-import { useRecordSet } from '../lib/series';
+import { useRecordSet, zeroFrom } from '../lib/series';
 import { TopBar } from '../components/ui';
 import GraphTabs from '../components/GraphTabs';
 
@@ -42,7 +42,8 @@ export default function Scatter() {
     if (e.intensity != null) c.max = Math.max(c.max ?? 0, e.intensity);
     cell.set(k, c);
   }
-  const observed = (d: string) => rs.recordedDays.has(d) && !(b && rs.notObserved.has(`${b.id}|${d}`));
+  const from = b ? zeroFrom(b, events) : '';
+  const observed = (d: string) => d >= from && rs.recordedDays.has(d) && !(b && rs.notObserved.has(`${b.id}|${d}`));
   const trend = trendSentence(cell, days);
   const levels = b?.intensity?.levels ?? 3;
 

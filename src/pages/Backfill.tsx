@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { canRecord, canUndoEvent, createEvent, setNotObserved } from '../db/repo';
 import { useApp } from '../state';
+import { zeroFrom } from '../lib/series';
 import { addDays, formatDateJa, formatDateTimeJa, fromDateTimeLocalInput, toLocalDate } from '../lib/date';
 import { METHOD_LABEL, type Event } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
@@ -56,7 +57,7 @@ export default function Backfill() {
     return days.flatMap((d) =>
       behaviors
         .filter((b) => b.method === 'frequency' || b.method === 'duration')
-        .filter((b) => !has.has(`${b.id}|${d}`))
+        .filter((b) => !has.has(`${b.id}|${d}`) && d >= zeroFrom(b, data.events))
         .map((b) => ({ date: d, b, notObserved: marked.has(`${b.id}|${d}`) })),
     );
   }, [data, behaviors, today]);

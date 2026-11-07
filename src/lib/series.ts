@@ -2,14 +2,15 @@
  * グラフ・できたこと・PDF レポート・支援会議メモで共通に使う「1日ごとの値」（6.4.1）。
  * - 頻度: 1日の回数、持続時間: 1日の合計（分）、潜時: 1日の平均（秒）、インターバル・時間サンプリング: 起きた区間の割合（%）
  * - 自動0（決定21・31）: 頻度と持続時間は、記録を付けた日（その対象者に何か記録がある日）に記録がなければ 0。
- *   保存はせず、表示のたびに計算する。「観察していなかった」にした日は 0 を付けず、線を切る
+ *   保存はせず、表示のたびに計算する。「観察していなかった」にした日は 0 を付けず、線を切る。
+ *   行動を作った日より前には 0 を付けない（決定111）。さかのぼって入れた記録がそれより前にあれば、その日から
  * - 週・月（【暫定】）: 値のある日の平均。記録のない日で薄まらないようにする
  * - 1時間あたりの回数（6.3.3、【暫定】）: 頻度の回数を、その日の観察時間（推定）で割る。推定できない日は出さない
  */
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { latestSchedules, observedRatio } from '../db/repo';
-import { addDays, dateRange, formatDuration, parseLocalDate, startOfMonth, startOfWeek, toLocalDate } from './date';
+import { addDays, dateRange, formatDuration, localDateOf, parseLocalDate, startOfMonth, startOfWeek, toLocalDate } from './date';
 import type { Behavior, Event, Observation, SleepLog, UserSchedule } from '../db/types';
 import { sleepMinutes } from './sleep';
 
@@ -57,13 +58,22 @@ const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((s, v) => s + v, 0) 
 export const isRatio = (b: Behavior) => b.method === 'interval' || b.method === 'sampling';
 const autoZero = (b: Behavior) => b.method === 'frequency' || b.method === 'duration';
 
+/** 自動 0 を付けはじめる日: 行動を作った日。さかのぼって入れた記録がそれより前にあれば、その日から（決定111） */
+export function zeroFrom(b: Behavior, events: Pick<Event, 'behaviorId' | 'localDate'>[]): string {
+  let from = localDateOf(b.createdAt);
+  for (const e of events) if (e.behaviorId === b.id && e.localDate < from) from = e.localDate;
+  return from;
+}
+
 /** その行動の、1日ごとの値（測り方ごと） */
 export function dailyMain(b: Behavior, dates: string[], rs: RecordSet): (number | null)[] {
   if (isRatio(b)) {
     const obs = rs.observations.filter((o) => o.behaviorId === b.id);
     return dates.map((d) => observedRatio(obs.filter((o) => o.localDate === d)));
   }
-  const byDate = groupByDate(rs.events.filter((e) => e.behaviorId === b.id));
+  const mine = rs.events.filter((e) => e.behaviorId === b.id);
+  const byDate = groupByDate(mine);
+  const from = zeroFrom(b, mine);
   return dates.map((d) => {
     const list = byDate.get(d);
     if (list?.length) {
@@ -71,7 +81,7 @@ export function dailyMain(b: Behavior, dates: string[], rs: RecordSet): (number 
       if (b.method === 'duration') return round1(list.reduce((s, e) => s + (e.durationSec ?? 0), 0) / 60);
       return avg(list.flatMap((e) => (e.latencySec != null ? [e.latencySec] : [])));
     }
-    return autoZero(b) && rs.recordedDays.has(d) && !rs.notObserved.has(`${b.id}|${d}`) ? 0 : null;
+    return autoZero(b) && d >= from && rs.recordedDays.has(d) && !rs.notObserved.has(`${b.id}|${d}`) ? 0 : null;
   });
 }
 

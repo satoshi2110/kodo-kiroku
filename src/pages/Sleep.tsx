@@ -17,7 +17,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 export default function Sleep() {
-  const { person, me, members, userId, shortSleepUnderHours } = useApp();
+  const { person, me, members, userId, shortSleepUnderHours, wakingsOn } = useApp();
   const personId = person?.id ?? '';
   const today = toLocalDate();
   const [wakeDate, setWakeDate] = useState(today);
@@ -77,6 +77,7 @@ export default function Sleep() {
                   いつもの時刻にする（{usual.bedTime} → {usual.wakeTime}）
                 </button>
               )}
+              {wakingsOn && (
               <div className="row row--between">
                 <span className="label">夜中に起きた回数（任意）</span>
                 <span className="row">
@@ -85,6 +86,7 @@ export default function Sleep() {
                   <button type="button" className="btn btn--sm" aria-label="1回ふやす" onClick={() => setForm({ ...form, wakings: form.wakings + 1 })}>＋</button>
                 </span>
               </div>
+              )}
               <label className="stack">
                 <span className="label">メモ（任意）</span>
                 <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />

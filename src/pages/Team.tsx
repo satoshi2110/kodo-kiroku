@@ -5,19 +5,17 @@
  * 管理者・副管理者・支援リーダーは、ほかのメンバーの役割を変えたり、停止したりできる（7章 #2）。
  * 所属（家族・施設・学校・その他）で絞って、まとめて停止もできる（7.4.2、14.2 #26。【暫定】2026-11-07 の試作）。
  * 管理者の引き継ぎ（6.9）: 管理者が指名して相手が受ける／副管理者が申し込み、14日のあいだ管理者が断らなければ入れかわる。
- * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
+ * 申し送りは TeamNotes（ホームにも新しい3件を出す。決定116）。
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import QRCode from 'qrcode';
 import { inviteUrl } from '../lib/inviteLink';
 import { Link } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
 import { useApp } from '../state';
-import { assignableRoles, canExport, canInvite, canManageMember, canRecord, setMemberFlags } from '../db/repo';
+import { assignableRoles, canExport, canInvite, canManageMember, setMemberFlags } from '../db/repo';
 import { supabase } from '../server/supabase';
 import { runSync, syncStatus } from '../server/sync';
-import { addComment, removeComment } from '../db/phase2';
+import { TeamNotes } from '../components/TeamNotes';
 import { formatDateTimeJa, nowISO } from '../lib/date';
 import { AFFILIATION_LABEL, ROLE_LABEL, type Affiliation, type Role, type TeamMember } from '../db/types';
 import { Chip, Sheet, TopBar } from '../components/ui';
@@ -27,24 +25,7 @@ import { formerAdminRole, isDue, TRANSFER_RESULT_LABEL, useOwnerTransfers } from
 export default function Team() {
   const { person, members, me, userId, aiEnabled } = useApp();
   const [editing, setEditing] = useState<TeamMember | null>(null);
-  const [text, setText] = useState('');
-  const notes = useLiveQuery(
-    async () =>
-      person
-        ? (await db.comments.where('personId').equals(person.id).filter((c) => c.target === 'team' && !c.deletedAt).toArray())
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-            .slice(0, 30)
-        : [],
-    [person?.id],
-  );
   if (!person || !userId) return null;
-  const memberOf = (uid: string) => members.find((m) => m.userId === uid);
-  async function post() {
-    const t = text.trim();
-    if (!t || !person || !userId) return;
-    await addComment(person.id, 'team', null, t, userId);
-    setText('');
-  }
   const isAdmin = me?.role === 'admin';
   const admin = members.find((m) => m.role === 'admin');
   const subadmins = members.filter((m) => m.role === 'subadmin').map((m) => m.displayName).join('・');
@@ -105,33 +86,7 @@ export default function Team() {
 
       {supabase && <Handover personId={person.id} />}
 
-      <div className="section">
-        <div className="card stack">
-          <h2 className="card__title" style={{ margin: 0 }}>申し送り</h2>
-          {canRecord(me?.role) && (
-            <div className="row">
-              <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="今日の様子を一言で書く" maxLength={200} />
-              <button type="button" className="btn btn--sm" disabled={!text.trim()} onClick={post}>送る</button>
-            </div>
-          )}
-          {(notes ?? []).length === 0 && <span className="muted">まだありません。</span>}
-          {(notes ?? []).map((c) => (
-            <div key={c.id} className="today-row stack" style={{ gap: 2 }}>
-              <span className="muted">
-                {memberOf(c.authorId)?.displayName ?? '退会したメンバー'}
-                {memberOf(c.authorId) ? `（${AFFILIATION_LABEL[memberOf(c.authorId)!.affiliation]}）` : ''} ・ {formatDateTimeJa(c.createdAt)}
-              </span>
-              <span>{c.text}</span>
-              {c.authorId === userId && (
-                <button type="button" className="btn btn--sm" style={{ alignSelf: 'flex-end' }} onClick={() => window.confirm('この申し送りを消しますか？（履歴には残ります）') && removeComment(c.id, userId)}>
-                  消す
-                </button>
-              )}
-            </div>
-          ))}
-          <p className="help">責める言い方を避け、できたことや気づいたことを短く書きましょう。{supabase ? 'チームの人に共有されます。' : 'いまはこの端末の中だけに残ります（共有はログインができてから）。'}</p>
-        </div>
-      </div>
+      <TeamNotes />
 
       <div className="section">
         <Link to="/team/settings" className="card row row--between team-settings-link">

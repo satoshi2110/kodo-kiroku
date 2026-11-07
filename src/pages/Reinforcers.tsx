@@ -142,7 +142,7 @@ export default function Reinforcers() {
       {form && (
         <Sheet title={form.id ? '好きなものの編集' : '好きなものの追加'} onClose={() => setForm(null)}>
           <div className="stack">
-            <FormPhoto form={form} onPick={(f) => pickPhoto(f, (b) => setForm({ ...form, photo: b }))} onRemove={() => setForm({ ...form, photo: null })} />
+            <FormPhoto form={form} onPick={(f) => pickPhoto(f, (b) => setForm((cur) => (cur ? { ...cur, photo: b } : cur)))} onRemove={() => setForm({ ...form, photo: null })} />
             <p className="help">本人や他の人の顔が写っていないか確かめてください。</p>
             <label className="field">
               名前

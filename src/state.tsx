@@ -21,6 +21,7 @@ interface AppState {
   placeOutside: boolean; // 「登録場所の外」を選んでいる
   placeAuto: boolean; // いまの場所を位置で自動判定した（false = 手で選んだ）
   useLocation: boolean; // この端末で位置情報を使う
+  wakingsOn: boolean; // 睡眠の「中途覚醒」を使う（決定115。初期は使う）
   shortSleepUnderHours: number | null; // 睡眠不足を「○時間未満」で判定する（null = いつもより2時間以上短い）
   mfaRule: 'all' | 'leader' | 'optional' | null; // MFA の基準（0020）。null = サーバーから届いていない（0020 の前・端末の中だけ）
   deleteRequestedAt: string | null; // チームの削除の申し込み
@@ -113,6 +114,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       placeOutside: choice === 'outside',
       placeAuto: !!(personId && device?.placeAuto?.[personId]),
       useLocation: !!device?.useLocation,
+      wakingsOn: teamSetting?.wakingsEnabled !== false,
       shortSleepUnderHours: teamSetting?.shortSleepUnderHours ?? null,
       mfaRule: teamSetting?.mfaRuleAt ? (teamSetting.mfaRule ?? 'leader') : null,
       deleteRequestedAt: teamSetting?.deleteRequestedAt ?? null,

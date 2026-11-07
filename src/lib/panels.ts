@@ -5,15 +5,24 @@
  * - 強度を付けた行動は、強度のパネルを別に出す（決定24）
  * - 達成基準（実施中の支援計画）は横線、条件変更は縦線
  * - rate = 頻度を1時間あたりの回数で見る（6.4.1）。達成基準は1日の回数で決めているので、そのときは横線を出さない
+ * - together = 「まとめて」（グラフ画面だけ。決定112・113）。
+ *   1. 代替行動のある問題行動は、その代替行動とだけ組にする（いつもと同じ）
+ *   2. 代替行動のない問題行動どうしは、測り方と単位が同じなら1つのグラフにする
+ *   3. 望ましい行動（代替行動でないもの）どうしも同じ
+ *   強度は段階の数が同じものを重ねる。色だけでなく点の形でも区別する
  */
 import { METHOD_LABEL, type Behavior, type BehaviorRevision, type PlanContent } from '../db/types';
 import { localDateOf } from './date';
 import { bucketize, canRate, dailyIntensity, dailyMain, dailyRate, dailySleepHours, mainFormat, mainUnit, type Granularity, type RecordSet } from './series';
-import type { ChartLine, Phase, Target } from '../components/LineChart';
+import type { ChartLine, Marker, Phase, Target } from '../components/LineChart';
 
 /** 色覚の多様性に配慮した色（オレンジと青）。印刷でも線の形（実線・点線）で区別できる */
 export const PROBLEM_COLOR = '#c2410c';
 export const GOOD_COLORS = ['#1d4ed8', '#047857', '#6d28d9'];
+/** まとめて重ねるときの問題行動の色（オレンジ系・赤紫・茶）。点の形も変える */
+const PROBLEM_COLORS = [PROBLEM_COLOR, '#9d174d', '#854d0e'];
+const PROBLEM_MARKERS: Marker[] = ['circle', 'triangle', 'diamond'];
+const GOOD_MARKERS: Marker[] = ['square', 'diamond', 'triangle'];
 
 export interface PanelSpec {
   key: string;
@@ -38,12 +47,41 @@ function colorOf(b: Behavior, goodIndex: number) {
   return b.kind === 'problem' ? PROBLEM_COLOR : GOOD_COLORS[goodIndex % GOOD_COLORS.length];
 }
 
-/** 問題行動ごとに、その代替行動を同じ組にする。代替元のない行動は1つずつ */
-export function groupBehaviors(behaviors: Behavior[]): Behavior[][] {
+/**
+ * 「まとめて」の組（決定113）。代替行動のある問題行動はその組のまま。
+ * 残りの問題行動どうし・問題行動でない行動どうしは、測り方と単位が同じものを1つの組にする
+ */
+function joinBehaviors(behaviors: Behavior[], plan: PlanContent | null, unitOf: (b: Behavior) => string): Behavior[][] {
+  const pairs: Behavior[][] = [];
+  const rest = new Map<string, Behavior[]>();
+  for (const grp of groupBehaviors(behaviors, plan)) {
+    if (grp.length > 1) {
+      pairs.push(grp);
+      continue;
+    }
+    const b = grp[0];
+    const k = `${b.kind === 'problem' ? 'p' : 'g'}|${b.method}|${unitOf(b)}`;
+    rest.set(k, [...(rest.get(k) ?? []), b]);
+  }
+  const solo = [...rest.entries()];
+  // 並びは、組 → 問題行動 → それ以外
+  return [...pairs, ...solo.filter(([k]) => k.startsWith('p|')).map(([, v]) => v), ...solo.filter(([k]) => k.startsWith('g|')).map(([, v]) => v)];
+}
+
+/**
+ * 問題行動ごとに、その代替行動を同じ組にする。代替元のない行動は1つずつ。
+ * 支援計画で「標的とする問題行動」と「代替行動」に選んだ組をいちばん優先する（決定114）。
+ * 計画の代替行動は、行動の設定（どの問題行動の代わりか）が別でも、計画の問題行動と組にする
+ */
+export function groupBehaviors(behaviors: Behavior[], plan: PlanContent | null = null): Behavior[][] {
+  const planPair = plan?.problemBehaviorId && plan.alternativeBehaviorId && behaviors.some((b) => b.id === plan.problemBehaviorId && b.kind === 'problem')
+    ? { problem: plan.problemBehaviorId, alt: plan.alternativeBehaviorId }
+    : null;
+  const partnerOf = (b: Behavior) => (b.kind === 'problem' ? null : planPair && b.id === planPair.alt ? planPair.problem : b.replacesBehaviorId);
   const used = new Set<string>();
   const groups: Behavior[][] = [];
   for (const p of behaviors.filter((b) => b.kind === 'problem')) {
-    const g = [p, ...behaviors.filter((b) => b.replacesBehaviorId === p.id)];
+    const g = [p, ...behaviors.filter((b) => partnerOf(b) === p.id)];
     g.forEach((b) => used.add(b.id));
     groups.push(g);
   }
@@ -58,14 +96,30 @@ export function buildGroups(
   g: Granularity,
   plan: PlanContent | null,
   rate = false,
+  together = false,
 ): GroupSpec[] {
-  return groupBehaviors(behaviors).map((members) => {
+  const sets = together ? joinBehaviors(behaviors, plan, (b) => mainUnit(b, g, rate)) : groupBehaviors(behaviors, plan);
+  return sets.map((members) => {
     let good = 0;
-    const colors = new Map(members.map((b) => [b.id, colorOf(b, b.kind === 'problem' ? 0 : good++)]));
+    let bad = 0;
+    const colors = new Map<string, string>();
+    const markers = new Map<string, Marker>();
+    for (const b of members) {
+      if (b.kind === 'problem') {
+        const i = together ? bad++ : 0;
+        colors.set(b.id, together ? PROBLEM_COLORS[i % PROBLEM_COLORS.length] : colorOf(b, 0));
+        if (together) markers.set(b.id, PROBLEM_MARKERS[i % PROBLEM_MARKERS.length]);
+      } else {
+        const i = good++;
+        colors.set(b.id, colorOf(b, i));
+        if (together) markers.set(b.id, GOOD_MARKERS[i % GOOD_MARKERS.length]);
+      }
+    }
     const line = (b: Behavior, values: (number | null)[]): ChartLine => ({
       name: b.name,
       color: colors.get(b.id)!,
       dashed: b.kind !== 'problem',
+      marker: markers.get(b.id),
       values,
     });
     const targetsFor = (list: Behavior[]): Target[] =>
@@ -93,20 +147,26 @@ export function buildGroups(
       };
     };
     const panels: PanelSpec[] = [];
+    // 組の中で測り方と単位がそろっていれば1つに重ね、違えば上下に並べる（決定33）
     const sameMethod = members.every((b) => b.method === members[0].method && mainUnit(b, g, rate) === mainUnit(members[0], g, rate));
     if (sameMethod) panels.push(main(members));
     else for (const b of members) panels.push(main([b]));
-    for (const b of members.filter((x) => x.intensity)) {
-      const s = bucketize(days, dailyIntensity(b, days, rs), g);
+    const withInt = members.filter((x) => x.intensity);
+    const intSets = together
+      ? [...new Set(withInt.map((b) => b.intensity!.levels))].map((lv) => withInt.filter((b) => b.intensity!.levels === lv))
+      : withInt.map((b) => [b]);
+    for (const list of intSets) {
+      const levels = list[0].intensity!.levels;
+      const series = list.map((b) => bucketize(days, dailyIntensity(b, days, rs), g));
       panels.push({
-        key: `int-${b.id}`,
-        caption: `${b.name} の強度（1日の平均。未評価は除く）`,
-        dates: s.dates,
-        lines: [line(b, s.values)],
-        unit: `平均の強度（1〜${b.intensity!.levels}）`,
+        key: `int-${list.map((b) => b.id).join('-')}`,
+        caption: list.length > 1 ? '強度（1日の平均。未評価は除く）' : `${list[0].name} の強度（1日の平均。未評価は除く）`,
+        dates: series[0].dates,
+        lines: list.map((b, i) => line(b, series[i].values)),
+        unit: `平均の強度（1〜${levels}）`,
         format: (v) => String(v),
         fixedMin: 1,
-        fixedMax: b.intensity!.levels,
+        fixedMax: levels,
         targets: [],
       });
     }

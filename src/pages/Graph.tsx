@@ -6,6 +6,7 @@
  * - 条件変更（支援計画が実施中になった日）は縦の点線、達成基準は横の点線（Phase 2）
  * - 表示する行動と睡眠時間のパネルを選べる
  * - 頻度は「回数」と「1時間あたり」を切りかえる（6.4.1）。既定は回数（【暫定】）
+ * - 「まとめ方」の「まとめて」で、代替行動のない問題行動どうし・望ましい行動どうしを、測り方が同じなら1つのグラフに重ねる（決定112・113）。既定は行動ごと
  */
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -31,6 +32,7 @@ export default function Graph() {
   const [params] = useSearchParams();
   const [showSleep, setShowSleep] = useState(params.get('sleep') === '1'); // 睡眠の画面の「グラフで見る」から来たときは睡眠時間も出す
   const [rate, setRate] = useState(false);
+  const [together, setTogether] = useState(false);
   const sync = useNewSync();
   if (!person || !rs) return null;
 
@@ -38,11 +40,14 @@ export default function Graph() {
   const days = allDates(rs);
   const shown = behaviors.filter((b) => !hidden.has(b.id));
   const hasFreq = shown.some(canRate);
-  const groups = buildGroups(shown, rs, days, g, planData?.plan?.activeContent ?? null, rate && hasFreq);
+  const canJoin = shown.length >= 2;
+  const join = together && canJoin;
+  const plan = planData?.plan?.activeContent ?? null;
+  const groups = buildGroups(shown, rs, days, g, plan, rate && hasFreq, join);
   const phases = planData?.phases ?? [];
   // 変化のまとめは、区切り（日・週・月）にかかわらず1日ごとの値で出す
   const dayPanels = new Map(
-    (g === 'day' ? groups : buildGroups(shown, rs, days, 'day', null, rate && hasFreq)).flatMap((grp) => grp.panels).map((p) => [p.key, p]),
+    (g === 'day' ? groups : buildGroups(shown, rs, days, 'day', plan, rate && hasFreq, join)).flatMap((grp) => grp.panels).map((p) => [p.key, p]),
   );
   const toggle = (id: string) => setHidden((h) => {
     const n = new Set(h);
@@ -73,6 +78,22 @@ export default function Graph() {
                 { value: 'month', label: '月' },
               ]}
             />
+            {canJoin && (
+              <Segmented
+                label="まとめ方"
+                value={join ? 'together' : 'each'}
+                onChange={(v) => setTogether(v === 'together')}
+                options={[
+                  { value: 'each', label: '行動ごと' },
+                  { value: 'together', label: 'まとめて' },
+                ]}
+              />
+            )}
+            {join && (
+              <p className="help">
+                代替行動のある問題行動は、その代替行動と組で1つのグラフ。代替行動のない問題行動どうし、望ましい行動どうしは、測り方が同じなら1つのグラフに重ねます。線は色と点の形で見分けます。
+              </p>
+            )}
             {hasFreq && (
               <Segmented
                 label="頻度の見かた"
@@ -115,7 +136,7 @@ export default function Graph() {
                         {i > 0 && <span className="muted">と</span>}
                         {(() => {
                           const l = grp.panels.flatMap((p) => p.lines).find((x) => x.name === b.name);
-                          return l ? <LineSwatch color={l.color} dashed={l.dashed} /> : null;
+                          return l ? <LineSwatch color={l.color} dashed={l.dashed} marker={l.marker} /> : null;
                         })()}
                         <strong className="graph-name">{b.name}</strong>
                         <KindBadge kind={b.kind} />

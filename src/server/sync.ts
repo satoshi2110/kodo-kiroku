@@ -69,10 +69,12 @@ export function installSyncHooks() {
       if (!isRemote(tx)) (obj as unknown as Row)._dirty = 1;
       scheduleSync();
     });
-    t.hook('updating', function (mods, _pk, _obj, tx) {
-      if (isRemote(tx) || '_dirty' in (mods as object)) return undefined;
+    t.hook('updating', function (mods, _pk, obj, tx) {
+      // 丸ごと置きかえる put（写真など）では、新しい形に _dirty・_srv がないため「_dirty を消す」差分になる。
+      // それを「印を外した」と取りちがえると送られず、次の同期でサーバーの古い内容に戻ってしまうので、値があるときだけ見る
+      if (isRemote(tx) || (mods as Row)._dirty !== undefined) return undefined;
       scheduleSync();
-      return { _dirty: 1 };
+      return (obj as unknown as Row)?._srv === 1 ? { _dirty: 1, _srv: 1 } : { _dirty: 1 };
     });
   }
 }

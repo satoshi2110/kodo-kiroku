@@ -16,6 +16,7 @@ import { Chip, KindBadge, Sheet, TopBar } from '../components/ui';
 import { formatSleep, sleepMinutes } from '../lib/sleep';
 import { useRecordSet } from '../lib/series';
 import { computeWins } from '../lib/wins';
+import { TeamNotes } from '../components/TeamNotes';
 import { usePlanData } from '../lib/usePlan';
 import { needsMyAnswer, useOwnerTransfers } from '../lib/ownerTransfer';
 import { addDays, formatShortDate } from '../lib/date';
@@ -49,7 +50,7 @@ function useStoredTimers() {
 }
 
 export default function Home() {
-  const { person, persons, setCurrentPerson, behaviors, me, members, userId, places, place, placeOutside, placeAuto, useLocation } = useApp();
+  const { person, persons, setCurrentPerson, behaviors, me, members, userId, places, place, placeOutside, placeAuto, useLocation, wakingsOn } = useApp();
   const today = toLocalDate();
   const personId = person?.id ?? '';
   const now = useNow(30_000);
@@ -290,7 +291,7 @@ export default function Home() {
             <span className="label">睡眠（昨夜）</span>{' '}
             {lastNight ? (
               <>
-                {lastNight.bedTime} → {lastNight.wakeTime} ・ {formatSleep(sleepMinutes(lastNight))} ・ 中途覚醒 {lastNight.wakings}回
+                {lastNight.bedTime} → {lastNight.wakeTime} ・ {formatSleep(sleepMinutes(lastNight))}{wakingsOn && ` ・ 中途覚醒 ${lastNight.wakings}回`}
                 <span className="muted"> ・ {members.find((m) => m.userId === lastNight.recorderId)?.displayName ?? ''} が入力</span>
               </>
             ) : (
@@ -339,6 +340,8 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <TeamNotes limit={3} compact />
 
       <div className="section">
         <div className="card">
@@ -420,13 +423,14 @@ export default function Home() {
             記録しました ・ {formatTime(intensityFor.event.occurredAt)}{intensityFor.event.placeName ? ` ・ ${intensityFor.event.placeName}` : ''}
           </p>
           <p className="help">いちばん近いものを選んでください。あとで選ぶと「未評価」のまま残ります。</p>
+          {/* 「あとで」をいちばん上に置く（決定110） */}
+          <button type="button" className="btn btn--block" onClick={() => setIntensity(null)}>あとで（未評価）</button>
           {INTENSITY_NAMES[intensityFor.behavior.intensity.levels].map((label, i) => (
             <button key={i} type="button" className="btn btn--block intensity-option" onClick={() => setIntensity(i + 1)}>
               <strong>強度 {i + 1}</strong>
               <span>{intensityFor.behavior.intensity!.criteria[i] || `${label}（基準未設定）`}</span>
             </button>
           ))}
-          <button type="button" className="btn btn--block" onClick={() => setIntensity(null)}>あとで（未評価）</button>
           <button
             type="button"
             className="btn btn--outline btn--block"

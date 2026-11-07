@@ -280,6 +280,7 @@ export interface TeamSetting {
   restraintPeriod?: RestraintPeriod | null; // 身体拘束の見直しをすすめる目安の期間。初期値なし（決定74）
   restraintCount?: number | null; // 目安の件数（この件数を超えたら）。0 なら1件でも記録されたら
   shortSleepUnderHours?: number | null; // 睡眠不足の判定を「○時間未満」にする。null = いつもより2時間以上短い夜（初期設定）
+  wakingsEnabled?: boolean | null; // 睡眠の「中途覚醒」を使うか。false = 使わない（入力とホームのカードに出さない）。null・なし = 使う（決定115）
   deleteRequestedAt?: ISODateTime | null; // チームの削除を申し込んだ日時。30日たつと消える
   mfaRule?: 'all' | 'leader' | 'optional'; // MFA の基準（管理者が決める。0020。既定は支援リーダー以上）
   mfaRuleAt?: ISODateTime; // 基準を変えた時刻（サーバーが付ける。猶予の起点）

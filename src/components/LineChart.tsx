@@ -18,6 +18,7 @@ const PLOT_H = 160;
 const BOTTOM = 52;
 const H = TOP + PLOT_H + BOTTOM;
 const VISIBLE = 14;
+const ROW_H = 13; // 縦線の名前の1段の高さ
 const PAD_R = 16;
 const PAD_L = 14; // 最初の日付の文字が左で切れないように
 
@@ -25,8 +26,21 @@ export interface ChartLine {
   name: string;
   color: string;
   dashed?: boolean;
+  /** 点の形。省略時は実線なら丸、点線なら四角。まとめて重ねたときに、色のほかに形でも区別する */
+  marker?: Marker;
   values: (number | null)[];
 }
+
+export type Marker = 'circle' | 'square' | 'triangle' | 'diamond';
+
+/** 点の形を描く（中心 cx, cy、大きさ r） */
+function Dot({ cx, cy, r, color, marker }: { cx: number; cy: number; r: number; color: string; marker: Marker }) {
+  if (marker === 'square') return <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} fill={color} />;
+  if (marker === 'triangle') return <polygon points={`${cx},${cy - r * 1.2} ${cx + r * 1.15},${cy + r * 0.9} ${cx - r * 1.15},${cy + r * 0.9}`} fill={color} />;
+  if (marker === 'diamond') return <polygon points={`${cx},${cy - r * 1.3} ${cx + r * 1.3},${cy} ${cx},${cy + r * 1.3} ${cx - r * 1.3},${cy}`} fill={color} />;
+  return <circle cx={cx} cy={cy} r={r} fill={color} />;
+}
+const markerOf = (l: { dashed?: boolean; marker?: Marker }): Marker => l.marker ?? (l.dashed ? 'square' : 'circle');
 
 export interface Phase {
   date: string;
@@ -126,7 +140,7 @@ export default function LineChart({
   const all = lines.flatMap((l) => l.values.filter((v): v is number => v != null));
   const maxVal = Math.max(0, ...all, ...targets.map((t) => t.value));
   const { min, max, ticks } = fixedMax != null && fixedMin > 0 ? evenScale(fixedMin, fixedMax) : niceScale(fixedMax ?? maxVal);
-  const y = (v: number) => TOP + PLOT_H - ((v - min) / (max - min)) * PLOT_H;
+  const y = (v: number) => top + PLOT_H - ((v - min) / (max - min)) * PLOT_H;
   const x = (i: number) => PAD_L + i * slotW + slotW / 2;
 
   // 条件変更の位置: その区切りの左端（週・月は、変更日の入る区切りの中の位置）
@@ -141,6 +155,37 @@ export default function LineChart({
   };
   const shownPhases = phases.filter((p) => p.date > (dates[0] ?? '') && p.date <= (dates[n - 1] ?? ''));
   const planPhases = shownPhases.filter((p) => p.kind !== 'definition');
+  // 縦線の名前（6.4.1）。同じ位置の線は1本にして名前を「・」でつなぐ。
+  // 名前どうしが重なるときは、1段上に書く（そのぶんグラフを下げる）
+  const phaseLines: { x: number; label: string }[] = [];
+  for (const p of shownPhases) {
+    const px = phaseX(p.date);
+    if (px == null) continue;
+    const same = phaseLines.find((l) => Math.abs(l.x - px) < 1);
+    if (same) {
+      if (!same.label.split('・').includes(p.label)) same.label += `・${p.label}`;
+    } else phaseLines.push({ x: px, label: p.label });
+  }
+  const phaseTextW = (t: string) => [...t].reduce((sum, c) => sum + (c.charCodeAt(0) > 0xff ? 10.5 : 6), 0);
+  const labelItems: { text: string; x0: number; x1: number; anchorStart: boolean }[] = [];
+  if (planPhases.length > 0 && dates[0] < planPhases[0].date) labelItems.push({ text: 'ベースライン', x0: 4, x1: 4 + phaseTextW('ベースライン'), anchorStart: true });
+  for (const l of [...phaseLines].sort((a, b) => a.x - b.x)) {
+    const tw = phaseTextW(l.label);
+    labelItems.push(l.x + 4 + tw > plotW ? { text: l.label, x0: l.x - 4 - tw, x1: l.x - 4, anchorStart: false } : { text: l.label, x0: l.x + 4, x1: l.x + 4 + tw, anchorStart: true });
+  }
+  const rowEnds: number[] = [];
+  const placed = labelItems.map((it) => {
+    let r = rowEnds.findIndex((end) => it.x0 >= end + 6);
+    if (r < 0) {
+      r = Math.min(rowEnds.length, 2); // 3段まで
+      if (r === rowEnds.length) rowEnds.push(-Infinity);
+    }
+    rowEnds[r] = Math.max(rowEnds[r], it.x1);
+    return { ...it, row: r };
+  });
+  const extra = ROW_H * Math.max(0, rowEnds.length - 1);
+  const top = TOP + extra;
+  const h = H + extra;
   // i と i+1 の間に条件変更があれば線を切る
   const breakAfter = new Set<number>();
   for (const p of shownPhases) {
@@ -210,35 +255,33 @@ export default function LineChart({
         const label = (n - 1 - i) % every === 0;
         return (
           <g key={d}>
-            <line x1={x(i)} x2={x(i)} y1={TOP + PLOT_H} y2={TOP + PLOT_H + 4} className="chart__base" />
+            <line x1={x(i)} x2={x(i)} y1={top + PLOT_H} y2={top + PLOT_H + 4} className="chart__base" />
             {label && (
               <>
-                <text x={x(i)} y={TOP + PLOT_H + 16} textAnchor="middle" className="chart__tick">{a}</text>
-                {b && <text x={x(i)} y={TOP + PLOT_H + 29} textAnchor="middle" className={`chart__tick${sun ? ' chart__tick--sun' : ''}`}>{b}</text>}
+                <text x={x(i)} y={top + PLOT_H + 16} textAnchor="middle" className="chart__tick">{a}</text>
+                {b && <text x={x(i)} y={top + PLOT_H + 29} textAnchor="middle" className={`chart__tick${sun ? ' chart__tick--sun' : ''}`}>{b}</text>}
               </>
             )}
           </g>
         );
       })}
-      {planPhases.length > 0 && dates[0] < planPhases[0].date && (
-        <text x={4} y={TOP - 8} className="chart__phase">ベースライン</text>
-      )}
-      {shownPhases.map((p) => {
-        const px = phaseX(p.date);
-        return px == null ? null : (
-          <g key={p.date + p.label}>
-            <line x1={px} x2={px} y1={TOP - 4} y2={TOP + PLOT_H} className="chart__phase-line" />
-            {px + 4 + p.label.length * 11 > plotW ? (
-              <text x={px - 4} y={TOP - 8} textAnchor="end" className="chart__phase">{p.label}</text>
-            ) : (
-              <text x={px + 4} y={TOP - 8} className="chart__phase">{p.label}</text>
-            )}
-          </g>
-        );
-      })}
+      {phaseLines.map((l) => (
+        <line key={`pl-${l.x}`} x1={l.x} x2={l.x} y1={top - 4} y2={top + PLOT_H} className="chart__phase-line" />
+      ))}
+      {placed.map((it) => (
+        <text
+          key={`pt-${it.text}-${it.x0}`}
+          x={it.anchorStart ? it.x0 : it.x1}
+          y={top - 8 - ROW_H * it.row}
+          textAnchor={it.anchorStart ? 'start' : 'end'}
+          className="chart__phase"
+        >
+          {it.text}
+        </text>
+      ))}
       {gaps.map((gp) =>
         gp.w >= 16 ? (
-          <text key={`gap-${gp.cx}`} x={gp.cx} y={TOP + PLOT_H - 5} textAnchor="middle" className="chart__gap">未記録</text>
+          <text key={`gap-${gp.cx}`} x={gp.cx} y={top + PLOT_H - 5} textAnchor="middle" className="chart__gap">未記録</text>
         ) : null,
       )}
       {targets.map((t, i) => (
@@ -254,11 +297,7 @@ export default function LineChart({
       )}
       {lines.map((l, k) =>
         l.values.map((v, i) =>
-          v == null ? null : l.dashed ? (
-            <rect key={`${k}-${i}`} x={x(i) - 3.5} y={y(v) - 3.5} width={7} height={7} fill={l.color} />
-          ) : (
-            <circle key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={3.5} fill={l.color} />
-          ),
+          v == null ? null : <Dot key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={3.5} color={l.color} marker={markerOf(l)} />,
         ),
       )}
       {ends.map((e) => (
@@ -273,7 +312,7 @@ export default function LineChart({
           {e.text}
         </text>
       ))}
-      <text x={plotW - 4} y={H - 6} textAnchor="end" className="chart__title">{xLabel}</text>
+      <text x={plotW - 4} y={h - 6} textAnchor="end" className="chart__title">{xLabel}</text>
     </>
   );
 
@@ -291,7 +330,7 @@ export default function LineChart({
     return (
       <div className="chart" ref={wrap}>
         <div className="chart__ylabel">{unit}</div>
-        <svg viewBox={`0 0 ${w} ${H}`} width="100%" role="img" aria-label={label} className="chart__static">
+        <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={label} className="chart__static">
           <g>{axis}</g>
           <g transform={`translate(${AXIS_W} 0)`}>{plot}</g>
         </svg>
@@ -310,9 +349,9 @@ export default function LineChart({
     <div className="chart" ref={wrap}>
       <div className="chart__ylabel">{unit}</div>
       <div className="chart__row">
-        <svg width={AXIS_W} height={H} className="chart__axis" aria-hidden="true">{axis}</svg>
+        <svg width={AXIS_W} height={h} className="chart__axis" aria-hidden="true">{axis}</svg>
         <div className="chart__scroll" ref={scroller} onScroll={onScroll}>
-          <svg width={plotW} height={H} role="img" aria-label={label}>{plot}</svg>
+          <svg width={plotW} height={h} role="img" aria-label={label}>{plot}</svg>
         </div>
       </div>
       {!atEnd && (
@@ -325,11 +364,11 @@ export default function LineChart({
 }
 
 /** 見出しに付ける線の見本（問題行動は実線、代替行動・望ましい行動は点線。決定65の前の【決定】） */
-export function LineSwatch({ color, dashed }: { color: string; dashed?: boolean }) {
+export function LineSwatch({ color, dashed, marker }: { color: string; dashed?: boolean; marker?: Marker }) {
   return (
     <svg width="24" height="10" aria-hidden="true" style={{ flex: 'none' }}>
       <line x1="1" y1="5" x2="23" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray={dashed ? '5 3' : undefined} />
-      {dashed ? <rect x="8.5" y="1.5" width="7" height="7" fill={color} /> : <circle cx="12" cy="5" r="3.5" fill={color} />}
+      <Dot cx={12} cy={5} r={3.5} color={color} marker={markerOf({ dashed, marker })} />
     </svg>
   );
 }

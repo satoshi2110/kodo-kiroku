@@ -12,13 +12,21 @@ export interface Pos {
 /** 位置を1回だけ取る。精度は粗くてよく、5秒で諦める。取れなければ null */
 export function getPositionOnce(): Promise<Pos | null> {
   if (!('geolocation' in navigator)) return Promise.resolve(null);
-  return new Promise((resolve) =>
+  return new Promise((resolve) => {
+    // 許可の画面が出ないまま止まる端末（アプリの箱の中など）でも、待たせ続けない
+    const guard = setTimeout(() => resolve(null), 15_000);
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => resolve(null),
+      (p) => {
+        clearTimeout(guard);
+        resolve({ lat: p.coords.latitude, lng: p.coords.longitude });
+      },
+      () => {
+        clearTimeout(guard);
+        resolve(null);
+      },
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 60_000 },
-    ),
-  );
+    );
+  });
 }
 
 /** 2点の距離（m） */

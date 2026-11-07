@@ -20,7 +20,7 @@ const ANTHROPIC_TRAINING = 'https://privacy.claude.com/en/articles/7996868-is-my
 const ANTHROPIC_RETENTION = 'https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data';
 
 export default function TeamSettings() {
-  const { person, me, members, userId, aiEnabled, shortSleepUnderHours, deleteRequestedAt, mfaRule } = useApp();
+  const { person, me, members, userId, aiEnabled, shortSleepUnderHours, wakingsOn, deleteRequestedAt, mfaRule } = useApp();
   const [asking, setAsking] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const personId = person?.id ?? '';
@@ -160,6 +160,21 @@ export default function TeamSettings() {
             ))}
           </div>
           <p className="help">年齢によって必要な睡眠時間がちがうため、初期設定は「いつもと比べて」です。短い夜の日の ABC記録には「睡眠不足」が最初から付きます。</p>
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="card stack">
+          <span className="label">中途覚醒（夜中に起きた回数）</span>
+          <div className="chips">
+            <Chip on={wakingsOn} onClick={editable ? () => updateTeamSetting(person.id, { wakingsEnabled: null }, userId) : undefined}>
+              使う（初期設定）
+            </Chip>
+            <Chip on={!wakingsOn} onClick={editable ? () => updateTeamSetting(person.id, { wakingsEnabled: false }, userId) : undefined}>
+              使わない
+            </Chip>
+          </div>
+          <p className="help">「使わない」にすると、睡眠の入力とホームの睡眠のカードに出なくなります。これまでの回数は消えません。</p>
         </div>
       </div>
 

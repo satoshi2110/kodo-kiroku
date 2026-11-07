@@ -36,6 +36,7 @@ export async function createSampleTeam(): Promise<void> {
 
   const behavior = (b: Omit<Behavior, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'personId' | 'hiddenAt' | 'examples' | 'nonExamples' | 'intervalSec' | 'samplingMin'>): Behavior => ({
     ...rec(),
+    createdAt: toLocalISO(parseLocalDate(addDays(toLocalDate(), -DAYS))), // 見本の記録は DAYS 日前から（自動 0 は作った日から。決定111）
     personId: person.id,
     examples: '',
     nonExamples: '',
