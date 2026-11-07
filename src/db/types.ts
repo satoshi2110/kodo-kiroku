@@ -553,6 +553,20 @@ export interface DeviceSetting {
   viewedOn?: Record<string, string>; // チームごとに、閲覧の記録をサーバーに送った日（1日1回。決定102）
   exportAlertSeen?: Record<string, string>; // チームごとに、「書き出しが多い日」の知らせをこの時刻まで確かめた（決定103）
   mentionSeenAt?: Record<string, string>; // チームごとに、「あなたが呼ばれました」の知らせをこの時刻まで確かめた（決定105）
+  // ---- 画面の知らせ（6.11、決定106・107）。この端末だけの設定。なし = オン ----
+  notify?: NotifyPrefs;
+  reminderOff?: Record<string, string>; // チームごとに、「今日は出さない」を押した日
+  reviewSeen?: Record<string, string>; // チームごとに、「確かめた」を押した見直し日
+  meetingSeenAt?: Record<string, string>; // チームごとに、「会議メモができました」をこの時刻まで確かめた
+}
+
+/** 画面の知らせのオン・オフ（決定106・107）。メール・プッシュ通知は使わない（決定101） */
+export interface NotifyPrefs {
+  reminder?: boolean; // 記録のリマインド（その日の記録がないときだけ）
+  reminderTime?: string; // 'HH:MM'。なし = 17:30
+  review?: boolean; // 支援計画の見直し日（前の日の 9:00 から）
+  mention?: boolean; // コメントで @ で呼ばれたとき
+  meeting?: boolean; // 参加した会議のメモができたとき
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

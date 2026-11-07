@@ -1,6 +1,6 @@
 /**
  * 個人の設定（画面一覧 16 のうち、自分のアカウントの部分）。
- * 【暫定】（2026-11-07 の試作）名前とメール、自分の同意、文字の大きさの案内、多要素認証（認証アプリ）、ログインしている端末と遠隔ログアウト（0021）、ログアウト、ほかの端末をすべてログアウト。通知の設定はまだない。
+ * 【暫定】（2026-11-07 の試作）名前とメール、自分の同意、文字の大きさの案内、多要素認証（認証アプリ）、ログインしている端末と遠隔ログアウト（0021）、ログアウト、ほかの端末をすべてログアウト、画面の知らせのオン・オフ（この端末だけ。決定106・107）。
  * チームを抜ける（決定98、7.6）: 管理者は引き継いでから。抜ける前にまだ送っていない記録を送り、サーバーの leave_team（0019）を呼んで、この端末からそのチームのデータを消す。
  */
 import { useState } from 'react';
@@ -17,6 +17,8 @@ import { forgetTeam, saveDevice } from '../db/repo';
 import { useNavigate } from 'react-router-dom';
 import { MfaCard } from '../components/Mfa';
 import { DeviceList } from '../components/Devices';
+import { DEFAULT_REMINDER, prefsOf } from '../components/Notices';
+import type { NotifyPrefs } from '../db/types';
 
 const CONSENT_LABEL: Record<Consent['kind'], string> = {
   terms_privacy_sensitive: '利用規約・プライバシー・要配慮個人情報の取り扱い',
@@ -132,6 +134,8 @@ export default function MySettings() {
         </div>
       </div>
 
+      <NotifySettings />
+
       {supabase && !person.isSample && <MfaCard />}
 
       {supabase && <DeviceKind />}
@@ -214,6 +218,46 @@ function DeviceKind() {
             共用の端末にする（PIN と10分のロック）
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** 画面の知らせのオン・オフ（6.11、決定106・107）。この端末だけに残す */
+function NotifySettings() {
+  const dev = useLiveQuery(() => db.device.get('device'), []);
+  if (dev === undefined) return null;
+  const p = prefsOf(dev);
+  const set = (v: Partial<NotifyPrefs>) => void saveDevice({ notify: { ...dev?.notify, ...v } });
+  const items: { key: 'reminder' | 'review' | 'mention' | 'meeting'; label: string; sub: string }[] = [
+    { key: 'reminder', label: '記録のリマインド', sub: `毎日 ${p.reminderTime} から・その日の記録がないときだけ` },
+    { key: 'review', label: '支援計画の見直し日', sub: '前の日の 9:00 から' },
+    { key: 'mention', label: 'コメントで @ で呼ばれたとき', sub: 'すぐに' },
+    { key: 'meeting', label: '支援会議のメモができたとき', sub: '参加した会議だけ' },
+  ];
+  return (
+    <div className="section">
+      <div className="card stack">
+        <h2 className="card__title" style={{ margin: 0 }}>知らせ（この端末）</h2>
+        <p className="help" style={{ margin: 0 }}>
+          知らせは、アプリを開いているときに画面の上に出します。メールやスマホの通知は送りません。この設定はこの端末だけのもので、共用の端末では使う人みんなに同じになります。
+        </p>
+        {items.map((it) => (
+          <label key={it.key} className="row" style={{ minHeight: 48 }}>
+            <input type="checkbox" checked={p[it.key]} onChange={(e) => set({ [it.key]: e.target.checked })} style={{ width: 22, height: 22 }} />
+            <span className="stack" style={{ gap: 0 }}>
+              <span className="label">{it.label}</span>
+              <span className="muted">{it.sub}</span>
+            </span>
+          </label>
+        ))}
+        {p.reminder && (
+          <label className="field">
+            リマインドを出す時刻
+            <input type="time" value={p.reminderTime} onChange={(e) => set({ reminderTime: e.target.value || DEFAULT_REMINDER })} />
+          </label>
+        )}
+        <p className="help" style={{ margin: 0 }}>強度3や身体拘束の記録が入っても、すぐの知らせは出しません（決定52）。睡眠の入力も催促しません。</p>
       </div>
     </div>
   );
