@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0015）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0016）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -1456,6 +1456,192 @@ begin
   begin
     perform 1 from start_codes;
     raise exception 'NG: ログイン前に開始コードの表が読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- ---------- AI の分析・提案の結果と採否（決定63・70、0016） ----------
+-- ほかのテストで役割が入れかわっているので、新しいチーム3 で確かめる。
+-- X: チーム3 の管理者 / W: 支援リーダー / Y: 支援者 / Z: 閲覧者。チーム2 の分析（9a…02）は B が入れたもの
+select set_config('request.jwt.claims', '', true);
+insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000c3', 'rls-ai-x@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000c4', 'rls-ai-y@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000c5', 'rls-ai-z@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000c6', 'rls-ai-w@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}');
+insert into persons (id, display_name) values ('10000000-0000-0000-0000-000000000003', 'テスト3');
+insert into team_members (id, person_id, user_id, display_name, affiliation, role, approved_at) values
+  ('20000000-0000-0000-0000-0000000000c3', '10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c3', 'X', 'family', 'admin', now()),
+  ('20000000-0000-0000-0000-0000000000c4', '10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c4', 'Y', 'school', 'supporter', now()),
+  ('20000000-0000-0000-0000-0000000000c5', '10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c5', 'Z', 'school', 'viewer', now()),
+  ('20000000-0000-0000-0000-0000000000c6', '10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c6', 'W', 'facility', 'leader', now());
+insert into behaviors (id, person_id, kind, name, method) values
+  ('30000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', 'problem', '行動3', 'frequency');
+insert into ai_analyses (id, person_id, behavior_id, requested_by, input, output, model) values
+  ('9a000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', '{"behavior":{"name":"行動2"}}', '{"confidence":"low"}', 'm');
+insert into ai_suggestions (id, person_id, analysis_id, requested_by, output, model) values
+  ('9b000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '9a000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', '{"alternatives":[]}', 'm');
+
+-- 支援者（Y）は分析と提案を入れられるが、採否は決められない。ほかのチームには入れられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c4","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  insert into ai_analyses (id, person_id, behavior_id, requested_by, input, output, model) values
+    ('9a000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c4', '{"behavior":{"name":"行動3"}}', '{"confidence":"low"}', 'm');
+  -- 採否を付けて送っても、支援者の分は空になる
+  insert into ai_analyses (id, person_id, behavior_id, requested_by, input, output, model, decision, decided_by) values
+    ('9a000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c4', '{}', null, 'm', 'adopted', '00000000-0000-0000-0000-0000000000c4');
+  if (select decision from ai_analyses where id = '9a000000-0000-0000-0000-000000000004') is not null then
+    raise exception 'NG: 支援者が採否を付けて分析を入れられた';
+  end if;
+  insert into ai_suggestions (id, person_id, analysis_id, requested_by, output, model) values
+    ('9b000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', '9a000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c4', '{"alternatives":[]}', 'm');
+  update ai_analyses set decision = 'adopted', decided_by = auth.uid(), updated_at = now() where id = '9a000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援者が分析の採否を決められた'; end if;
+  update ai_suggestions set decision = 'adopted', updated_at = now() where id = '9b000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援者が提案の採否を決められた'; end if;
+  begin
+    insert into ai_analyses (id, person_id, behavior_id, requested_by, input, model) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c3', '{}', 'm');
+    raise exception 'NG: ほかの人が入れたことにして分析を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into ai_analyses (id, person_id, behavior_id, requested_by, input, model) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000c4', '{}', 'm');
+    raise exception 'NG: チーム2 に分析を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    -- チーム3 の分析として、チーム2 の行動を使う
+    insert into ai_analyses (id, person_id, behavior_id, requested_by, input, model) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000c4', '{}', 'm');
+    raise exception 'NG: ほかのチームの行動で分析を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    -- チーム3 の提案として、チーム2 の分析を使う
+    insert into ai_suggestions (id, person_id, analysis_id, requested_by, output, model) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '9a000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000c4', '{}', 'm');
+    raise exception 'NG: ほかのチームの分析から提案を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  select count(*) into n from ai_analyses;
+  if n <> 2 then raise exception 'NG: 支援者に、チームの分析が見えない、またはほかのチームの分析が見えた'; end if;
+  select count(*) into n from ai_suggestions;
+  if n <> 1 then raise exception 'NG: 支援者に、チームの提案が見えない、またはほかのチームの提案が見えた'; end if;
+  begin
+    delete from ai_analyses where id = '9a000000-0000-0000-0000-000000000003';
+    raise exception 'NG: 分析を消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 閲覧者（Z）は結果と採否を見るだけ
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c5","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from ai_analyses;
+  if n <> 2 then raise exception 'NG: 閲覧者にチームの分析が見えない'; end if;
+  select count(*) into n from ai_suggestions;
+  if n <> 1 then raise exception 'NG: 閲覧者にチームの提案が見えない'; end if;
+  begin
+    insert into ai_analyses (id, person_id, behavior_id, requested_by, input, model) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c5', '{}', 'm');
+    raise exception 'NG: 閲覧者が分析を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update ai_analyses set decision = 'rejected', updated_at = now() where id = '9a000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が採否を決められた'; end if;
+end $$;
+reset role;
+
+-- 支援リーダー（W）は採否を1回だけ決められる。決めた人はサーバーが書く。結果の中身は変えられない。ほかのチームは見えない・変えられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c6","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  -- 決めた人を X と書いて送っても、W になる
+  update ai_analyses set decision = 'modified', decision_note = '注目もありそう', decided_by = '00000000-0000-0000-0000-0000000000c3', updated_at = now()
+    where id = '9a000000-0000-0000-0000-000000000003';
+  if (select decision from ai_analyses where id = '9a000000-0000-0000-0000-000000000003') is distinct from 'modified' then
+    raise exception 'NG: 支援リーダーが分析の採否を決められない';
+  end if;
+  if (select decided_by from ai_analyses where id = '9a000000-0000-0000-0000-000000000003') is distinct from '00000000-0000-0000-0000-0000000000c6' then
+    raise exception 'NG: 採否を決めた人が、送った本人にならない';
+  end if;
+  update ai_suggestions set decision = 'adopted', updated_at = now() where id = '9b000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが提案の採否を決められない'; end if;
+  -- 2回目は決められない
+  update ai_analyses set decision = 'rejected', updated_at = now() + interval '1 second' where id = '9a000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 決めた採否を変えられた'; end if;
+  -- 結果の中身と、消した印は変えられない
+  update ai_analyses set output = '{"confidence":"high"}', updated_at = now() + interval '2 second' where id = '9a000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 分析の結果を書きかえられた'; end if;
+  update ai_suggestions set output = '{"alternatives":[{"behavior":"x"}]}', updated_at = now() + interval '2 second' where id = '9b000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 提案の結果を書きかえられた'; end if;
+  update ai_analyses set deleted_at = now(), updated_at = now() + interval '2 second' where id = '9a000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 分析を消した印を付けられた'; end if;
+  -- 同じ内容の送り直しは通る（決めた人・時刻はそのまま）
+  update ai_analyses set decided_by = null, decided_at = null, updated_at = now() + interval '3 second' where id = '9a000000-0000-0000-0000-000000000003';
+  if (select decided_by from ai_analyses where id = '9a000000-0000-0000-0000-000000000003') is distinct from '00000000-0000-0000-0000-0000000000c6' then
+    raise exception 'NG: 送り直しで、採否を決めた人が消えた';
+  end if;
+  -- チーム2
+  select count(*) into n from ai_analyses where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: ほかのチームの分析が見えた'; end if;
+  update ai_analyses set decision = 'adopted', updated_at = now() where id = '9a000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: ほかのチームの分析の採否を決められた'; end if;
+  update ai_suggestions set decision = 'adopted', updated_at = now() where id = '9b000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: ほかのチームの提案の採否を決められた'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select decision from ai_analyses where id = '9a000000-0000-0000-0000-000000000002') is not null then raise exception 'NG: チーム2 の分析が変わった'; end if;
+  if (select decision from ai_suggestions where id = '9b000000-0000-0000-0000-000000000002') is not null then raise exception 'NG: チーム2 の提案が変わった'; end if;
+  if (select output ->> 'confidence' from ai_analyses where id = '9a000000-0000-0000-0000-000000000003') <> 'low' then raise exception 'NG: 分析の結果が変わった'; end if;
+  if not exists (select 1 from audit_logs where entity = 'ai_analyses' and entity_id = '9a000000-0000-0000-0000-000000000003' and by_server and action = 'update') then
+    raise exception 'NG: 採否を決めたことが監査ログに残らない';
+  end if;
+end $$;
+
+-- 管理者（X）は端末で決めてから送った分析を、採否つきで入れられる。ほかのチームの管理者（N）には見えない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c3","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  insert into ai_analyses (id, person_id, behavior_id, requested_by, input, model, decision, decided_by) values
+    ('9a000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c3', '{}', 'm', 'rejected', '00000000-0000-0000-0000-0000000000c4');
+  if (select decided_by from ai_analyses where id = '9a000000-0000-0000-0000-000000000005') is distinct from '00000000-0000-0000-0000-0000000000c3' then
+    raise exception 'NG: 採否つきで入れた分析の、決めた人が送った本人にならない';
+  end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from ai_analyses;
+  if n <> 0 then raise exception 'NG: ほかのチームの人に AI の分析が見えた'; end if;
+  select count(*) into n from ai_suggestions;
+  if n <> 0 then raise exception 'NG: ほかのチームの人に AI の提案が見えた'; end if;
+end $$;
+reset role;
+set local role anon;
+do $$ begin
+  begin
+    perform 1 from ai_analyses;
+    raise exception 'NG: ログイン前に AI の分析が読めた';
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 end $$;
 reset role;

@@ -3,8 +3,8 @@
  * - 送る: 端末で作った・変えた行に印（_dirty）を付けておき、サーバーのチームの分だけ送る。サンプルは送らない。
  * - 受け取る: サーバーが受け取った時刻（server_at）が前回より新しい行を取りにくる。見えるのは RLS で許された行だけ。
  * - ぶつかったとき: updated_at が新しいほうを残す（サーバーでも古い変更は捨てる）。
- * いまは 対象者・メンバー・チームの設定・同意・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・管理者の引き継ぎ（受け取るだけ）・監査ログ。
- * AI の結果は、まだこの端末の中だけ。
+ * いまは 対象者・メンバー・チームの設定・同意・行動・記録・インターバル記録・ABC記録（選択肢と詳しい内容）・睡眠・「観察していなかった日」・場所・わたしのいつもの時間・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送りとコメント・管理者の引き継ぎ（受け取るだけ）・AI の分析と提案（採否も、決定63・70）・監査ログ。
+ * ABC集計の AI のまとめ（Phase 3）は、まだこの端末の中だけ。
  */
 import Dexie, { type Table } from 'dexie';
 import { db } from '../db/db';
@@ -22,7 +22,7 @@ interface SyncTable {
   appendOnly?: boolean; // 作ったあとは変えない（同意）。送り直しても重ならないように送る
 }
 
-/** 送る順番（行動・場所・睡眠の前に対象者、AI の「あり」の前に同意、記録・インターバル記録・「観察していなかった日」の前に行動、ABC記録の前に記録、写真の前に好きなもの、変更の前に計画、合意の前に変更、コメントの前に会議メモ） */
+/** 送る順番（行動・場所・睡眠の前に対象者、AI の「あり」の前に同意、記録・インターバル記録・「観察していなかった日」の前に行動、ABC記録の前に記録、写真の前に好きなもの、変更の前に計画、合意の前に変更、コメントの前に会議メモ、AI の分析の前に行動、提案の前に分析） */
 const TABLES: SyncTable[] = [
   { local: db.persons, remote: 'persons', team: (r) => r.id, insert: false },
   { local: db.teamMembers, remote: 'team_members', team: (r) => r.personId, insert: false },
@@ -46,6 +46,8 @@ const TABLES: SyncTable[] = [
   { local: db.restraintLogs, remote: 'restraint_logs', team: (r) => r.personId, insert: true },
   { local: db.meetingNotes, remote: 'meeting_notes', team: (r) => r.personId, insert: true },
   { local: db.comments, remote: 'comments', team: (r) => r.personId, insert: true },
+  { local: db.aiAnalyses, remote: 'ai_analyses', team: (r) => r.personId, insert: true },
+  { local: db.aiSuggestions, remote: 'ai_suggestions', team: (r) => r.personId, insert: true },
 ];
 
 // ---------- 変更の印 ----------
@@ -318,7 +320,7 @@ export async function runSync(): Promise<void> {
 /** ログアウトしたとき: サーバーのチームのデータをこの端末から消す（端末の紛失・共用への備え、7.4.2 #1）。サンプルは残す */
 export async function clearServerData() {
   const teams = await serverTeams();
-  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.device];
+  const all = [...TABLES.map((s) => s.local), db.auditLogs, db.aiSummaries, db.device];
   await db.transaction('rw', all, async () => {
     for (const t of all) {
       if (t === db.device) continue;
