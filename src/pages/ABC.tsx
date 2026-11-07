@@ -4,10 +4,10 @@
  * 自由記述は端末の音声入力でも書ける（録音は保存しない、決定48）。
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { RANK, addChoiceOption, canUndoEvent, ensureChoiceOptions, hideChoiceOption, restoreEvent, saveAbc, undoEvent } from '../db/repo';
+import { RANK, addChoiceOption, canEditBehaviors, canUndoEvent, ensureChoiceOptions, hideChoiceOption, restoreEvent, saveAbc, undoEvent } from '../db/repo';
 import { useApp } from '../state';
 import { formatDateTimeJa, formatDuration } from '../lib/date';
 import { isShortNight } from '../lib/sleep';
@@ -29,7 +29,7 @@ export default function ABCRoute() {
 
 function ABC({ eventId }: { eventId: string }) {
   const nav = useNavigate();
-  const { person, behaviors, members, me, userId, shortSleepUnderHours } = useApp();
+  const { person, behaviors, members, me, userId, shortSleepUnderHours, places } = useApp();
   const personId = person?.id ?? '';
 
   const event = useLiveQuery(() => db.events.get(eventId), [eventId]);
@@ -62,6 +62,7 @@ function ABC({ eventId }: { eventId: string }) {
     note: string;
     intensity: number | null;
     activity: string;
+    placeName: string;
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -82,6 +83,7 @@ function ABC({ eventId }: { eventId: string }) {
       note: existing?.note ?? '',
       intensity: event.intensity,
       activity: event.activity ?? '',
+      placeName: event.placeName ?? '',
     });
   }, [event, existing, form, me, options, sleepLogs]);
 
@@ -122,9 +124,9 @@ function ABC({ eventId }: { eventId: string }) {
   async function save() {
     if (!form || !event || !userId) return;
     setSaving(true);
-    const { intensity, activity, ...detail } = form;
+    const { intensity, activity, placeName, ...detail } = form;
     await saveAbc(event, { ...detail, antecedentNote: detail.antecedentNote.trim(), consequenceNote: detail.consequenceNote.trim(), note: detail.note.trim() },
-      { intensity, activity: activity.trim() || null }, userId);
+      { intensity, activity: activity.trim() || null, placeName: placeName || null }, userId);
     nav('/', { replace: true });
   }
 
@@ -170,7 +172,10 @@ function ABC({ eventId }: { eventId: string }) {
           {event.durationSec != null && <span className="muted">持続: {formatDuration(event.durationSec)}</span>}
           {behavior?.intensity && (
             <>
-              <span className="label">強度（この行動の基準）</span>
+              <div className="row row--between">
+                <span className="label">強度（この行動の基準）</span>
+                {canEditBehaviors(me?.role) && <Link to={`/behaviors/${behavior.id}`}>基準を編集</Link>}
+              </div>
               {INTENSITY_NAMES[behavior.intensity.levels].map((name, i) => (
                 <button
                   key={i}
@@ -186,6 +191,17 @@ function ABC({ eventId }: { eventId: string }) {
               ))}
             </>
           )}
+          {/* 場所は自動の判定が違っていたときに選び直せる（6.3.3）。名前だけを残す（決定42） */}
+          <label className="field">
+            場所
+            <select value={form.placeName} disabled={!editable} onChange={(e) => set('placeName', e.target.value)}>
+              <option value="">登録場所の外・わからない</option>
+              {places.map((p) => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+              ))}
+              {form.placeName && !places.some((p) => p.name === form.placeName) && <option value={form.placeName}>{form.placeName}</option>}
+            </select>
+          </label>
           <label className="field">
             活動（任意）
             <input value={form.activity} disabled={!editable} onChange={(e) => set('activity', e.target.value)} placeholder="例: 個別課題、食事" />

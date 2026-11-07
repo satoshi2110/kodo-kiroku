@@ -550,7 +550,7 @@ export async function hideChoiceOption(id: string, actorId: string) {
 export type AbcInput = Omit<AbcDetail, keyof BaseRecord | 'personId' | 'eventId' | 'recorderId'>;
 
 /** ABC記録を保存する（1つの記録に1つ。2回目以降は上書きして、前の内容は監査ログに残す） */
-export async function saveAbc(event: Event, input: AbcInput, eventPatch: Partial<Pick<Event, 'intensity' | 'activity'>>, actorId: string) {
+export async function saveAbc(event: Event, input: AbcInput, eventPatch: Partial<Pick<Event, 'intensity' | 'activity' | 'placeName'>>, actorId: string) {
   await db.transaction('rw', [db.abcDetails, db.events, db.auditLogs], async () => {
     const before = await db.abcDetails.where('eventId').equals(event.id).filter((d) => !d.deletedAt).first();
     if (before) {
@@ -562,7 +562,7 @@ export async function saveAbc(event: Event, input: AbcInput, eventPatch: Partial
       await db.abcDetails.add(d);
       await audit(event.personId, 'abcDetail', d.id, 'create', actorId, null, d);
     }
-    if (eventPatch.intensity !== event.intensity || eventPatch.activity !== event.activity) {
+    if (eventPatch.intensity !== event.intensity || eventPatch.activity !== event.activity || eventPatch.placeName !== event.placeName) {
       await updateEvent(event.id, eventPatch, actorId);
     }
   });

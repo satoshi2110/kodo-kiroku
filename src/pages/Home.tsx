@@ -22,6 +22,32 @@ import { addDays, formatShortDate } from '../lib/date';
 
 type Timer = { behaviorId: string; startedAt: number };
 
+/**
+ * 計っている途中のタイマー（持続時間・潜時）。画面を移っても、アプリを開き直しても続くように、
+ * 始めた時刻だけをこの端末に覚えておく（経過時間は開いたときに計算する）。覚えるのは行動の ID と時刻だけ
+ */
+const TIMERS_KEY = 'kodo.runningTimers';
+function loadTimers(): Record<string, Timer> {
+  try {
+    const v = JSON.parse(localStorage.getItem(TIMERS_KEY) ?? '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+function useStoredTimers() {
+  const [timers, setState] = useState<Record<string, Timer>>(loadTimers);
+  const setTimers = (next: Record<string, Timer>) => {
+    setState(next);
+    try {
+      localStorage.setItem(TIMERS_KEY, JSON.stringify(next));
+    } catch {
+      // 保存できない端末（プライベートモードなど）では、この画面にいるあいだだけ計る
+    }
+  };
+  return [timers, setTimers] as const;
+}
+
 export default function Home() {
   const { person, persons, setCurrentPerson, behaviors, me, members, userId, places, place, placeOutside, useLocation } = useApp();
   const today = toLocalDate();
@@ -34,11 +60,11 @@ export default function Home() {
     [personId, today],
   );
   const nav = useNavigate();
-  const [toast, setToast] = useState<{ text: string; abcEventId?: string; restoreEventId?: string } | null>(null);
+  const [toast, setToast] = useState<{ text: string; abcEventId?: string; restoreEventId?: string; placeBack?: string | null } | null>(null);
   const toastTimer = useRef<number>();
   const [flash, setFlash] = useState<{ id: string; good: boolean } | null>(null);
   const [intensityFor, setIntensityFor] = useState<{ event: Event; behavior: Behavior } | null>(null);
-  const [timers, setTimers] = useState<Record<string, Timer>>({});
+  const [timers, setTimers] = useStoredTimers();
   useNow(Object.keys(timers).length ? 1000 : null);
 
   const abcIds = new Set(
@@ -71,18 +97,19 @@ export default function Home() {
   );
 
   // 場所の自動判定（6.3.3）: 開いたときと前面に戻ったときに1回だけ位置を取り、端末の中で照らし合わせる
-  const placeRef = useRef({ places, placeId: place?.id });
-  placeRef.current = { places, placeId: place?.id };
+  const placeRef = useRef({ places, placeId: place?.id, outside: placeOutside });
+  placeRef.current = { places, placeId: place?.id, outside: placeOutside };
   useEffect(() => {
     if (!useLocation || !personId) return;
     let alive = true;
     const detect = async () => {
       const pos = await getPositionOnce();
       if (!alive || !pos) return; // 取れなければ前の場所のまま
-      const { places: list, placeId } = placeRef.current;
+      const { places: list, placeId, outside } = placeRef.current;
       const hit = matchPlace(list, pos);
       await setPlaceChoice(personId, hit?.id ?? 'outside');
-      if (hit && hit.id !== placeId) notify(`場所を「${hit.name}」に切りかえました`);
+      // 切りかえたことを3秒出し、違っていたら「元に戻す」で前の場所に戻せる（6.3.3）
+      if (hit && hit.id !== placeId) notify(`場所を「${hit.name}」に切りかえました`, undefined, undefined, placeId ?? (outside ? 'outside' : null));
     };
     detect();
     const onVisible = () => document.visibilityState === 'visible' && detect();
@@ -97,9 +124,9 @@ export default function Home() {
   if (!person || !userId) return null;
   const recordable = canRecord(me?.role);
 
-  function notify(text: string, abcEventId?: string, restoreEventId?: string) {
+  function notify(text: string, abcEventId?: string, restoreEventId?: string, placeBack?: string | null) {
     window.clearTimeout(toastTimer.current);
-    setToast({ text, abcEventId, restoreEventId });
+    setToast({ text, abcEventId, restoreEventId, placeBack });
     toastTimer.current = window.setTimeout(() => setToast(null), abcEventId || restoreEventId ? 5000 : 3000);
   }
 
@@ -343,6 +370,18 @@ export default function Home() {
               onClick={async () => {
                 await restoreEvent(toast.restoreEventId!, userId);
                 notify('取り消した記録を元に戻しました');
+              }}
+            >
+              元に戻す
+            </button>
+          )}
+          {toast.placeBack !== undefined && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={async () => {
+                await setPlaceChoice(person.id, toast.placeBack ?? null);
+                notify('場所を元に戻しました');
               }}
             >
               元に戻す
