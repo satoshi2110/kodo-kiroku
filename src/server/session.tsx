@@ -39,6 +39,8 @@ if (supabase) {
     // 中で await しない（supabase-js の決まり）。ログインの処理は次の順番で行う
     setTimeout(async () => {
       if (session && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) await onLogin(session);
+      // ほかの端末から「すべてログアウト」された・ログインが無効になったときも、この端末からチームのデータを消す
+      if (event === 'SIGNED_OUT') await clearServerData();
       set({ ready: true, session, recovery: state.recovery || event === 'PASSWORD_RECOVERY' });
     }, 0);
   });
@@ -86,4 +88,14 @@ export async function signOut() {
   if (!supabase) return;
   await supabase.auth.signOut();
   await clearServerData();
+}
+
+/**
+ * この端末はそのままで、同じアカウントのほかの端末をすべてログアウトする（端末をなくしたとき）。
+ * ほかの端末は、次にログインを更新するとき（最長で1時間ほど）にログアウトされ、チームのデータが消える。
+ */
+export async function signOutOthers(): Promise<string | null> {
+  if (!supabase) return null;
+  const { error } = await supabase.auth.signOut({ scope: 'others' });
+  return error ? error.message : null;
 }

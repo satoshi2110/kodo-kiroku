@@ -13,10 +13,9 @@ import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
-import { assignableRoles, canInvite, canManageMember, canRecord, setMemberFlags } from '../db/repo';
+import { assignableRoles, canExport, canInvite, canManageMember, canRecord, setMemberFlags } from '../db/repo';
 import { supabase } from '../server/supabase';
-import { runSync, syncStatus, unsentCount } from '../server/sync';
-import { signOut } from '../server/session';
+import { runSync, syncStatus } from '../server/sync';
 import { addComment, removeComment } from '../db/phase2';
 import { formatDateTimeJa, nowISO } from '../lib/date';
 import { AFFILIATION_LABEL, ROLE_LABEL, type Role, type TeamMember } from '../db/types';
@@ -136,6 +135,25 @@ export default function Team() {
           </span>
           <span className="today-row__go" aria-hidden="true">›</span>
         </Link>
+      </div>
+
+      <div className="section stack">
+        <Link to="/me" className="card row row--between team-settings-link">
+          <span className="stack" style={{ gap: 2 }}>
+            <strong>あなたの設定</strong>
+            <span className="muted">{supabase ? 'アカウント・同意・文字の大きさ・ログアウト' : '同意・文字の大きさ'}</span>
+          </span>
+          <span className="today-row__go" aria-hidden="true">›</span>
+        </Link>
+        {canExport(me?.role) && (
+          <Link to="/team/audit" className="card row row--between team-settings-link">
+            <span className="stack" style={{ gap: 2 }}>
+              <strong>監査ログ</strong>
+              <span className="muted">誰が・いつ・何を変えたか（支援リーダー以上）</span>
+            </span>
+            <span className="today-row__go" aria-hidden="true">›</span>
+          </Link>
+        )}
       </div>
 
       {supabase && <Account />}
@@ -418,16 +436,9 @@ function Handover({ personId }: { personId: string }) {
   );
 }
 
-/** サーバーとの同期の状態とログアウト */
+/** サーバーとの同期の状態（ログアウトは「あなたの設定」） */
 function Account() {
   const st = useSyncExternalStore(syncStatus.subscribe, syncStatus.get);
-  async function logout() {
-    const n = await unsentCount();
-    const msg = n
-      ? `まだサーバーに送れていない変更が ${n} 件あります。ログアウトすると、この端末から消えます。ログアウトしますか？`
-      : 'ログアウトしますか？ この端末から、このチームのデータを消します（サーバーには残ります）。';
-    if (window.confirm(msg)) await signOut();
-  }
   return (
     <div className="section">
       <div className="card stack">
@@ -437,8 +448,7 @@ function Account() {
           {st.pending > 0 && ` ・ 送れていない変更 ${st.pending} 件`}
         </span>
         {st.error && <p className="ai-error" role="alert">{st.error}</p>}
-        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送り・管理者の引き継ぎです。AI の結果は、この端末の中だけです。</p>
-        <button type="button" className="btn btn--block" onClick={logout}>ログアウト</button>
+        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・身体拘束の記録・支援会議メモ・申し送り・管理者の引き継ぎ・AI の分析と提案（採否も）です。ABC集計の AI のまとめは、この端末の中だけです。ログアウトは「あなたの設定」からできます。</p>
       </div>
     </div>
   );

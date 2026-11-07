@@ -29,12 +29,14 @@ import Meetings from './pages/Meetings';
 import Report from './pages/Report';
 import MeetingEdit from './pages/MeetingEdit';
 import RestraintEdit from './pages/RestraintEdit';
+import MySettings from './pages/MySettings';
+import AuditLog from './pages/AuditLog';
 import Login from './pages/Login';
 import NewPassword from './pages/NewPassword';
 import { serverEnabled } from './server/supabase';
 import { useSession } from './server/session';
 
-const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
+const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/team/audit', '/me', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
 const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
 
 function Shell() {
@@ -65,6 +67,8 @@ function Shell() {
         <Route path="/graph/scatter" element={<Scatter />} />
         <Route path="/team" element={<Team />} />
         <Route path="/team/settings" element={<TeamSettings />} />
+        <Route path="/team/audit" element={<AuditLog />} />
+        <Route path="/me" element={<MySettings />} />
         <Route path="/person" element={<PersonProfile />} />
         <Route path="/wins" element={<Wins />} />
         <Route path="/plan" element={<Plan />} />
