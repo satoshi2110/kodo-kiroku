@@ -149,7 +149,8 @@ export default function Home() {
       : b.method === 'latency' ? `「${b.name}」待ち時間 ${formatDuration(extra.latencySec ?? 0)} を記録しました`
       : `「${b.name}」+1 を記録しました`;
     notify(msg, e.id);
-    recheckPlace(e, msg);
+    if (b.intensity) setIntensityFor({ event: e, behavior: b });
+    void recheckPlace(e, msg);
   }
 
   /**
@@ -169,7 +170,6 @@ export default function Home() {
     await setPlaceChoice(personId, hit.id, true);
     // まだこの記録の知らせが出ているときだけ、場所を足して出し直す（あとの記録の知らせは消さない）
     if (lastToastEvent.current === e.id) notify(`${msg}（場所: ${hit.name}）`, e.id);
-    if (b.intensity) setIntensityFor({ event: e, behavior: b });
   }
 
   async function tap(b: Behavior) {

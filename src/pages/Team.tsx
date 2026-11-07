@@ -3,6 +3,7 @@
  * AI・睡眠不足の判定・書き出し・チームの削除は「チームの設定」にある。
  * サーバーにつながる設定があるときは、招待コード・招待リンク・QR を作り、参加した人を承認できる（決定44、7.4.2 #3）。
  * 管理者・副管理者・支援リーダーは、ほかのメンバーの役割を変えたり、停止したりできる（7章 #2）。
+ * 所属（家族・施設・学校・その他）で絞って、まとめて停止もできる（7.4.2、14.2 #26。【暫定】2026-11-07 の試作）。
  * 管理者の引き継ぎ（6.9）: 管理者が指名して相手が受ける／副管理者が申し込み、14日のあいだ管理者が断らなければ入れかわる。
  * 申し送りは、いまはこの端末の中だけ（同期はこのあと足す）。
  */
@@ -18,8 +19,8 @@ import { supabase } from '../server/supabase';
 import { runSync, syncStatus } from '../server/sync';
 import { addComment, removeComment } from '../db/phase2';
 import { formatDateTimeJa, nowISO } from '../lib/date';
-import { AFFILIATION_LABEL, ROLE_LABEL, type Role, type TeamMember } from '../db/types';
-import { Sheet, TopBar } from '../components/ui';
+import { AFFILIATION_LABEL, ROLE_LABEL, type Affiliation, type Role, type TeamMember } from '../db/types';
+import { Chip, Sheet, TopBar } from '../components/ui';
 import { formerAdminRole, isDue, TRANSFER_RESULT_LABEL, useOwnerTransfers } from '../lib/ownerTransfer';
 
 export default function Team() {
@@ -98,6 +99,8 @@ export default function Team() {
           </p>
         )}
       </div>
+
+      {canInvite(me?.role) && <BulkSuspend />}
 
       {supabase && <Handover personId={person.id} />}
 
@@ -490,5 +493,51 @@ function JobTitle({ member, userId }: { member: TeamMember; userId: string }) {
       </label>
       <p className="help">メンバー一覧に「所属 ・ 職種」で出ます。できること（役割）は変わりません。</p>
     </>
+  );
+}
+
+/**
+ * 所属でまとめて停止（退職・異動・卒業がまとまってあるとき。7.4.2、14.2 #26）。【暫定】（2026-11-07 の試作）
+ * 1人ずつの停止と同じ決まり: 自分・管理者は入らない。副管理者を停止できるのは管理者だけ。停止はあとで1人ずつ外せる。
+ */
+function BulkSuspend() {
+  const { me, members, userId } = useApp();
+  const [aff, setAff] = useState<Affiliation | null>(null);
+  const [done, setDone] = useState('');
+  if (!me || !userId) return null;
+  const isAdmin = me.role === 'admin';
+  const can = (m: TeamMember) =>
+    m.userId !== me.userId && m.approvedAt !== null && !m.suspendedAt && m.role !== 'admin' && (isAdmin || m.role !== 'subadmin');
+  const targets = aff ? members.filter((m) => m.affiliation === aff && can(m)) : [];
+  async function run() {
+    if (!aff || !targets.length || !userId) return;
+    const names = targets.map((m) => m.displayName).join('、');
+    if (!window.confirm(`所属が「${AFFILIATION_LABEL[aff]}」の ${targets.length}人を停止しますか？\n${names}\nすぐにこのチームの記録が見られなくなり、その人たちの端末に残った記録も次の通信で消えます。停止はあとで1人ずつ外せます。`)) return;
+    const t = nowISO();
+    for (const m of targets) await setMemberFlags(m.id, { suspendedAt: t }, userId);
+    setDone(`${targets.length}人を停止しました（${names}）。`);
+    setAff(null);
+  }
+  return (
+    <div className="section">
+      <div className="card stack">
+        <h2 className="card__title" style={{ margin: 0 }}>所属でまとめて停止</h2>
+        <p className="help" style={{ margin: 0 }}>職員の異動・退職や卒業がまとまってあるときに使います。あなた自身と管理者は入りません{isAdmin ? '' : '。副管理者を停止できるのは管理者だけです'}。</p>
+        <div className="chips">
+          {(Object.keys(AFFILIATION_LABEL) as Affiliation[]).map((a) => (
+            <Chip key={a} on={aff === a} onClick={() => { setAff(aff === a ? null : a); setDone(''); }}>{AFFILIATION_LABEL[a]}</Chip>
+          ))}
+        </div>
+        {aff && (
+          <p className="help" style={{ margin: 0 }}>
+            {targets.length ? `停止する人: ${targets.map((m) => m.displayName).join('、')}（${targets.length}人）` : 'この所属で停止できる人はいません。'}
+          </p>
+        )}
+        <button type="button" className="btn btn--danger btn--block" disabled={!targets.length} onClick={run}>
+          {aff && targets.length ? `「${AFFILIATION_LABEL[aff]}」の ${targets.length}人を停止する` : '所属を選んでください'}
+        </button>
+        {done && <p className="help" role="status" style={{ margin: 0 }}>{done}</p>}
+      </div>
+    </div>
   );
 }
