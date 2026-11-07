@@ -217,12 +217,15 @@ export default function Team() {
 function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
   // 初めは一番小さい権限（閲覧者）にしておき、必要なときだけ上げる（仕様書 7.4.2 #3）
   const [role, setRole] = useState<Role>('viewer');
+  const [family, setFamily] = useState(false); // 「家族」の印（管理者だけが付けられる。サーバーの 0018 でも同じ決まり）
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const roles: Role[] = isAdmin ? ['subadmin', 'leader', 'supporter', 'viewer'] : ['leader', 'supporter', 'viewer'];
   async function make() {
     setError(null);
-    const { data, error } = await supabase!.rpc('create_invite', { p_person: personId, p_role: role });
+    // 印を付けないときは、前と同じ形で呼ぶ
+    const args = isAdmin && family ? { p_person: personId, p_role: role, p_family: true } : { p_person: personId, p_role: role };
+    const { data, error } = await supabase!.rpc('create_invite', args);
     if (error) setError(error.message);
     else setCode(data as string);
   }
@@ -235,11 +238,20 @@ function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
           {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </select>
       </label>
+      {isAdmin && (
+        <>
+          <label className="row row--between">
+            <span className="label">「家族」の印を付ける</span>
+            <input type="checkbox" checked={family} onChange={(e) => { setFamily(e.target.checked); setCode(null); }} style={{ width: 22, height: 22 }} />
+          </label>
+          <p className="help" style={{ marginTop: 0 }}>父・きょうだいなど。睡眠の入力ができるようになります。参加する人が所属を「家族」と選んでも、ここで付けないと印は付きません。</p>
+        </>
+      )}
       <button type="button" className="btn btn--outline btn--block" onClick={make}>招待コードを作る</button>
       {code && (
         <>
           <p className="notice-inline" role="status">
-            招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}として参加。72時間・1回だけ使えます）
+            招待コード: <strong style={{ letterSpacing: 2 }}>{code}</strong>（{ROLE_LABEL[role]}{isAdmin && family ? '・「家族」の印つき' : ''}として参加。72時間・1回だけ使えます）
           </p>
           <InviteLink code={code} />
         </>

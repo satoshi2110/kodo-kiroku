@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0016）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0018）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -1827,6 +1827,75 @@ do $$ begin
   exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
 end $$;
 reset role;
+
+-- ---------- 0018 「家族」の印は管理者だけが付ける（6.3.4） ----------
+-- 支援リーダー（L）と副管理者（D）は、印を付けて招待できない。メンバーの印・睡眠の許可を変えても前のまま
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    perform create_invite('10000000-0000-0000-0000-000000000001', 'supporter', true);
+    raise exception 'NG: 支援リーダーが「家族」の印を付けて招待できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update team_members set family_mark = true, sleep_input_allowed = true, updated_at = now() + interval '20 seconds'
+    where id = '20000000-0000-0000-0000-0000000000d1';
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000d1' and not family_mark and not sleep_input_allowed;
+  if n <> 1 then raise exception 'NG: 支援リーダーがメンバーに「家族」の印か睡眠の許可を付けられた'; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    perform create_invite('10000000-0000-0000-0000-000000000001', 'supporter', true);
+    raise exception 'NG: 副管理者が「家族」の印を付けて招待できた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update team_members set family_mark = true, updated_at = now() + interval '21 seconds' where id = '20000000-0000-0000-0000-0000000000d1';
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000d1' and not family_mark;
+  if n <> 1 then raise exception 'NG: 副管理者がメンバーに「家族」の印を付けられた'; end if;
+end $$;
+reset role;
+
+-- 管理者（A）は、印を付けた招待と付けない招待を作れる。メンバーの印も変えられる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  perform set_config('rls_test.fam_on', create_invite('10000000-0000-0000-0000-000000000001', 'supporter', true), true);
+  perform set_config('rls_test.fam_off', create_invite('10000000-0000-0000-0000-000000000001', 'supporter'), true);
+  update team_members set family_mark = true, updated_at = now() + interval '22 seconds' where id = '20000000-0000-0000-0000-0000000000d1';
+  select count(*) into n from team_members where id = '20000000-0000-0000-0000-0000000000d1' and family_mark;
+  if n <> 1 then raise exception 'NG: 管理者がメンバーに「家族」の印を付けられない'; end if;
+end $$;
+reset role;
+insert into auth.users (id, email, aud, role, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-0000000000a9', 'rls-fam1@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}'),
+  ('00000000-0000-0000-0000-0000000000aa', 'rls-fam2@test.invalid', 'authenticated', 'authenticated', '{"invite_code":"RLSSIGNUP01"}');
+-- 所属を「家族」と選んでも、印のない招待では印は付かない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a9","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin perform join_team(current_setting('rls_test.fam_off'), 'F1', 'family', 'v'); end $$;
+reset role;
+-- 印を付けた招待では、所属が「家族」でなくても印が付く
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000aa","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin perform join_team(current_setting('rls_test.fam_on'), 'F2', 'school', 'v'); end $$;
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_members where user_id = '00000000-0000-0000-0000-0000000000a9' and not family_mark;
+  if n <> 1 then raise exception 'NG: 所属を「家族」と選んだだけで「家族」の印が付いた'; end if;
+  select count(*) into n from team_members where user_id = '00000000-0000-0000-0000-0000000000aa' and family_mark;
+  if n <> 1 then raise exception 'NG: 印を付けた招待で参加したのに「家族」の印が付かない'; end if;
+  select count(*) into n from audit_logs where entity = 'invite' and (after ->> 'familyMark')::boolean;
+  if n <> 1 then raise exception 'NG: 印を付けた招待が監査ログに残らない'; end if;
+end $$;
 
 rollback;
 
