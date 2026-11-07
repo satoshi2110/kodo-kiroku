@@ -146,12 +146,22 @@ export default function Plan() {
                 const vals = dailyMain(b, lastDays(7), rs).filter((v): v is number => v != null);
                 const avg = vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : null;
                 const met = avg != null && (c.op === 'lte' ? avg <= c.value : avg >= c.value);
+                // 期限を過ぎても届いていなければ、見直しをすすめる（6.7「一定期間未達なら計画修正」）
+                const overdue = !met && !!c.deadline && c.deadline < today;
                 return (
-                  <div key={i} className="row row--between today-row">
-                    <span>{criterionText(c, behaviors)}</span>
-                    <span className={met ? 'badge badge--owner' : 'badge badge--role'}>
-                      {avg == null ? '記録なし' : `直近7日 ${mainFormat(b)(avg)} ・ ${met ? '達成' : '未達'}`}
-                    </span>
+                  <div key={i} className="stack">
+                    <div className="row row--between today-row">
+                      <span>{criterionText(c, behaviors)}</span>
+                      <span className={met ? 'badge badge--owner' : 'badge badge--role'}>
+                        {avg == null ? '記録なし' : `直近7日 ${mainFormat(b)(avg)} ・ ${met ? '達成' : '未達'}`}
+                      </span>
+                    </div>
+                    {met && <span className="help">届いています。できることを広げましょう。</span>}
+                    {overdue && (
+                      <span className="help notice-inline">
+                        期限（{formatDateJa(c.deadline!)}）を過ぎても届いていません。グラフを見て、計画を見直しましょう（目標・工夫・期限を変えるなど）。
+                      </span>
+                    )}
                   </div>
                 );
               })}

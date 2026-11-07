@@ -340,6 +340,7 @@ export interface PlanCriterion {
   op: 'lte' | 'gte'; // 以下 / 以上
   value: number; // グラフの1日の値と同じ単位（回・分・秒・%）
   note: string; // 例: 2週連続
+  deadline?: LocalDate | null; // 期限（いつまでに達成するか、6.7）。過ぎても未達なら見直しをすすめる
 }
 
 /** 計画の中身。1つの計画を上書きで保存し、変更は PlanChange に残す（決定67） */

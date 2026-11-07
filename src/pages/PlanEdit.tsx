@@ -134,6 +134,10 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
                     <option value="gte">以上</option>
                   </select>
                 </div>
+                <label className="row">
+                  <span className="muted nowrap">期限</span>
+                  <input className="input" type="date" value={c.deadline ?? ''} onChange={(e) => setCriterion(i, { deadline: e.target.value || null })} aria-label="期限（いつまでに）" />
+                </label>
                 <div className="row">
                   <input className="input" value={c.note} onChange={(e) => setCriterion(i, { note: e.target.value })} placeholder="例: 2週連続" aria-label="期間などの条件" />
                   <button type="button" className="btn btn--sm" onClick={() => set('criteria', p.criteria.filter((_, j) => j !== i))}>外す</button>
@@ -142,7 +146,7 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
             );
           })}
           <button type="button" className="btn btn--sm" style={{ alignSelf: 'flex-start' }} disabled={behaviors.length === 0} onClick={addCriterion}>+ 達成基準を足す</button>
-          <p className="help">達成基準はグラフに横の点線で出ます。値はグラフと同じ「1日あたり」です。</p>
+          <p className="help">達成基準はグラフに横の点線で出ます。値はグラフと同じ「1日あたり」です。期限を入れると、過ぎても届いていないときに計画の画面で見直しをすすめます。</p>
         </div>
       </div>
 
