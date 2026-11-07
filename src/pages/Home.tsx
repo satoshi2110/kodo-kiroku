@@ -49,7 +49,7 @@ function useStoredTimers() {
 }
 
 export default function Home() {
-  const { person, persons, setCurrentPerson, behaviors, me, members, userId, places, place, placeOutside, useLocation } = useApp();
+  const { person, persons, setCurrentPerson, behaviors, me, members, userId, places, place, placeOutside, placeAuto, useLocation } = useApp();
   const today = toLocalDate();
   const personId = person?.id ?? '';
   const now = useNow(30_000);
@@ -107,7 +107,7 @@ export default function Home() {
       if (!alive || !pos) return; // 取れなければ前の場所のまま
       const { places: list, placeId, outside } = placeRef.current;
       const hit = matchPlace(list, pos);
-      await setPlaceChoice(personId, hit?.id ?? 'outside');
+      await setPlaceChoice(personId, hit?.id ?? 'outside', true);
       // 切りかえたことを3秒出し、違っていたら「元に戻す」で前の場所に戻せる（6.3.3）
       if (hit && hit.id !== placeId) notify(`場所を「${hit.name}」に切りかえました`, undefined, undefined, placeId ?? (outside ? 'outside' : null));
     };
@@ -218,6 +218,7 @@ export default function Home() {
             {formatDateJa(toLocalDate(new Date(now)))} {formatTime(new Date(now).toISOString())} ・{' '}
             <button type="button" className="place-btn" onClick={() => setPickingPlace(true)}>
               場所: {place ? place.name : placeOutside ? '登録場所の外' : '未設定'}
+              {(place || placeOutside) && <span className="muted">（{placeAuto ? '自動判定' : '手で選んだ'}）</span>}
             </button>
           </>
         }
@@ -268,7 +269,7 @@ export default function Home() {
             <span className="label">睡眠（昨夜）</span>{' '}
             {lastNight ? (
               <>
-                {lastNight.bedTime} → {lastNight.wakeTime} ・ {formatSleep(sleepMinutes(lastNight))}
+                {lastNight.bedTime} → {lastNight.wakeTime} ・ {formatSleep(sleepMinutes(lastNight))} ・ 中途覚醒 {lastNight.wakings}回
                 <span className="muted"> ・ {members.find((m) => m.userId === lastNight.recorderId)?.displayName ?? ''} が入力</span>
               </>
             ) : (
@@ -286,6 +287,7 @@ export default function Home() {
               <BehaviorCard
                 key={b.id}
                 b={b}
+                replaces={b.kind === 'alternative' && b.replacesBehaviorId ? behaviors.find((x) => x.id === b.replacesBehaviorId)?.name : undefined}
                 events={byBehavior(b.id)}
                 observations={todayObs.filter((o) => o.behaviorId === b.id)}
                 timer={timers[b.id]}
@@ -393,6 +395,9 @@ export default function Home() {
 
       {intensityFor?.behavior.intensity && (
         <Sheet title={`「${intensityFor.behavior.name}」の強度`} onClose={() => setIntensity(null)}>
+          <p className="muted" style={{ margin: 0 }}>
+            記録しました ・ {formatTime(intensityFor.event.occurredAt)}{intensityFor.event.placeName ? ` ・ ${intensityFor.event.placeName}` : ''}
+          </p>
           <p className="help">いちばん近いものを選んでください。あとで選ぶと「未評価」のまま残ります。</p>
           {INTENSITY_NAMES[intensityFor.behavior.intensity.levels].map((label, i) => (
             <button key={i} type="button" className="btn btn--block intensity-option" onClick={() => setIntensity(i + 1)}>
@@ -400,7 +405,18 @@ export default function Home() {
               <span>{intensityFor.behavior.intensity!.criteria[i] || `${label}（基準未設定）`}</span>
             </button>
           ))}
-          <button type="button" className="btn btn--block" onClick={() => setIntensity(null)}>あとで</button>
+          <button type="button" className="btn btn--block" onClick={() => setIntensity(null)}>あとで（未評価）</button>
+          <button
+            type="button"
+            className="btn btn--outline btn--block"
+            onClick={() => {
+              const id = intensityFor.event.id;
+              setIntensityFor(null);
+              nav(`/abc/${id}`);
+            }}
+          >
+            詳細を追加（ABC）
+          </button>
         </Sheet>
       )}
     </div>
@@ -409,6 +425,7 @@ export default function Home() {
 
 function BehaviorCard({
   b,
+  replaces,
   events,
   observations,
   timer,
@@ -418,6 +435,7 @@ function BehaviorCard({
   onUndo,
 }: {
   b: Behavior;
+  replaces?: string;
   events: Event[];
   observations: Observation[];
   timer?: Timer;
@@ -443,7 +461,7 @@ function BehaviorCard({
   return (
     <div className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${flash ? ` bcard--flash-${flash}` : ''}`}>
       <button type="button" className="bcard__tap" disabled={disabled} onClick={onTap} aria-label={`${b.name}: ${action}`}>
-        <KindBadge kind={b.kind} />
+        <KindBadge kind={b.kind} of={replaces} />
         <span className="bcard__name">{b.name}</span>
         <span className="bcard__count">
           {b.method === 'frequency' && <>今日 <strong>{total}</strong> 回</>}

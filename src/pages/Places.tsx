@@ -108,7 +108,7 @@ export default function Places() {
     await saveDevice({ useLocation: on });
     if (!on || !person) return;
     const pos = await getPositionOnce();
-    if (pos) await setPlaceChoice(person.id, matchPlace(places, pos)?.id ?? 'outside');
+    if (pos) await setPlaceChoice(person.id, matchPlace(places, pos)?.id ?? 'outside', true);
     else setMsg('位置を取れませんでした。場所は手で選んでください。');
   }
 
@@ -228,7 +228,7 @@ export default function Places() {
                   await saveDevice({ useLocation: true });
                   if (!person) return;
                   const pos = await getPositionOnce();
-                  if (pos) await setPlaceChoice(person.id, matchPlace(places, pos)?.id ?? 'outside');
+                  if (pos) await setPlaceChoice(person.id, matchPlace(places, pos)?.id ?? 'outside', true);
                   else setMsg('位置を取れませんでした。場所は手で選んでください。');
                 })();
               }}

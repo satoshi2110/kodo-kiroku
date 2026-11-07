@@ -18,6 +18,7 @@ interface AppState {
   places: Place[]; // 非表示を除いた登録場所
   place: Place | undefined; // いまの場所（未設定・登録場所の外なら undefined）
   placeOutside: boolean; // 「登録場所の外」を選んでいる
+  placeAuto: boolean; // いまの場所を位置で自動判定した（false = 手で選んだ）
   useLocation: boolean; // この端末で位置情報を使う
   shortSleepUnderHours: number | null; // 睡眠不足を「○時間未満」で判定する（null = いつもより2時間以上短い）
   deleteRequestedAt: string | null; // チームの削除の申し込み
@@ -91,6 +92,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       places: places ?? [],
       place: places?.find((p) => p.id === choice),
       placeOutside: choice === 'outside',
+      placeAuto: !!(personId && device?.placeAuto?.[personId]),
       useLocation: !!device?.useLocation,
       shortSleepUnderHours: teamSetting?.shortSleepUnderHours ?? null,
       deleteRequestedAt: teamSetting?.deleteRequestedAt ?? null,

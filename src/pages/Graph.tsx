@@ -8,7 +8,7 @@
  * - 頻度は「回数」と「1時間あたり」を切りかえる（6.4.1）。既定は回数（【暫定】）
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../state';
 import { canExport } from '../db/repo';
 import { formatShortDate } from '../lib/date';
@@ -27,7 +27,8 @@ export default function Graph() {
   const revisions = useRevisions(person?.id) ?? [];
   const [g, setG] = useState<Granularity>('day');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [showSleep, setShowSleep] = useState(false);
+  const [params] = useSearchParams();
+  const [showSleep, setShowSleep] = useState(params.get('sleep') === '1'); // 睡眠の画面の「グラフで見る」から来たときは睡眠時間も出す
   const [rate, setRate] = useState(false);
   const sync = useNewSync();
   if (!person || !rs) return null;

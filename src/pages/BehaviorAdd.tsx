@@ -18,11 +18,11 @@ import {
 } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
 
-const QUESTIONS: { q: string; yes: Method | null }[] = [
-  { q: '声かけや合図のあと、動き出すまでに何秒かかるかを見たいですか？', yes: 'latency' },
-  { q: '1回あたり何分続いたか、合計の時間を見たいですか？', yes: 'duration' },
-  { q: '「1回」の区切りが分かりやすく、起きた回数を数えられる行動ですか？', yes: 'frequency' },
-  { q: '記録する間、ほかの用事をせずに本人をずっと見ていられますか？', yes: 'interval' },
+const QUESTIONS: { q: string; ex: string; yes: Method | null }[] = [
+  { q: '声かけや合図のあと、動き出すまでに何秒かかるかを見たいですか？', ex: '例: 「座りましょう」と言ってから座るまで、「片付けよう」と言ってから始めるまで', yes: 'latency' },
+  { q: '1回あたり何分続いたか、合計の時間を見たいですか？', ex: '例: 泣き続ける、大きな声を出し続ける、席を離れている', yes: 'duration' },
+  { q: '「1回」の区切りが分かりやすく、起きた回数を数えられる行動ですか？', ex: '例: たたく、手を挙げる、決まった言葉を言う', yes: 'frequency' },
+  { q: '記録する間、ほかの用事をせずに本人をずっと見ていられますか？', ex: '例: 個別の課題の時間に、ほかの人の対応をせずにそばにいられる', yes: 'interval' },
 ];
 
 export default function BehaviorAdd() {
@@ -157,6 +157,7 @@ export default function BehaviorAdd() {
             <div className="card stack">
               <span className="wizard-step">質問 {qIndex + 1} / 4</span>
               <p className="h">{QUESTIONS[qIndex].q}</p>
+              <p className="help" style={{ marginTop: 0 }}>{QUESTIONS[qIndex].ex}</p>
               <div className="grid-2">
                 <button type="button" className="btn btn--primary" onClick={() => answer(true)}>はい</button>
                 <button type="button" className="btn btn--outline" onClick={() => answer(false)}>いいえ</button>
@@ -170,6 +171,7 @@ export default function BehaviorAdd() {
               <span className="card__title">おすすめの測り方</span>
               <p className="h">{METHOD_LABEL[method]}</p>
               <p className="help">{METHOD_HELP[method]}</p>
+              <button type="button" className="btn btn--sm" onClick={() => { setMethod(null); setQIndex(0); }}>もう一度答える</button>
             </div>
           )}
           <div className="card stack">

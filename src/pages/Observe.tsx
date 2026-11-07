@@ -5,6 +5,9 @@
  * - インターバル（部分インターバル）: 区間の途中でも「○ 起きた」を押せる。押した区間は終わったときに ○ になる
  * - 時間サンプリング（固定間隔のみ）: 区切りの瞬間に起きているかを ○× で答える
  * - 答えないまま次の区間も終わった区間と、画面を消した・ほかのアプリにいた間の区間は「未観察」にする（推測で埋めない）
+ * - 【暫定】（2026-11-07 の試作）押し間違えたら「直前の区間を取り消す」で、いちばん新しく答えた区間だけを答え直せる。
+ *   次の区間が終わるまでに答え直さないと「未観察」になる。未観察の区間は取り消せない（あとから埋めない）
+ *   今の区間に先に付けた「起きた」の印は、取り消しても残る（答え直さないまま今の区間も終わると、どちらも未観察）
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -144,6 +147,15 @@ export default function Observe() {
     if (obs.method === 'interval' && r === 'yes') setPreMarked((v) => !v);
   }
 
+  // 直前の区間を取り消す: いちばん新しく終わった区間に答えていて、それが未観察でないときだけ
+  const canUndo = running && results.length > 0 && results.length === idx && results[results.length - 1] !== 'missed';
+  function undoLast() {
+    if (!obs || !canUndo) return;
+    const next = results.slice(0, -1);
+    setResults(next);
+    saveObservationResults(obs.id, next);
+  }
+
   async function finish() {
     const o = obs;
     if (!o || !userId) return;
@@ -221,6 +233,11 @@ export default function Observe() {
               × 起きなかった
             </button>
           </div>
+          {canUndo && (
+            <button type="button" className="btn btn--outline btn--block" onClick={undoLast}>
+              直前の区間（区間 {results.length}）を取り消して答え直す
+            </button>
+          )}
           <button type="button" className="btn btn--block" onClick={finish}>
             観察を終える
           </button>

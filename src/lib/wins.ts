@@ -5,6 +5,8 @@
  *  2. 問題行動のない「午前」（12時より前）または「午後」が、直近7日で4日以上（その時間帯に何か記録がある日だけ数える）
  *  3. 直近7日の平均が、実施中の支援計画の達成基準に届いた
  *  4. 平均の強度が、2週間で1段階以上下がった（前の7日と直近7日の比較）
+ *  5. 代替行動・望ましい行動（回数で記録）の1日の回数が、これまでのどの日よりも多くなった
+ *     （【暫定】（2026-11-07 の試作）それより前に記録のある日が7日以上あり、2回以上のときだけ。増えるたびに出る）
  * 同じことが続く間は、届いた最初の日だけに出す。場所は、その間にいちばん多く記録された場所の名前。
  */
 import { addDays, dateRange } from './date';
@@ -51,6 +53,21 @@ export function computeWins(behaviors: Behavior[], rs: RecordSet, plan: PlanCont
         if (up(i) && !up(i - 1)) {
           wins.push({ date: d, behaviorId: b.id, place: placeOf(b, days[i - 2], d), text: `「${b.name}」が3日続けて、前の日と同じか増えました（${v[i - 3]}回 → ${v[i]}回）` });
         }
+      });
+    }
+
+    // 5. 代替行動・望ましい行動が、初めて1日 N回になった（これまでの最多を超えた）
+    if (b.kind !== 'problem' && b.method === 'frequency') {
+      let best = -1;
+      let seen = 0;
+      days.forEach((d, i) => {
+        const x = v[i];
+        if (x == null) return;
+        if (seen >= 7 && x > best && x >= 2) {
+          wins.push({ date: d, behaviorId: b.id, place: placeOf(b, d, d), text: `「${b.name}」が、初めて1日${x}回になりました` });
+        }
+        if (x > best) best = x;
+        seen++;
       });
     }
 

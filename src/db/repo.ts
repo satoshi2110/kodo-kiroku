@@ -505,13 +505,16 @@ export async function deleteSchedule(id: string, actorId: string) {
   await audit(before.personId, 'userSchedule', id, 'delete', actorId, before, after);
 }
 
-/** いまの場所を端末に覚える（Place.id / 'outside' / null = 未設定） */
-export async function setPlaceChoice(personId: string, choice: string | null) {
+/** いまの場所を端末に覚える（Place.id / 'outside' / null = 未設定）。auto: 位置で自動判定したとき true */
+export async function setPlaceChoice(personId: string, choice: string | null, auto = false) {
   const dev = await getDevice();
   const placeChoice = { ...(dev.placeChoice ?? {}) };
+  const placeAuto = { ...(dev.placeAuto ?? {}) };
   if (choice) placeChoice[personId] = choice;
   else delete placeChoice[personId];
-  await saveDevice({ placeChoice });
+  if (choice && auto) placeAuto[personId] = true;
+  else delete placeAuto[personId];
+  await saveDevice({ placeChoice, placeAuto });
 }
 
 // ---------- 強化子（好きなもの、6.14） ----------

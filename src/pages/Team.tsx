@@ -45,11 +45,12 @@ export default function Team() {
   }
   const isAdmin = me?.role === 'admin';
   const admin = members.find((m) => m.role === 'admin');
+  const subadmins = members.filter((m) => m.role === 'subadmin').map((m) => m.displayName).join('・');
   const current = editing ? members.find((m) => m.id === editing.id) ?? editing : null;
 
   return (
     <div className="page">
-      <TopBar title="チーム" sub={`${person.displayName} ・ 管理者: ${admin?.displayName ?? '—'} ・ ${members.length}名`} />
+      <TopBar title="チーム" sub={`${person.displayName} ・ 管理者: ${admin?.displayName ?? '—'}${subadmins ? ` ・ 副管理者: ${subadmins}` : ''} ・ ${members.length}名`} />
       <div className="section">
         <Link to="/person" className="card row row--between team-settings-link">
           <span className="stack" style={{ gap: 2 }}>

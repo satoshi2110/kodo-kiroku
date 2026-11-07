@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import RestraintThreshold from '../components/RestraintThreshold';
-import { AI_LIMITS, aiUsage, canEditTeamSettings, canExport, logExport, setAiEnabled, TEAM_DELETE_DAYS, updateTeamSetting } from '../db/repo';
+import { AI_LIMITS, AI_TEAM_LIMIT, aiTeamUsage, aiUsage, canEditTeamSettings, canExport, logExport, setAiEnabled, TEAM_DELETE_DAYS, updateTeamSetting } from '../db/repo';
 import { useApp } from '../state';
 import { buildCsv, downloadCsv, type CsvKind } from '../lib/csv';
 import { addDays, formatDateJa, localDateOf, nowISO, toLocalDate } from '../lib/date';
@@ -24,6 +24,7 @@ export default function TeamSettings() {
   const [agreed, setAgreed] = useState(false);
   const personId = person?.id ?? '';
   const usage = useLiveQuery(async () => (userId ? aiUsage(userId, me?.role) : null), [userId, me?.role]);
+  const teamUsage = useLiveQuery(async () => (personId ? aiTeamUsage(personId) : null), [personId]);
   const aiConsent = useLiveQuery(
     async () =>
       personId
@@ -78,10 +79,15 @@ export default function TeamSettings() {
           </div>
           {aiEnabled && aiConsent && (
             <p className="help">
-              送り先: Anthropic（米国）。氏名・施設名は置きかえて送り、写真は送りません。同意: {nameOf(aiConsent.userId)} {formatDateJa(localDateOf(aiConsent.createdAt), false)}
+              送り先: Anthropic（米国）。氏名・施設名は置きかえて送り、写真は送りません。同意: {nameOf(aiConsent.userId)} {formatDateJa(localDateOf(aiConsent.createdAt), false)}（同意文の版 {aiConsent.textVersion}）
             </p>
           )}
           {!aiEnabled && <p className="help">「なし」のときは、外の AI に何も送りません。記録・グラフ・共有はそのまま使えます。</p>}
+          {aiEnabled && teamUsage && (
+            <p className="help">
+              今月のチームの残り: {teamUsage.monthLeft}回 / {AI_TEAM_LIMIT.month}回（今日 {teamUsage.dayLeft}回 / {AI_TEAM_LIMIT.day}回）
+            </p>
+          )}
           {usage && (
             <p className="help">
               あなたの残り: 今日 {usage.dayLeft}回・今月 {usage.monthLeft}回（1人の上限: 支援リーダー以上 月{AI_LIMITS.lead.month}回・1日{AI_LIMITS.lead.day}回 ／ 支援者 月{AI_LIMITS.supporter.month}回・1日{AI_LIMITS.supporter.day}回）

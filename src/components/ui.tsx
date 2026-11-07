@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { KIND_LABEL, type BehaviorKind } from '../db/types';
 
-export function KindBadge({ kind }: { kind: BehaviorKind }) {
-  return <span className={`badge badge--${kind}`}>{KIND_LABEL[kind]}</span>;
+/** of: 代替行動のとき、置きかえる問題行動の名前（ホームで「代替行動（頭たたき）」と出す） */
+export function KindBadge({ kind, of }: { kind: BehaviorKind; of?: string }) {
+  return <span className={`badge badge--${kind}`}>{KIND_LABEL[kind]}{of ? `（${of}）` : ''}</span>;
 }
 
 export function Chip({

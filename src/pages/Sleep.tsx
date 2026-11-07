@@ -4,6 +4,7 @@
  * 記録日は起きた日。入力・変更できるのは管理者・副管理者と「家族」の印・許可のある人（決定37）。それ以外は一覧だけ見える。
  */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { canEditSleep, saveSleep } from '../db/repo';
@@ -103,7 +104,10 @@ export default function Sleep() {
 
       <div className="section">
         <div className="card stack">
-          <h2 className="card__title">この1週間</h2>
+          <div className="row row--between">
+            <h2 className="card__title" style={{ margin: 0 }}>この1週間</h2>
+            <Link to="/graph?sleep=1" className="btn btn--sm">グラフで見る</Link>
+          </div>
           {(() => {
             const mins = week.flatMap((d) => {
               const l = logs.find((x) => x.wakeDate === d);

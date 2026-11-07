@@ -524,6 +524,7 @@ export interface DeviceSetting {
   currentPersonId: string | null;
   useLocation?: boolean; // この端末で位置情報を使う（既定はオフ。6.3.3a）
   placeChoice?: Record<string, string>; // 対象者ごとの、いまの場所（Place.id か 'outside'）
+  placeAuto?: Record<string, boolean>; // その場所を位置で自動判定したか（false / なし = 手で選んだ）。画面に出すだけ
   syncSince?: Record<string, string>; // 表ごとに、サーバーから最後に受け取った時刻（server_at）
   syncTeams?: string[]; // 前回の同期で見えていたチーム（対象者の id）。新しく見えたチームがあれば全部取り直す
 }
