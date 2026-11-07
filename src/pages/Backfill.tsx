@@ -2,14 +2,15 @@
  * さかのぼって入力（6.3.5、画面一覧 6、ワイヤーフレーム 15）。
  * 日時を指定して記録を足す（「あとで入力」の印が付く）。自動で 0 になった日を「観察していなかった（未記録）」に直す。
  * インターバル・時間サンプリングは区間ごとの観察なので、あとから足せない。
+ * 取り消した記録（直近14日）もここに並べ、記録の詳細から元に戻せるようにする（6.3.5）。
  */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { canRecord, createEvent, setNotObserved } from '../db/repo';
+import { canRecord, canUndoEvent, createEvent, setNotObserved } from '../db/repo';
 import { useApp } from '../state';
-import { addDays, formatDateJa, fromDateTimeLocalInput, toLocalDate } from '../lib/date';
+import { addDays, formatDateJa, formatDateTimeJa, fromDateTimeLocalInput, toLocalDate } from '../lib/date';
 import { METHOD_LABEL, type Event } from '../db/types';
 import { Chip, TopBar } from '../components/ui';
 
@@ -39,8 +40,11 @@ export default function Backfill() {
       db.observations.where('personId').equals(personId).filter((o) => !o.deletedAt && o.results.length > 0).toArray(),
       db.notObservedDays.where('personId').equals(personId).filter((x) => !x.deletedAt).toArray(),
     ]);
-    return { events, obs, marks };
-  }, [personId]);
+    // 取り消した記録は、元に戻せる人の分だけ並べる
+    const undone = (await db.events.where('personId').equals(personId).filter((e) => !!e.deletedAt && e.localDate >= addDays(today, -ZERO_DAYS)).toArray())
+      .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+    return { events, obs, marks, undone };
+  }, [personId, today]);
 
   // グラフと同じ考え方: 何か記録がある日に、その行動の記録がなければ自動で 0（頻度・持続時間だけ）
   const zeroRows = useMemo(() => {
@@ -59,6 +63,7 @@ export default function Backfill() {
 
   if (!person || !userId || !data) return null;
   if (!canRecord(me?.role)) return <p className="empty">閲覧者は記録を見るだけです。</p>;
+  const undoneRows = data.undone.filter((e) => canUndoEvent(me?.role, e, userId));
   const b = targets.find((x) => x.id === behaviorId);
 
   async function save() {
@@ -185,6 +190,21 @@ export default function Backfill() {
             </div>
           ))}
           <p className="help">「観察していなかった」を押すと未記録に戻り、グラフの線が切れます。</p>
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="card">
+          <h2 className="card__title">取り消した記録（直近{ZERO_DAYS}日）</h2>
+          {undoneRows.length === 0 && <p className="muted">取り消した記録はありません。</p>}
+          {undoneRows.map((e) => (
+            <Link key={e.id} to={`/abc/${e.id}`} className="row row--between today-row today-row--link">
+              <span className="muted">{formatDateTimeJa(e.occurredAt)}</span>
+              <span style={{ flex: 1 }}>{behaviors.find((x) => x.id === e.behaviorId)?.name ?? '（非表示の行動）'}</span>
+              <span className="today-row__go" aria-hidden="true">›</span>
+            </Link>
+          ))}
+          <p className="help">押すと記録の詳細が開き、「元に戻す」でグラフや集計に戻せます。元に戻せるのは、記録した人と支援リーダー以上の人です。</p>
         </div>
       </div>
     </div>

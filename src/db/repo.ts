@@ -261,18 +261,35 @@ export async function updateEvent(id: string, patch: Partial<Event>, actorId: st
   await audit(after.personId, 'event', id, 'update', actorId, before, after);
 }
 
-/** −1・取消バッジ: 自分が付けた、その行動の最後の記録（今日の分）を取り消す。履歴は残る */
-export async function undoLastEvent(personId: string, behaviorId: string, localDate: string, actorId: string): Promise<Event | null> {
-  const list = (await db.events.where('[personId+localDate]').equals([personId, localDate]).toArray())
-    .filter((e) => e.behaviorId === behaviorId && !e.deletedAt && e.recorderId === actorId)
+/**
+ * −1・取消バッジ（6.3.1、時間制限なし）: その行動の最後の記録を1件取り消す。履歴は残り、元に戻せる。
+ * 支援者は自分の記録だけ、管理者・副管理者・支援リーダーはほかの人の記録も（6.3.5）。日付では区切らない。
+ */
+export async function lastUndoableEvent(personId: string, behaviorId: string, role: Role | undefined, actorId: string): Promise<Event | null> {
+  const list = (await db.events.where('personId').equals(personId).toArray())
+    .filter((e) => e.behaviorId === behaviorId && !e.deletedAt && canUndoEvent(role, e, actorId))
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
-  const last = list[0];
-  if (!last) return null;
+  return list[0] ?? null;
+}
+
+/** 記録を1件取り消す（論理削除）。−1 バッジと記録の詳細から */
+export async function undoEvent(id: string, actorId: string): Promise<Event | null> {
+  const before = await db.events.get(id);
+  if (!before || before.deletedAt) return null;
   const t = nowISO();
-  const after = { ...last, deletedAt: t, updatedAt: t };
+  const after = { ...before, deletedAt: t, updatedAt: t };
   await db.events.put(after);
-  await audit(personId, 'event', last.id, 'delete', actorId, last, after);
-  return last;
+  await audit(before.personId, 'event', id, 'delete', actorId, before, after);
+  return before;
+}
+
+/** 取り消した記録を元に戻す。付いていた ABC もそのまま戻る */
+export async function restoreEvent(id: string, actorId: string): Promise<void> {
+  const before = await db.events.get(id);
+  if (!before || !before.deletedAt) return;
+  const after = { ...before, deletedAt: null, updatedAt: nowISO() };
+  await db.events.put(after);
+  await audit(before.personId, 'event', id, 'restore', actorId, before, after);
 }
 
 /**

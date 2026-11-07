@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { RANK, addChoiceOption, canUndoEvent, ensureChoiceOptions, hideChoiceOption, saveAbc } from '../db/repo';
+import { RANK, addChoiceOption, canUndoEvent, ensureChoiceOptions, hideChoiceOption, restoreEvent, saveAbc, undoEvent } from '../db/repo';
 import { useApp } from '../state';
 import { formatDateTimeJa, formatDuration } from '../lib/date';
 import { isShortNight } from '../lib/sleep';
@@ -86,7 +86,27 @@ function ABC({ eventId }: { eventId: string }) {
   }, [event, existing, form, me, options, sleepLogs]);
 
   if (event === undefined || !person || !userId) return null;
-  if (!event || event.deletedAt) return <p className="empty">この記録は見つかりません（取り消された可能性があります）。</p>;
+  if (!event) return <p className="empty">この記録は見つかりません。</p>;
+  // 取り消した記録（論理削除）。記録した本人と支援リーダー以上が元に戻せる（6.3.5）
+  if (event.deletedAt) {
+    const canRestore = canUndoEvent(me?.role, event, userId);
+    const b = behaviors.find((x) => x.id === event.behaviorId);
+    return (
+      <div className="page page--no-nav">
+        <TopBar title="取り消した記録" sub={<>{formatDateTimeJa(event.occurredAt)} ・ {b?.name ?? '（非表示の行動）'}</>} back="/" />
+        <div className="section stack">
+          <p className="notice-inline">
+            この記録は {formatDateTimeJa(event.deletedAt)} に取り消されました。グラフや集計には入りません。取り消したことは履歴に残っています。
+          </p>
+          {canRestore ? (
+            <button type="button" className="btn btn--primary btn--block" onClick={() => restoreEvent(event.id, userId)}>元に戻す</button>
+          ) : (
+            <p className="help">元に戻せるのは、記録した人と支援リーダー以上の人です。</p>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (!form) return null;
 
   const behavior = behaviors.find((b) => b.id === event.behaviorId);
@@ -208,6 +228,18 @@ function ABC({ eventId }: { eventId: string }) {
         </Section>
 
         {editable && <button type="button" className="btn btn--primary btn--block" disabled={saving} onClick={save}>保存する</button>}
+        {canUndoEvent(me?.role, event, userId) && (
+          <button
+            type="button"
+            className="btn btn--danger btn--block"
+            onClick={async () => {
+              const who = event.recorderId !== userId ? `${members.find((m) => m.userId === event.recorderId)?.displayName ?? '退会したメンバー'}がつけた` : 'この';
+              if (window.confirm(`${who}記録（${formatDateTimeJa(event.occurredAt)}）を取り消しますか？\nグラフや集計から外れます。履歴に残り、あとで元に戻せます。`)) await undoEvent(event.id, userId);
+            }}
+          >
+            この記録を取り消す
+          </button>
+        )}
       </div>
     </div>
   );

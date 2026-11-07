@@ -7,10 +7,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { canEditSleep, canRecord, createEvent, observedRatio, setPlaceChoice, undoLastEvent, updateEvent } from '../db/repo';
+import { canEditSleep, canRecord, createEvent, lastUndoableEvent, observedRatio, restoreEvent, setPlaceChoice, undoEvent, updateEvent } from '../db/repo';
 import { getPositionOnce, matchPlace } from '../lib/place';
 import { useApp } from '../state';
-import { formatDuration, formatTime, toLocalDate } from '../lib/date';
+import { formatDateTimeJa, formatDuration, formatTime, toLocalDate } from '../lib/date';
 import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
 import { Chip, KindBadge, Sheet, TopBar } from '../components/ui';
 import { formatSleep, sleepMinutes } from '../lib/sleep';
@@ -34,7 +34,7 @@ export default function Home() {
     [personId, today],
   );
   const nav = useNavigate();
-  const [toast, setToast] = useState<{ text: string; abcEventId?: string } | null>(null);
+  const [toast, setToast] = useState<{ text: string; abcEventId?: string; restoreEventId?: string } | null>(null);
   const toastTimer = useRef<number>();
   const [flash, setFlash] = useState<{ id: string; good: boolean } | null>(null);
   const [intensityFor, setIntensityFor] = useState<{ event: Event; behavior: Behavior } | null>(null);
@@ -97,10 +97,10 @@ export default function Home() {
   if (!person || !userId) return null;
   const recordable = canRecord(me?.role);
 
-  function notify(text: string, abcEventId?: string) {
+  function notify(text: string, abcEventId?: string, restoreEventId?: string) {
     window.clearTimeout(toastTimer.current);
-    setToast({ text, abcEventId });
-    toastTimer.current = window.setTimeout(() => setToast(null), abcEventId ? 5000 : 3000);
+    setToast({ text, abcEventId, restoreEventId });
+    toastTimer.current = window.setTimeout(() => setToast(null), abcEventId || restoreEventId ? 5000 : 3000);
   }
 
   function feedback(b: Behavior) {
@@ -151,9 +151,17 @@ export default function Home() {
       setTimers(rest);
       return notify(`「${b.name}」の計測を取り消しました`);
     }
-    const last = await undoLastEvent(person.id, b.id, today, userId);
-    if (intensityFor?.event.id === last?.id) setIntensityFor(null);
-    notify(last ? `「${b.name}」の記録を1件取り消しました` : '取り消せる今日の記録がありません');
+    // 日付では区切らない（時間制限なし）。ほかの人の記録か今日より前の記録なら、取り消す前に確かめる
+    const last = await lastUndoableEvent(person.id, b.id, me?.role, userId);
+    if (!last) return notify(`「${b.name}」に取り消せる記録がありません`);
+    const others = last.recorderId !== userId;
+    if (others || last.localDate !== today) {
+      const who = others ? `${members.find((m) => m.userId === last.recorderId)?.displayName ?? '退会したメンバー'}がつけた、` : '';
+      if (!window.confirm(`${who}${formatDateTimeJa(last.occurredAt)} の「${b.name}」の記録を取り消しますか？`)) return;
+    }
+    await undoEvent(last.id, userId);
+    if (intensityFor?.event.id === last.id) setIntensityFor(null);
+    notify(`「${b.name}」の記録（${last.localDate === today ? formatTime(last.occurredAt) : formatDateTimeJa(last.occurredAt)}）を取り消しました`, undefined, last.id);
   }
 
   async function setIntensity(level: number | null) {
@@ -327,6 +335,18 @@ export default function Home() {
           <span>{toast.text}</span>
           {toast.abcEventId && !intensityFor && (
             <button type="button" className="btn btn--sm" onClick={() => nav(`/abc/${toast.abcEventId}`)}>詳しく書く</button>
+          )}
+          {toast.restoreEventId && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={async () => {
+                await restoreEvent(toast.restoreEventId!, userId);
+                notify('取り消した記録を元に戻しました');
+              }}
+            >
+              元に戻す
+            </button>
           )}
         </div>
       )}
