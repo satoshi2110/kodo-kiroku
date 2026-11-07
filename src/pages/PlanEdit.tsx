@@ -22,7 +22,7 @@ export default function PlanEditRoute() {
   const { person } = useApp();
   const data = usePlanData(person?.id);
   if (!person || !data) return null;
-  return <PlanEdit initial={data.plan?.content ?? emptyPlan()} isNew={!data.plan} />;
+  return <PlanEdit initial={{ ...emptyPlan(), ...data.plan?.content }} isNew={!data.plan} />;
 }
 
 function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) {
@@ -116,6 +116,10 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
           <label className="field">
             支援目標
             <textarea value={p.goal} onChange={(e) => set('goal', e.target.value)} placeholder="例: 課題の場面で、頭たたきの代わりに休憩カードを渡せる" />
+          </label>
+          <label className="field">
+            場面（この計画を使うところ）
+            <input value={p.scene} onChange={(e) => set('scene', e.target.value)} placeholder="例: 施設・学校の個別課題の時間" />
           </label>
           {p.criteria.map((c, i) => {
             const b = behaviors.find((x) => x.id === c.behaviorId);

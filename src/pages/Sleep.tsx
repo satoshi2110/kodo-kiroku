@@ -123,7 +123,10 @@ export default function Sleep() {
                 <span className="sleep-row__track">
                   {l && <span className={`sleep-row__bar${short ? ' sleep-row__bar--short' : ''}`} style={{ width: `${Math.min(100, (min / (12 * 60)) * 100)}%` }} />}
                 </span>
-                <span className="sleep-row__val">{l ? formatSleep(min) : '未記録'}</span>
+                <span className="sleep-row__val">
+                  {l ? formatSleep(min) : '未記録'}
+                  {l && <span className="sleep-row__times">{l.bedTime}→{l.wakeTime}</span>}
+                </span>
               </button>
             );
           })}

@@ -6,7 +6,9 @@
  * - 合意の状況、意見あり（保存した人と管理者に出す、決定75）
  * - 身体拘束の記録・支援会議メモ・PDF レポート・できたことへの入口
  * - 機能分析のツール（外部のサイト）へのリンク（決定90）
+ * - 「確認を依頼する」: 端末の共有メニューで、合意の画面へのリンクを送る（ワイヤーフレーム 4）。アプリから通知やメールは送らない（決定75）
  */
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../state';
 import { canEditPlan, FUNCTION_HINT } from '../db/phase2';
@@ -140,6 +142,7 @@ export default function Plan() {
                 <Link to="/graph" className="btn btn--sm">グラフで確認</Link>
               </div>
               {shown.goal && <p className="reinf__usage">{shown.goal}</p>}
+              {shown.scene && <span className="muted">場面: {shown.scene}</span>}
               {shown.criteria.map((c, i) => {
                 const b = nameOf(c.behaviorId);
                 if (!b) return null;
@@ -209,10 +212,46 @@ export default function Plan() {
               </div>
             );
           })}
+          {change.signerMemberIds.some((id) => !signoffs.some((x) => x.changeId === change.id && x.memberId === id)) && <RequestCheck />}
         </div>
       </div>
     );
   }
+}
+
+/**
+ * 確認を依頼する（ワイヤーフレーム 4）。【暫定】（2026-11-07 の試作）
+ * 端末の共有メニュー（LINE・メールなど）で、合意の画面へのリンクを送る。共有メニューがない端末では、リンクをコピーする。
+ * 文には対象者の名前や計画の中身を入れない（送り先のアプリに残るため）。開いた人はログインしてから合意の画面を見る。
+ */
+function RequestCheck() {
+  const [copied, setCopied] = useState(false);
+  const url = `${location.origin}/plan/signoff`;
+  const text = '支援計画の確認をお願いします。アプリを開いて、合意の画面で内容を確かめてください。';
+  async function send() {
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: '計画の確認をお願いします', text, url });
+      } catch {
+        // 閉じたときは何もしない
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <div className="stack">
+      <button type="button" className="btn btn--outline btn--block" onClick={send}>確認を依頼する</button>
+      <span className="help" role="status">
+        {copied ? '依頼の文とリンクをコピーしました。LINE やメールに貼って送ってください。' : 'LINE やメールなどで、合意の画面へのリンクを送ります。未確認の人には、アプリを開いたときにも「確認の依頼があります」と出ます。'}
+      </span>
+    </div>
+  );
 }
 
 function PlanText({ title, text }: { title: string; text: string }) {

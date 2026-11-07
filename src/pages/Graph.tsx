@@ -13,7 +13,7 @@ import { useApp } from '../state';
 import { canExport } from '../db/repo';
 import { formatShortDate } from '../lib/date';
 import { allDates, canRate, useRecordSet, type Granularity } from '../lib/series';
-import { buildGroups, groupTitle, sleepPanel, type PanelSpec } from '../lib/panels';
+import { buildGroups, changeSummary, groupTitle, sleepPanel, type PanelSpec } from '../lib/panels';
 import { usePlanData } from '../lib/usePlan';
 import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
 import LineChart, { ChartSyncProvider, LineSwatch, useNewSync, type Phase } from '../components/LineChart';
@@ -36,6 +36,10 @@ export default function Graph() {
   const hasFreq = shown.some(canRate);
   const groups = buildGroups(shown, rs, days, g, planData?.plan?.activeContent ?? null, rate && hasFreq);
   const phases = planData?.phases ?? [];
+  // 変化のまとめは、区切り（日・週・月）にかかわらず1日ごとの値で出す
+  const dayPanels = new Map(
+    (g === 'day' ? groups : buildGroups(shown, rs, days, 'day', null, rate && hasFreq)).flatMap((grp) => grp.panels).map((p) => [p.key, p]),
+  );
   const toggle = (id: string) => setHidden((h) => {
     const n = new Set(h);
     if (n.has(id)) n.delete(id);
@@ -84,6 +88,14 @@ export default function Graph() {
             {phases.length > 0 && (
               <p className="help">縦の点線 = 条件の変更（{phases.map((p) => `${formatShortDate(p.date)} ${p.label}`).join('、')}）。横の点線 = 支援計画の達成基準。</p>
             )}
+            {days.length > 0 && (
+              <p className="help" style={{ margin: 0 }}>
+                <strong>
+                  期間: {formatShortDate(days[0])} 〜 {formatShortDate(days[days.length - 1])}（{days.length}日）
+                </strong>
+                ・ グラフは横にずらすと前の日が見られます。「未記録」は記録のない日です。
+              </p>
+            )}
             {g !== 'day' && <p className="help">週・月は、記録のある日の平均です。</p>}
           </div>
           <ChartSyncProvider value={sync}>
@@ -103,7 +115,7 @@ export default function Graph() {
                       </span>
                     ))}
                   </div>
-                  {grp.panels.map((p) => <Panel key={p.key} p={p} g={g} phases={phases} title={groupTitle(grp.behaviors)} />)}
+                  {grp.panels.map((p) => <Panel key={p.key} p={p} day={dayPanels.get(p.key)} g={g} phases={phases} title={groupTitle(grp.behaviors)} />)}
                 </div>
               </div>
             ))}
@@ -111,7 +123,7 @@ export default function Graph() {
               <div className="section">
                 <div className="card stack">
                   <strong className="graph-name">睡眠</strong>
-                  <Panel p={sleepPanel(rs, days, g)} g={g} phases={phases} title="睡眠" />
+                  <Panel p={sleepPanel(rs, days, g)} day={sleepPanel(rs, days, 'day')} g={g} phases={phases} title="睡眠" />
                 </div>
               </div>
             )}
@@ -133,10 +145,16 @@ export default function Graph() {
   );
 }
 
-function Panel({ p, g, phases, title }: { p: PanelSpec; g: Granularity; phases: Phase[]; title: string }) {
+function Panel({ p, day, g, phases, title }: { p: PanelSpec; day?: PanelSpec; g: Granularity; phases: Phase[]; title: string }) {
+  const sum = day ? changeSummary(day, phases) : null;
   return (
     <div className="stack" style={{ gap: 2 }} aria-label={title}>
       <span className="muted">{p.caption}</span>
+      {sum && (
+        <span className="graph-change">
+          <strong>{sum.text}</strong> <span className="muted">（{sum.label}）</span>
+        </span>
+      )}
       <LineChart
         dates={p.dates}
         lines={p.lines}

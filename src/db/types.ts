@@ -349,6 +349,7 @@ export interface PlanContent {
   alternativeBehaviorId: string | null;
   func: BehaviorFunction | null; // 機能仮説
   goal: string; // 支援目標
+  scene: string; // 場面（この計画を使う場所。例: 施設・学校）【暫定】（2026-11-07 の試作）
   criteria: PlanCriterion[];
   antecedent: string; // 先行子操作（予防）
   reinforcement: string; // 代替行動への対応（強化）
@@ -363,6 +364,7 @@ export const PLAN_FIELD_LABEL: Record<keyof PlanContent, string> = {
   alternativeBehaviorId: '代替行動',
   func: '機能仮説',
   goal: '支援目標',
+  scene: '場面',
   criteria: '達成基準',
   antecedent: '先行子操作（予防）',
   reinforcement: '代替行動への対応（強化）',

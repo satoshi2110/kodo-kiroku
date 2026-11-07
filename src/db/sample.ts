@@ -242,6 +242,7 @@ export async function createSampleTeam(): Promise<void> {
     alternativeBehaviorId: card.id,
     func: 'escape',
     goal: '個別課題の時間に、頭をたたく代わりに休憩カードを渡して休めるようになる',
+    scene: '施設',
     criteria: [
       { behaviorId: hit.id, op: 'lte', value: 3, note: '' },
       { behaviorId: card.id, op: 'gte', value: 3, note: '' },
@@ -253,7 +254,7 @@ export async function createSampleTeam(): Promise<void> {
     reviewDate: addDays(today, 23),
     owner: '職員A（見本）',
   };
-  const plan2: PlanContent = { ...plan1, antecedent: '午前の課題の量を2つ減らし、終わりの合図を写真カードで見せる。学校でも同じカードを使う' };
+  const plan2: PlanContent = { ...plan1, scene: '施設・学校', antecedent: '午前の課題の量を2つ減らし、終わりの合図を写真カードで見せる。学校でも同じカードを使う' };
   const stamp = (date: string, hour: number) => at(date, hour, 0);
   const planRec: SupportPlan = { ...rec(), createdAt: stamp(startDate, 17), personId: person.id, content: plan2, activeContent: plan2, activeSince: changeDate };
   const change = (c: Omit<PlanChange, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'personId' | 'planId' | 'closedBy' | 'fields'>, createdAt: string): PlanChange => ({
@@ -267,7 +268,7 @@ export async function createSampleTeam(): Promise<void> {
     ...c,
   });
   const ch1 = change({ savedBy: staff.userId, reason: '支援を始める', before: null, after: plan1, signerMemberIds: [me.id, staff.id, teacher.id], status: 'past', activeSince: startDate }, stamp(addDays(startDate, -1), 17));
-  const ch2 = change({ savedBy: staff.userId, reason: '支援会議で、午前の課題の量と終わりの合図を見直した', before: plan1, after: plan2, signerMemberIds: [me.id, staff.id, teacher.id], status: 'active', activeSince: changeDate }, stamp(changeDate, 16));
+  const ch2 = change({ savedBy: staff.userId, reason: '支援会議で、午前の課題の量と終わりの合図を見直し、学校でも同じやり方にした', before: plan1, after: plan2, signerMemberIds: [me.id, staff.id, teacher.id], status: 'active', activeSince: changeDate }, stamp(changeDate, 16));
   const sign = (c: PlanChange, m: TeamMember, state: PlanSignoff['state'], opinion = ''): PlanSignoff => ({ ...rec(), createdAt: c.createdAt, personId: person.id, changeId: c.id, memberId: m.id, state, opinion });
   const signoffs = [sign(ch1, me, 'agreed'), sign(ch1, staff, 'agreed'), sign(ch1, teacher, 'agreed'), sign(ch2, staff, 'agreed'), sign(ch2, me, 'agreed')];
 

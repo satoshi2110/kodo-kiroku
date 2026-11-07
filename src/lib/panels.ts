@@ -132,3 +132,41 @@ export function groupTitle(members: Behavior[]): string {
 }
 
 export type { Phase };
+
+/**
+ * 変化のまとめ（ワイヤーフレーム 3 の「5.8 → 1.9 回」）。1日ごとの値の平均を、前と後で比べる。
+ * 【暫定】（2026-11-07 の試作）条件の変更（支援計画が実施中になった日）があれば、前と後が3日以上ある最後の変更の前と後。
+ * なければ、最初の7日と最近の7日（14日以上あるときだけ）。値のない日（未記録）は平均に入れない。
+ */
+export function changeSummary(p: PanelSpec, phases: Phase[]): { label: string; text: string } | null {
+  const d = p.dates;
+  if (d.length < 2) return null;
+  // 前と後がどちらも3日以上ある変更のうち、いちばん新しいもの（変えたばかりの日は、まだ比べられない）
+  const phase = [...phases]
+    .filter((x) => d.filter((y) => y < x.date).length >= 3 && d.filter((y) => y >= x.date).length >= 3)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .pop();
+  let before: number[];
+  let after: number[];
+  let label: string;
+  if (phase) {
+    before = d.flatMap((x, i) => (x < phase.date ? [i] : []));
+    after = d.flatMap((x, i) => (x >= phase.date ? [i] : []));
+    label = `${phase.label}（${Number(phase.date.slice(5, 7))}/${Number(phase.date.slice(8, 10))}）の前 → 後の平均`;
+  } else if (d.length >= 14) {
+    before = d.slice(0, 7).map((_, i) => i);
+    after = d.slice(-7).map((_, i) => d.length - 7 + i);
+    label = '最初の7日 → 最近の7日の平均';
+  } else return null;
+  const avg = (vals: (number | null)[], idx: number[]) => {
+    const v = idx.map((i) => vals[i]).filter((x): x is number => x != null);
+    return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : null;
+  };
+  const parts = p.lines.map((l) => {
+    const a = avg(l.values, before);
+    const b = avg(l.values, after);
+    const name = p.lines.length > 1 ? `${l.name} ` : '';
+    return `${name}${a == null ? '—' : p.format(a)} → ${b == null ? '—' : p.format(b)}`;
+  });
+  return { label, text: parts.join(' ／ ') };
+}

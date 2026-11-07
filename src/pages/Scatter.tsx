@@ -43,6 +43,7 @@ export default function Scatter() {
     cell.set(k, c);
   }
   const observed = (d: string) => rs.recordedDays.has(d) && !(b && rs.notObserved.has(`${b.id}|${d}`));
+  const trend = trendSentence(cell, days);
   const levels = b?.intensity?.levels ?? 3;
 
   return (
@@ -68,6 +69,7 @@ export default function Scatter() {
           </div>
           <div className="section">
             <div className="card">
+              <p className="scatter__trend">{trend}</p>
               <div className="scatter" role="table" aria-label={`${b.name}の時間帯の図`}>
                 <div className="scatter__row" role="row">
                   <span className="scatter__time" role="columnheader" />
@@ -119,4 +121,41 @@ export default function Scatter() {
       )}
     </div>
   );
+}
+
+const hm = (slot: number) => `${Math.floor(slot / 2)}:${slot % 2 ? '30' : '00'}`;
+
+/**
+ * この週の傾向の一文（ワイヤーフレーム 20）。
+ * 【暫定】（2026-11-07 の試作）30分のマスを2つ続けた「1時間」のうち、回数がいちばん多いところを出す。
+ * 合計が3回より少ないときと、いちばん多い1時間でも全体の3割に届かないときは、時間帯の偏りを言わない。
+ * 理由（なぜその時間か）は書かない。きっかけは ABC記録で確かめる。
+ */
+function trendSentence(cell: Map<string, { n: number }>, days: string[]): string {
+  const bySlot = new Map<number, number>();
+  const daysBySlot = new Map<number, Set<string>>();
+  let total = 0;
+  for (const [k, c] of cell) {
+    const [d, s] = k.split('|');
+    if (!days.includes(d)) continue;
+    const slot = Number(s);
+    bySlot.set(slot, (bySlot.get(slot) ?? 0) + c.n);
+    if (!daysBySlot.has(slot)) daysBySlot.set(slot, new Set());
+    daysBySlot.get(slot)!.add(d);
+    total += c.n;
+  }
+  if (total === 0) return 'この週は、この行動の記録がありません。';
+  if (total < 3) return `この週は ${total}回です。回数が少ないので、時間帯の傾向はまだ分かりません。`;
+  let best = -1;
+  let bestN = 0;
+  for (const slot of [...bySlot.keys()].sort((a, b) => a - b)) {
+    const n = (bySlot.get(slot) ?? 0) + (bySlot.get(slot + 1) ?? 0);
+    if (n > bestN) {
+      best = slot;
+      bestN = n;
+    }
+  }
+  if (bestN / total < 0.3) return `この週は ${total}回です。決まった時間帯に偏ってはいません。`;
+  const nDays = new Set([...(daysBySlot.get(best) ?? []), ...(daysBySlot.get(best + 1) ?? [])]).size;
+  return `この週は ${hm(best)}〜${hm(best + 2)} に多く、${total}回のうち ${bestN}回（${nDays}日）です。`;
 }

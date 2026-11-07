@@ -36,6 +36,7 @@ export function emptyPlan(): PlanContent {
     alternativeBehaviorId: null,
     func: null,
     goal: '',
+    scene: '',
     criteria: [],
     antecedent: '',
     reinforcement: '',
@@ -48,8 +49,10 @@ export function emptyPlan(): PlanContent {
 
 /** 変わった項目 */
 export function diffFields(before: PlanContent | null, after: PlanContent): (keyof PlanContent)[] {
-  const b = before ?? emptyPlan();
-  return (Object.keys(after) as (keyof PlanContent)[]).filter((k) => JSON.stringify(b[k]) !== JSON.stringify(after[k]));
+  // 場面（scene）を足す前に保存した計画には、その項目がない。空として比べる
+  const b = { ...emptyPlan(), ...before };
+  const a = { ...emptyPlan(), ...after };
+  return (Object.keys(a) as (keyof PlanContent)[]).filter((k) => JSON.stringify(b[k]) !== JSON.stringify(a[k]));
 }
 
 export async function getPlan(personId: string): Promise<SupportPlan | undefined> {

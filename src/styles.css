@@ -275,6 +275,7 @@ h2.h { font-size: 1rem; font-weight: 700; margin: 0; }
 .sleep-row__bar { display: block; height: 100%; background: var(--primary); }
 .sleep-row__bar--short { background: #ea580c; }
 .sleep-row__val { font-size: 0.8125rem; text-align: right; }
+.sleep-row__times { display: block; font-size: 0.75rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .sleep-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-decoration: none; color: inherit; }
 .nowrap { white-space: nowrap; }
 
@@ -295,6 +296,9 @@ span.dot { width: 22px; }
 /* グラフ: 条件変更の縦線と達成基準の横線（6.4.1） */
 .chart__phase-line { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 4 4; }
 .chart__phase { font-size: 10px; fill: var(--text-2); font-weight: 600; }
+.scatter__trend { margin: 0 0 8px; font-weight: 600; line-height: 1.5; }
+.graph-change { font-size: 0.875rem; line-height: 1.5; }
+.chart__gap { font-size: 9px; fill: var(--problem-ink); font-weight: 600; }
 .chart__target { font-size: 10px; font-weight: 700; }
 .chart__static { display: block; height: auto; }
 

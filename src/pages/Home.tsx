@@ -10,7 +10,7 @@ import { db } from '../db/db';
 import { canEditSleep, canRecord, createEvent, lastUndoableEvent, observedRatio, restoreEvent, setPlaceChoice, undoEvent, updateEvent } from '../db/repo';
 import { getPositionOnce, matchPlace } from '../lib/place';
 import { useApp } from '../state';
-import { formatDateTimeJa, formatDuration, formatTime, toLocalDate } from '../lib/date';
+import { formatDateJa, formatDateTimeJa, formatDuration, formatTime, toLocalDate } from '../lib/date';
 import { INTENSITY_NAMES, METHOD_LABEL, type Behavior, type Event, type Observation } from '../db/types';
 import { Chip, KindBadge, Sheet, TopBar } from '../components/ui';
 import { formatSleep, sleepMinutes } from '../lib/sleep';
@@ -215,7 +215,7 @@ export default function Home() {
         }
         sub={
           <>
-            {formatTime(new Date(now).toISOString())} ・{' '}
+            {formatDateJa(toLocalDate(new Date(now)))} {formatTime(new Date(now).toISOString())} ・{' '}
             <button type="button" className="place-btn" onClick={() => setPickingPlace(true)}>
               場所: {place ? place.name : placeOutside ? '登録場所の外' : '未設定'}
             </button>
@@ -331,6 +331,7 @@ export default function Home() {
                 {e.intensity != null && ` ・ 強度${e.intensity}`}
                 {abcIds.has(e.id) ? ' ・ ABC' : ''}
                 {e.backfilled ? ' ・ あとで入力' : ''}
+                {members.length > 1 && ` ・ ${members.find((m) => m.userId === e.recorderId)?.displayName ?? '退会したメンバー'}`}
               </span>
               <span className="today-row__go" aria-hidden="true">›</span>
             </Link>

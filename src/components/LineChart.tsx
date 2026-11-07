@@ -165,6 +165,20 @@ export default function LineChart({
     return { segs, last };
   });
 
+  // 未記録: 最初の記録と最後の記録の間で、どの線にも値がない区切り（「観察していなかった」など）。続いていれば真ん中に1つだけ書く
+  const has = (i: number) => lines.some((l) => l.values[i] != null);
+  let firstI = -1;
+  let lastI = -1;
+  for (let i = 0; i < n; i++) if (has(i)) { if (firstI < 0) firstI = i; lastI = i; }
+  const gaps: { cx: number; w: number }[] = [];
+  for (let i = firstI + 1; firstI >= 0 && i < lastI; i++) {
+    if (has(i)) continue;
+    let j = i;
+    while (j + 1 < lastI && !has(j + 1)) j++;
+    gaps.push({ cx: (x(i) + x(j)) / 2, w: (j - i + 1) * slotW });
+    i = j;
+  }
+
   const every = staticMode ? Math.max(1, Math.ceil(36 / slotW)) : granularity === 'day' ? 2 : 1;
   const xLabel = granularity === 'day' ? '日付（1日ごと）' : granularity === 'week' ? '週（1週間ごと）' : '月（1か月ごと）';
   const dateLabel = (d: string): [string, string | null, boolean] => {
@@ -219,6 +233,11 @@ export default function LineChart({
           </g>
         );
       })}
+      {gaps.map((gp) =>
+        gp.w >= 16 ? (
+          <text key={`gap-${gp.cx}`} x={gp.cx} y={TOP + PLOT_H - 5} textAnchor="middle" className="chart__gap">未記録</text>
+        ) : null,
+      )}
       {targets.map((t, i) => (
         <g key={i}>
           <line x1={0} x2={plotW} y1={y(t.value)} y2={y(t.value)} stroke={t.color} strokeWidth={1.5} strokeDasharray="6 4" />
