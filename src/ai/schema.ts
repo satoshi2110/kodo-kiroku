@@ -55,6 +55,8 @@ export interface SuggestionInput {
   hypothesisNote: string; // 修正して採用したときのメモ（仮名化済み）
   likelyConditions: string[];
   existingAlternatives: string[]; // すでに登録している代替行動・望ましい行動
+  /** 対象者の「好きなもの」（6.6 #4）。名前（仮名化済み）・種類・ハマり度だけ。写真と「使い方」のメモは送らない */
+  reinforcers?: { name: string; category: string; level: number }[];
 }
 
 export interface SuggestionOutput {
@@ -155,9 +157,13 @@ export function validateAnalysisInput(x: AnalysisInput): string | null {
   return null;
 }
 
+/** AI に渡す「好きなもの」の上限（ハマり度の高い順） */
+export const MAX_REINFORCERS = 20;
+
 export function validateSuggestionInput(x: SuggestionInput): string | null {
   if (!x?.behavior?.name || !Array.isArray(x.adoptedFunctions) || x.adoptedFunctions.length === 0) return '採用した機能がありません';
   if (!x.adoptedFunctions.every((f) => (AI_FUNCTIONS as readonly string[]).includes(f))) return '機能の値が正しくありません';
+  if (x.reinforcers !== undefined && (!Array.isArray(x.reinforcers) || x.reinforcers.length > MAX_REINFORCERS)) return '好きなものの数が多すぎます';
   if (JSON.stringify(x).length > 20_000) return '入力が大きすぎます';
   return null;
 }

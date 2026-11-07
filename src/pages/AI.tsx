@@ -11,9 +11,9 @@ import { useApp } from '../state';
 import { aiTeamUsage, aiUsage, canDecideAi, canRunAi, decideAi, saveAnalysis, saveSuggestion } from '../db/repo';
 import { buildAnalysisInput, makeMasker, placeNamesFor } from '../ai/build';
 import { isMockProvider, requestAi } from '../ai/adapter';
-import { MIN_ABC_RECORDS } from '../ai/schema';
+import { MAX_REINFORCERS, MIN_ABC_RECORDS } from '../ai/schema';
 import { formatDateTimeJa, formatShortDate } from '../lib/date';
-import { FUNCTION_LABEL, type AiAnalysis, type AiDecision, type AiSuggestion, type Behavior } from '../db/types';
+import { FUNCTION_LABEL, REINFORCER_CATEGORY_LABEL, type AiAnalysis, type AiDecision, type AiSuggestion, type Behavior } from '../db/types';
 import { FBA_LINK } from '../lib/links';
 import { TopBar } from '../components/ui';
 
@@ -80,6 +80,12 @@ export default function AI() {
     // 分析と同じ置きかえをする。分析の入力も置きかえ直す（置きかえを直す前に保存した分析のため）
     const mask = makeMasker(person, members, await placeNamesFor(person.id));
     const b0 = a.input.behavior;
+    // 好きなもの（6.6 #4）。隠したもの・消したものは除き、ハマり度の高い順に。写真と「使い方」のメモは送らない
+    const reinforcers = (await db.reinforcers.where('personId').equals(person.id).toArray())
+      .filter((r) => !r.deletedAt && !r.hiddenAt && r.name.trim())
+      .sort((x, y) => y.level - x.level)
+      .slice(0, MAX_REINFORCERS)
+      .map((r) => ({ name: mask(r.name), category: REINFORCER_CATEGORY_LABEL[r.category], level: r.level }));
     const res = await requestAi({
       personId: person.id,
       kind: 'suggest',
@@ -89,6 +95,7 @@ export default function AI() {
         hypothesisNote: mask(a.decisionNote),
         likelyConditions: a.output.likelyConditions,
         existingAlternatives: behaviors.filter((b) => b.kind !== 'problem').map((b) => mask(b.name)),
+        reinforcers,
       },
     });
     if (res.status === 'ok' && res.kind === 'suggest') {
