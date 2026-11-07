@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0022）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0023）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2508,7 +2508,118 @@ begin
   if n = 0 then raise exception 'NG: 自分でログアウトさせていない端末まで読めなくなった（% 件）', n; end if;
 end $$;
 
--- ---------- チームの削除をサーバーでも行う（0022） ----------
+-- ---------- 閲覧の記録と、書き出しの見張り（0022） ----------
+-- V（閲覧者）がチーム1を2回開く → 1日1行だけ。V には読めない（支援リーダー以上）。管理者 A には読める
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  perform record_view('10000000-0000-0000-0000-000000000001');
+  perform record_view('10000000-0000-0000-0000-000000000001');
+  select count(*) into n from view_days;
+  if n <> 0 then raise exception 'NG: 閲覧者に、閲覧の記録が見える（% 件）', n; end if;
+  begin
+    insert into view_days (person_id, user_id, local_date) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000d1', '2026-01-01');
+    raise exception 'NG: 閲覧の記録を直接書けた';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from view_days where person_id = '10000000-0000-0000-0000-000000000001' and user_id = '00000000-0000-0000-0000-0000000000d1';
+  if n <> 1 then raise exception 'NG: 2回開いても閲覧の記録は1日1行のはず（% 件）', n; end if;
+  update view_days set local_date = '2026-01-01';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 管理者が閲覧の記録を書きかえられた'; end if;
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    delete from view_days;
+    raise exception 'NG: 閲覧の記録を消せた';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+-- ほかのチームの人（B）は、チーム1の閲覧を書けず、読めない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    perform record_view('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: ほかのチームの人が、閲覧の記録を書けた';
+  exception when others then
+    if sqlerrm not like '%メンバーではありません%' then raise; end if;
+  end;
+  select count(*) into n from view_days where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: ほかのチームの閲覧の記録が見える'; end if;
+end $$;
+-- 遠隔ログアウトしたログイン（V の1つ目）は、閲覧の記録も書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000101"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform record_view('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 遠隔ログアウトしたログインで、閲覧の記録を書けた';
+  exception when others then
+    if sqlerrm not like '%メンバーではありません%' then raise; end if;
+  end;
+end $$;
+
+-- 書き出し: V が同じ日に3回、A が2回 → 知らせは V の1件だけ。読めるのは管理者だけ
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+insert into audit_logs (id, person_id, entity, entity_id, action, actor_id, after) values
+  (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'person', '10000000-0000-0000-0000-000000000001', 'export', '00000000-0000-0000-0000-0000000000d1', '{"kind":"csv"}'),
+  (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'person', '10000000-0000-0000-0000-000000000001', 'export', '00000000-0000-0000-0000-0000000000d1', '{"kind":"csv"}'),
+  (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'person', '10000000-0000-0000-0000-000000000001', 'export', '00000000-0000-0000-0000-0000000000d1', '{"kind":"csv"}');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+insert into audit_logs (id, person_id, entity, entity_id, action, actor_id, after) values
+  (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'person', '10000000-0000-0000-0000-000000000001', 'export', '00000000-0000-0000-0000-0000000000a1', '{"kind":"csv"}'),
+  (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', 'person', '10000000-0000-0000-0000-000000000001', 'export', '00000000-0000-0000-0000-0000000000a1', '{"kind":"csv"}');
+do $$
+declare r record; n int := 0;
+begin
+  for r in select * from export_alerts('10000000-0000-0000-0000-000000000001') loop
+    n := n + 1;
+    if r.user_id <> '00000000-0000-0000-0000-0000000000d1' or r.exports <> 3 then
+      raise exception 'NG: 書き出しの知らせの中身がおかしい（%・% 回）', r.user_id, r.exports;
+    end if;
+  end loop;
+  if n <> 1 then raise exception 'NG: 書き出しの知らせは1件のはず（% 件）', n; end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform export_alerts('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 管理者でない人が、書き出しの知らせを読めた';
+  exception when others then
+    if sqlerrm not like '%管理者だけ%' then raise; end if;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform export_alerts('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: ほかのチームの管理者が、書き出しの知らせを読めた';
+  exception when others then
+    if sqlerrm not like '%管理者だけ%' then raise; end if;
+  end;
+end $$;
+
+-- ---------- チームの削除をサーバーでも行う（0023） ----------
 -- 最後にチーム1（テスト1）を消す。消す前の件数を覚えておく
 select set_config('request.jwt.claims', '', true);
 reset role;
@@ -2587,6 +2698,8 @@ begin
   if n <> 0 then raise exception 'NG: チームを消したのに、メンバーが残っている（% 件）', n; end if;
   select count(*) into n from team_settings where person_id = '10000000-0000-0000-0000-000000000001';
   if n <> 0 then raise exception 'NG: チームを消したのに、設定が残っている'; end if;
+  select count(*) into n from view_days where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、閲覧の記録が残っている'; end if;
   select count(*) into n from behaviors where person_id = '10000000-0000-0000-0000-000000000001';
   if n <> 0 then raise exception 'NG: チームを消したのに、行動が残っている（% 件）', n; end if;
   if (select display_name from persons where id = '10000000-0000-0000-0000-000000000001') <> '（削除したチーム）' then

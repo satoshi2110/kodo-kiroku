@@ -5,16 +5,18 @@
  *   データベースが自分で残した行（by_server）を正とし、端末が送った同じ変更の行は出さない（6.3.5 の「画面を作るときにまとめる」）。
  *   書き出しは端末だけが残すので、そのまま出す。
  * - サーバーなし（サンプル）のときは、この端末の監査ログを出す。
- * - 変える前と後の中身は出さず、変わった項目の名前だけを出す。誰が何を「見た」かは、まだ残していない。
+ * - 変える前と後の中身は出さず、変わった項目の名前だけを出す。
+ * - ログインして使うときは、下に閲覧の記録（誰が・どの日にこのチームを開いたか。1日1回。決定102）も出す。どの画面を見たかは残していない。
  */
 import { useEffect, useState } from 'react';
 import { db } from '../db/db';
 import { useApp } from '../state';
-import { formatDateTimeJa } from '../lib/date';
+import { addDays, formatDateJa, formatDateTimeJa, toLocalDate } from '../lib/date';
 import { canExport } from '../db/repo';
 import { ROLE_LABEL, type AuditAction, type Role } from '../db/types';
 import { TopBar } from '../components/ui';
 import { supabase } from '../server/supabase';
+import { listViewDays, type ViewDay } from '../server/views';
 
 const PAGE = 50;
 
@@ -201,7 +203,7 @@ export default function AuditLog() {
       <TopBar title="監査ログ" sub={`${person.displayName} ・ 新しい順`} back="/team" />
       <div className="section">
         <p className="help" style={{ marginTop: 0 }}>
-          記録・計画・メンバー・設定を、誰が・いつ・どう変えたかの記録です。誰にも消したり書き換えたりできません。誰が何を見たかは、まだ残していません。
+          記録・計画・メンバー・設定を、誰が・いつ・どう変えたかの記録です。誰にも消したり書き換えたりできません。
           {local && (supabase ? ' いまは、この端末で行った操作だけを出しています。' : ' サンプルでは、この端末で行った操作を出しています。')}
         </p>
         {error && (
@@ -236,6 +238,40 @@ export default function AuditLog() {
             もっと見る
           </button>
         )}
+      </div>
+      {supabase && <ViewDays personId={person.id} nameOf={nameOf} />}
+    </div>
+  );
+}
+
+/** 閲覧の記録（チームを開いた日・直近30日）。決定102 */
+function ViewDays({ personId, nameOf }: { personId: string; nameOf: (uid: string) => string }) {
+  const [days, setDays] = useState<ViewDay[] | null | undefined>(undefined);
+  useEffect(() => {
+    let stop = false;
+    void listViewDays(personId, addDays(toLocalDate(), -29)).then((d) => !stop && setDays(d));
+    return () => {
+      stop = true;
+    };
+  }, [personId]);
+  const byDate = new Map<string, ViewDay[]>();
+  for (const d of days ?? []) byDate.set(d.localDate, [...(byDate.get(d.localDate) ?? []), d]);
+  return (
+    <div className="section">
+      <div className="card">
+        <h2 className="card__title">閲覧の記録（チームを開いた日・直近30日）</h2>
+        <p className="help" style={{ marginTop: 0 }}>
+          誰が、どの日にこのチームを開いたかを、1人1日1回だけ残しています。どの画面を見たかは残していません。
+        </p>
+        {days === undefined && <span className="muted">読み込み中…</span>}
+        {days === null && <span className="muted">読めませんでした（通信を確かめてください）。</span>}
+        {days && days.length === 0 && <span className="muted">まだありません。</span>}
+        {[...byDate].map(([date, list]) => (
+          <div key={date} className="today-row stack" style={{ gap: 2 }}>
+            <strong>{formatDateJa(date)}</strong>
+            <span className="muted">{list.map((v) => nameOf(v.userId)).join('、')}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

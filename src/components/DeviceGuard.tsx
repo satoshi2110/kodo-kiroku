@@ -6,6 +6,7 @@
  *   画面の上に「操作中: 名前」をいつも出す。
  * - 自分専用の端末: ロックはかけず、スマホのロックに任せる。
  * - どちらも、90日使わなければログアウトして、もう一度ログインしてもらう（送れていない変更があるときは、送れるまで待つ）。
+ * - チームを開いた日を閲覧の記録として残し、管理者には書き出しが多い日を知らせる（決定102・103）。
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -18,6 +19,7 @@ import { PIN_OK, checkPin, hashPin } from '../lib/devicePin';
 import { TopBar } from './ui';
 import { MfaBanner } from './Mfa';
 import { NewDeviceBanner } from './Devices';
+import { ExportAlertBanner, useRecordView } from './ExportAlert';
 
 const LOCK_MS = 10 * 60_000;
 const IDLE_DAYS_MS = 90 * 86_400_000;
@@ -33,6 +35,7 @@ export function DeviceGuard({ userId, email, children }: { userId: string; email
   const body = useRef<HTMLDivElement>(null);
   const shared = !!dev?.shared;
   const locked = shared && !!dev?.lockedAt;
+  useRecordView();
 
   // 開いたとき: 90日使われていなければログアウト、共用の端末で10分たっていればロック
   useEffect(() => {
@@ -99,6 +102,7 @@ export function DeviceGuard({ userId, email, children }: { userId: string; email
       )}
       <div ref={body} aria-hidden={locked || undefined} className="app__body">
         <NewDeviceBanner />
+        <ExportAlertBanner />
         <MfaBanner />
         {children}
       </div>

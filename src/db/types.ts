@@ -544,6 +544,8 @@ export interface DeviceSetting {
   relogin?: 'idle90' | 'remote' | null; // 90日使われなかった・遠隔ログアウトされたのでログアウトした（ログインの画面で知らせる）
   deviceId?: string; // この端末の番号（0021 の端末の一覧に使う。ログアウトしても変えない）
   newDeviceSeenAt?: string | null; // 「新しい端末からのログイン」の知らせを、この時刻まで確かめた
+  viewedOn?: Record<string, string>; // チームごとに、閲覧の記録をサーバーに送った日（1日1回。決定102）
+  exportAlertSeen?: Record<string, string>; // チームごとに、「書き出しが多い日」の知らせをこの時刻まで確かめた（決定103）
 }
 
 export const KIND_LABEL: Record<BehaviorKind, string> = {

@@ -5,8 +5,8 @@
 --   監査ログ（誰も消せない。7.4.2 #6）と身体拘束の記録（取り消し・削除できない。6.8）。残しても、メンバーがいなくなるので誰も読めない。
 --   ほかに、AI の回数の記録（中身はない）と開始コードも残す。対象者の行は名前などを消して「削除したチーム」として残す（監査ログがこの行を指すため）。
 -- ・メンバーの行も消すので、ほかのメンバーの端末は次の同期で、端末の中のそのチームのデータを消す（0019 までと同じしくみ）。
--- ・消したことは監査ログに1行残す（中身は入れない）。
--- 使い方: 0021 のあとに、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- ・閲覧の記録（0022）も消す。消したことは監査ログに1行残す（中身は入れない）。
+-- 使い方: 0022 のあとに、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 
 create function purge_team(p_person uuid) returns void
 language plpgsql security definer set search_path = public as $$
@@ -56,6 +56,7 @@ begin
   delete from invites where person_id = p_person;
   delete from owner_transfers where person_id = p_person;
   delete from team_settings where person_id = p_person;
+  delete from view_days where person_id = p_person;
   delete from behaviors where person_id = p_person;
   delete from team_members where person_id = p_person;
 end $$;

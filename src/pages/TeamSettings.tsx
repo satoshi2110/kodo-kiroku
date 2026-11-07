@@ -55,7 +55,7 @@ export default function TeamSettings() {
     setAgreed(false);
   }
 
-  // サーバーで消すときに残すもの（0022。14.3 #10・#11 で決めるまで）
+  // サーバーで消すときに残すもの（0023。14.3 #10・#11 で決めるまで）
   const KEPT_NOTE = '監査ログ（誰が・いつ・何をしたか）と身体拘束の記録は、扱いが決まるまでサーバーに残します。チームの人も見られなくなります。';
 
   async function requestDelete() {
