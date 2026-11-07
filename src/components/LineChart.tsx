@@ -31,6 +31,8 @@ export interface ChartLine {
 export interface Phase {
   date: string;
   label: string;
+  /** definition = 行動の定義の変更（6.2）。「ベースライン」の見出しは、計画の変更の前にだけ付ける */
+  kind?: 'plan' | 'definition';
 }
 
 export interface Target {
@@ -138,6 +140,7 @@ export default function LineChart({
     return PAD_L + j * slotW + ((parseLocalDate(date).getTime() - start) / (end - start)) * slotW;
   };
   const shownPhases = phases.filter((p) => p.date > (dates[0] ?? '') && p.date <= (dates[n - 1] ?? ''));
+  const planPhases = shownPhases.filter((p) => p.kind !== 'definition');
   // i と i+1 の間に条件変更があれば線を切る
   const breakAfter = new Set<number>();
   for (const p of shownPhases) {
@@ -217,7 +220,7 @@ export default function LineChart({
           </g>
         );
       })}
-      {shownPhases.length > 0 && dates[0] < shownPhases[0].date && (
+      {planPhases.length > 0 && dates[0] < planPhases[0].date && (
         <text x={4} y={TOP - 8} className="chart__phase">ベースライン</text>
       )}
       {shownPhases.map((p) => {

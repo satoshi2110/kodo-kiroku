@@ -6,6 +6,7 @@
  * - 合意の状況、意見あり（保存した人と管理者に出す、決定75）
  * - 身体拘束の記録・支援会議メモ・PDF レポート・できたことへの入口
  * - 機能分析のツール（外部のサイト）へのリンク（決定90）
+ * - 支援者の提案（支援者以上が出し、支援リーダー以上が採用・見送りを決める。【暫定】2026-11-07 の試作）
  * - 「確認を依頼する」: 端末の共有メニューで、合意の画面へのリンクを送る（ワイヤーフレーム 4）。アプリから通知やメールは送らない（決定75）
  */
 import { useState } from 'react';
@@ -20,6 +21,7 @@ import { criterionText } from '../lib/planText';
 import { FUNCTION_LABEL, KIND_LABEL, ROLE_LABEL, type PlanChange, type PlanContent } from '../db/types';
 import { KindBadge, TopBar } from '../components/ui';
 import { FBA_LINK } from '../lib/links';
+import { Proposals } from '../components/Proposals';
 
 export default function Plan() {
   const { person, behaviors, members, me, userId } = useApp();
@@ -57,6 +59,7 @@ export default function Plan() {
             {editable ? <Link to="/plan/edit" className="btn btn--primary btn--block">支援計画を作る</Link> : <p className="help">作れるのは管理者・副管理者・支援リーダーです。</p>}
           </div>
         </div>
+        <Proposals kind="plan" />
         <FbaTool />
         <PlanLinks exportable={canExport(me?.role)} />
       </div>
@@ -187,6 +190,7 @@ export default function Plan() {
       )}
 
       {latest && <SignStatus change={latest} />}
+      <Proposals kind="plan" />
       <FbaTool />
       <PlanLinks exportable={canExport(me?.role)} />
     </div>

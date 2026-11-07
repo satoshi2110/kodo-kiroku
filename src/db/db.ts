@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, UserSchedule, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, OwnerTransfer, Person, TeamMember, User } from './types';
+import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, UserSchedule, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, OwnerTransfer, Person, Proposal, BehaviorRevision, TeamMember, User } from './types';
 
 /**
  * 端末内の保存（IndexedDB）。電波がなくても記録でき（6.3.6）、サーバー接続後は同期の元になる。
@@ -34,6 +34,8 @@ export class AppDB extends Dexie {
   comments!: Table<Comment, string>;
   userSchedules!: Table<UserSchedule, string>;
   ownerTransfers!: Table<OwnerTransfer, string>;
+  proposals!: Table<Proposal, string>;
+  behaviorRevisions!: Table<BehaviorRevision, string>;
 
   constructor() {
     super('kodo-kiroku-v1');
@@ -85,6 +87,11 @@ export class AppDB extends Dexie {
     // 管理者の引き継ぎ（6.9）。サーバーから受け取るだけ
     this.version(9).stores({
       ownerTransfers: 'id, personId',
+    });
+    // 支援者の提案と、行動の定義の変更の記録（0017）
+    this.version(10).stores({
+      proposals: 'id, personId, behaviorId',
+      behaviorRevisions: 'id, personId, behaviorId',
     });
   }
 }

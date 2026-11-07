@@ -13,7 +13,8 @@ import { useApp } from '../state';
 import { canExport } from '../db/repo';
 import { formatShortDate } from '../lib/date';
 import { allDates, canRate, useRecordSet, type Granularity } from '../lib/series';
-import { buildGroups, changeSummary, groupTitle, sleepPanel, type PanelSpec } from '../lib/panels';
+import { buildGroups, changeSummary, groupTitle, phasesFor, sleepPanel, type PanelSpec } from '../lib/panels';
+import { useRevisions } from '../lib/useRevisions';
 import { usePlanData } from '../lib/usePlan';
 import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
 import LineChart, { ChartSyncProvider, LineSwatch, useNewSync, type Phase } from '../components/LineChart';
@@ -23,6 +24,7 @@ export default function Graph() {
   const { person, behaviors, me } = useApp();
   const rs = useRecordSet(person?.id);
   const planData = usePlanData(person?.id);
+  const revisions = useRevisions(person?.id) ?? [];
   const [g, setG] = useState<Granularity>('day');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [showSleep, setShowSleep] = useState(false);
@@ -88,6 +90,9 @@ export default function Graph() {
             {phases.length > 0 && (
               <p className="help">縦の点線 = 条件の変更（{phases.map((p) => `${formatShortDate(p.date)} ${p.label}`).join('、')}）。横の点線 = 支援計画の達成基準。</p>
             )}
+            {revisions.length > 0 && (
+              <p className="help">「定義の変更」の縦の点線 = その行動の、どんな行動か（定義・例・含まないもの）や測り方・強度の基準を直した日です。前と後は数え方が違うことがあります。</p>
+            )}
             {days.length > 0 && (
               <p className="help" style={{ margin: 0 }}>
                 <strong>
@@ -115,7 +120,9 @@ export default function Graph() {
                       </span>
                     ))}
                   </div>
-                  {grp.panels.map((p) => <Panel key={p.key} p={p} day={dayPanels.get(p.key)} g={g} phases={phases} title={groupTitle(grp.behaviors)} />)}
+                  {grp.panels.map((p) => (
+                    <Panel key={p.key} p={p} day={dayPanels.get(p.key)} g={g} phases={phasesFor(phases, revisions, grp.behaviors)} title={groupTitle(grp.behaviors)} />
+                  ))}
                 </div>
               </div>
             ))}

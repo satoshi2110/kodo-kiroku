@@ -9,7 +9,7 @@ import { ensureChoiceOptions, getDevice, saveDevice } from './repo';
 import { diffFields } from './phase2';
 import { loadRecordSet } from '../lib/series';
 import { takeSnapshots } from '../lib/snapshot';
-import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type MeetingNote, type Observation, type PlanChange, type PlanContent, type PlanSignoff, type SupportPlan, type Comment, type SleepLog, type Person, type Place, type Reinforcer, type TeamMember } from './types';
+import { CONSENT_TEXT_VERSION, type AbcDetail, type Behavior, type ChoiceOption, type Event, type IntervalResult, type MeetingNote, type Observation, type PlanChange, type PlanContent, type PlanSignoff, type Proposal, type BehaviorRevision, type SupportPlan, type Comment, type SleepLog, type Person, type Place, type Reinforcer, type TeamMember } from './types';
 
 const DAYS = 21;
 
@@ -301,11 +301,28 @@ export async function createSampleTeam(): Promise<void> {
   };
   const comment: Comment = { ...rec(), createdAt: stamp(meetingDay, 18), personId: person.id, target: 'meeting', targetId: meeting.id, text: '学校の写真カードを、家庭用にもう1組作ります。', authorId: teacher.userId };
 
-  await db.transaction('rw', [db.supportPlans, db.planChanges, db.planSignoffs, db.meetingNotes, db.comments], async () => {
+  // 支援者の提案（【暫定】2026-11-07 の試作）: 先生Bが学校でのカードを提案し、職員Aが会議で採用した。もう1つはまだ決めていない
+  const proposal = (p: Pick<Proposal, 'kind' | 'behaviorId' | 'proposedBy' | 'body' | 'status' | 'decidedBy' | 'decidedAt'>, createdAt: string): Proposal => ({
+    ...rec(),
+    createdAt,
+    updatedAt: p.decidedAt ?? createdAt,
+    personId: person.id,
+    ...p,
+  });
+  const proposals = [
+    proposal({ kind: 'plan', behaviorId: null, proposedBy: teacher.userId, body: '学校でも同じ休憩カードを使いたいです。', status: 'adopted', decidedBy: staff.userId, decidedAt: stamp(meetingDay, 16) }, stamp(addDays(today, -7), 17)),
+    proposal({ kind: 'behavior', behaviorId: hit.id, proposedBy: teacher.userId, body: '学校では、机に頭をぶつけることもあります。「頭たたき」に入れるか、別の行動にするか決めたいです。', status: 'open', decidedBy: null, decidedAt: null }, stamp(addDays(today, -2), 16)),
+  ];
+  // 行動の定義の変更（6.2）: 10日前に「大きな声を出す」の定義に「1秒以上」を足した。グラフに「定義の変更」の線が入る
+  const revision: BehaviorRevision = { ...rec(), createdAt: stamp(addDays(today, -10), 18), personId: person.id, behaviorId: voice.id, userId: staff.userId, fields: ['definition'] };
+
+  await db.transaction('rw', [db.supportPlans, db.planChanges, db.planSignoffs, db.meetingNotes, db.comments, db.proposals, db.behaviorRevisions], async () => {
     await db.supportPlans.add(planRec);
     await db.planChanges.bulkAdd([ch1, ch2]);
     await db.planSignoffs.bulkAdd(signoffs);
     await db.meetingNotes.add(meeting);
     await db.comments.add(comment);
+    await db.proposals.bulkAdd(proposals);
+    await db.behaviorRevisions.add(revision);
   });
 }

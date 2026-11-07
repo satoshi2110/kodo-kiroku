@@ -1646,6 +1646,188 @@ do $$ begin
 end $$;
 reset role;
 
+-- ---------- 0017 支援者の提案と、行動の定義の変更の記録 ----------
+-- チーム2 の提案と定義の変更（ほかのチームから見えない・変えられないことを確かめる）
+insert into proposals (id, person_id, kind, behavior_id, proposed_by, body) values
+  ('9c000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'plan', null, '00000000-0000-0000-0000-0000000000b1', 'チーム2 の提案');
+insert into behavior_revisions (id, person_id, behavior_id, user_id, fields) values
+  ('9d000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', '{definition}');
+
+-- 支援者（Y）は提案を出せるが、採用・見送りは決められない。定義の変更の記録は入れられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c4","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  -- 採用済みにして送っても「まだ」になる
+  insert into proposals (id, person_id, kind, behavior_id, proposed_by, body, status, decided_by) values
+    ('9c000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', 'behavior', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c4', '「たたく」に、手のひらで机をたたくのも入れては', 'adopted', '00000000-0000-0000-0000-0000000000c4');
+  if (select status from proposals where id = '9c000000-0000-0000-0000-000000000003') <> 'open' then
+    raise exception 'NG: 支援者が採用済みの提案を入れられた';
+  end if;
+  insert into proposals (id, person_id, kind, proposed_by, body) values
+    ('9c000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000003', 'plan', '00000000-0000-0000-0000-0000000000c4', '学校でも休憩カードを使いたい');
+  update proposals set status = 'adopted', updated_at = now() where id = '9c000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援者が提案を採用できた'; end if;
+  update proposals set body = '書きかえ', updated_at = now() where id = '9c000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 支援者が提案の文を書きかえられた'; end if;
+  begin
+    insert into proposals (id, person_id, kind, proposed_by, body) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', 'plan', '00000000-0000-0000-0000-0000000000c3', 'なりすまし');
+    raise exception 'NG: ほかの人が出したことにして提案を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into proposals (id, person_id, kind, proposed_by, body) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000002', 'plan', '00000000-0000-0000-0000-0000000000c4', 'ほかのチーム');
+    raise exception 'NG: チーム2 に提案を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into proposals (id, person_id, kind, behavior_id, proposed_by, body) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', 'behavior', '30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000c4', 'ほかのチームの行動');
+    raise exception 'NG: ほかのチームの行動への提案を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into behavior_revisions (id, person_id, behavior_id, user_id, fields) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c4', '{definition}');
+    raise exception 'NG: 支援者が定義の変更の記録を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  select count(*) into n from proposals;
+  if n <> 2 then raise exception 'NG: 支援者に、チームの提案が見えない、またはほかのチームの提案が見えた'; end if;
+  select count(*) into n from behavior_revisions;
+  if n <> 0 then raise exception 'NG: 支援者に、ほかのチームの定義の変更が見えた'; end if;
+  begin
+    delete from proposals where id = '9c000000-0000-0000-0000-000000000003';
+    raise exception 'NG: 提案を消せた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
+-- 閲覧者（Z）は見るだけ
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c5","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from proposals;
+  if n <> 2 then raise exception 'NG: 閲覧者にチームの提案が見えない'; end if;
+  begin
+    insert into proposals (id, person_id, kind, proposed_by, body) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', 'plan', '00000000-0000-0000-0000-0000000000c5', '閲覧者の提案');
+    raise exception 'NG: 閲覧者が提案を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  update proposals set status = 'rejected', updated_at = now() where id = '9c000000-0000-0000-0000-000000000004';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 閲覧者が提案を見送りにできた'; end if;
+end $$;
+reset role;
+
+-- 支援リーダー（W）は1回だけ決められる。決めた人はサーバーが書く。文は変えられない。定義の変更の記録を入れられる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c6","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  update proposals set status = 'adopted', decided_by = '00000000-0000-0000-0000-0000000000c3', updated_at = now()
+    where id = '9c000000-0000-0000-0000-000000000003';
+  if (select status from proposals where id = '9c000000-0000-0000-0000-000000000003') <> 'adopted' then
+    raise exception 'NG: 支援リーダーが提案を採用できない';
+  end if;
+  if (select decided_by from proposals where id = '9c000000-0000-0000-0000-000000000003') is distinct from '00000000-0000-0000-0000-0000000000c6' then
+    raise exception 'NG: 決めた人が、送った本人にならない';
+  end if;
+  update proposals set status = 'rejected', updated_at = now() + interval '1 second' where id = '9c000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 決めたことを変えられた'; end if;
+  update proposals set status = 'open', updated_at = now() + interval '1 second' where id = '9c000000-0000-0000-0000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 決めたことを「まだ」に戻せた'; end if;
+  update proposals set body = '書きかえ', updated_at = now() + interval '2 second' where id = '9c000000-0000-0000-0000-000000000004';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 提案の文を書きかえられた'; end if;
+  update proposals set deleted_at = now(), updated_at = now() + interval '2 second' where id = '9c000000-0000-0000-0000-000000000004';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: 提案を消した印を付けられた'; end if;
+  -- 同じ内容の送り直しは通る（決めた人・時刻はそのまま）
+  update proposals set decided_by = null, decided_at = null, updated_at = now() + interval '3 second' where id = '9c000000-0000-0000-0000-000000000003';
+  if (select decided_by from proposals where id = '9c000000-0000-0000-0000-000000000003') is distinct from '00000000-0000-0000-0000-0000000000c6' then
+    raise exception 'NG: 送り直しで、決めた人が消えた';
+  end if;
+  update proposals set status = 'rejected', updated_at = now() where id = '9c000000-0000-0000-0000-000000000004';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'NG: 支援リーダーが提案を見送りにできない'; end if;
+  -- 定義の変更の記録
+  insert into behavior_revisions (id, person_id, behavior_id, user_id, fields) values
+    ('9d000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c6', '{definition,examples}');
+  -- 同じ記録の送り直しは重ならない（端末は ignoreDuplicates で送る）
+  insert into behavior_revisions (id, person_id, behavior_id, user_id, fields) values
+    ('9d000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c6', '{definition,examples}')
+    on conflict (id) do nothing;
+  begin
+    update behavior_revisions set fields = '{method}' where id = '9d000000-0000-0000-0000-000000000003';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 定義の変更の記録を書きかえられた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    delete from behavior_revisions where id = '9d000000-0000-0000-0000-000000000003';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'NG: 定義の変更の記録を消せた'; end if;
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into behavior_revisions (id, person_id, behavior_id, user_id, fields) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000c3', '{definition}');
+    raise exception 'NG: ほかの人が変えたことにして定義の変更の記録を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    insert into behavior_revisions (id, person_id, behavior_id, user_id, fields) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000c6', '{definition}');
+    raise exception 'NG: ほかのチームの行動の、定義の変更の記録を入れられた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  -- チーム2
+  select count(*) into n from proposals where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: ほかのチームの提案が見えた'; end if;
+  update proposals set status = 'adopted', updated_at = now() where id = '9c000000-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'NG: ほかのチームの提案を採用できた'; end if;
+  select count(*) into n from behavior_revisions;
+  if n <> 1 then raise exception 'NG: 定義の変更の記録が、チームの分だけ見えない'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select status from proposals where id = '9c000000-0000-0000-0000-000000000002') <> 'open' then raise exception 'NG: チーム2 の提案が変わった'; end if;
+  if (select body from proposals where id = '9c000000-0000-0000-0000-000000000004') <> '学校でも休憩カードを使いたい' then raise exception 'NG: 提案の文が変わった'; end if;
+  if (select fields from behavior_revisions where id = '9d000000-0000-0000-0000-000000000003') <> '{definition,examples}' then raise exception 'NG: 定義の変更の記録が変わった'; end if;
+  if not exists (select 1 from audit_logs where entity = 'proposals' and entity_id = '9c000000-0000-0000-0000-000000000003' and by_server and action = 'update') then
+    raise exception 'NG: 提案を採用したことが監査ログに残らない';
+  end if;
+end $$;
+
+-- ほかのチームの管理者（N）には見えない。ログイン前は読めない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a3","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from proposals;
+  if n <> 0 then raise exception 'NG: ほかのチームの人に提案が見えた'; end if;
+  select count(*) into n from behavior_revisions;
+  if n <> 0 then raise exception 'NG: ほかのチームの人に定義の変更の記録が見えた'; end if;
+end $$;
+reset role;
+set local role anon;
+do $$ begin
+  begin
+    perform 1 from proposals;
+    raise exception 'NG: ログイン前に提案が読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+  begin
+    perform 1 from behavior_revisions;
+    raise exception 'NG: ログイン前に定義の変更の記録が読めた';
+  exception when others then if sqlerrm like 'NG:%' then raise; end if; end;
+end $$;
+reset role;
+
 rollback;
 
 -- ここまで止まらずに来たら合格（テスト用のデータは上の rollback で消えている）

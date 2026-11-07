@@ -15,6 +15,7 @@ import { canRecord } from '../db/repo';
 import { addDays, dateRange, formatDateTimeJa, formatShortDate, fromDateTimeLocalInput, localDateOf, nowISO, toDateTimeLocalInput } from '../lib/date';
 import { useRecordSet } from '../lib/series';
 import { usePlanData } from '../lib/usePlan';
+import { useRevisions } from '../lib/useRevisions';
 import { takeSnapshots } from '../lib/snapshot';
 import { fieldText } from '../lib/planText';
 import { AFFILIATION_LABEL, PLAN_FIELD_LABEL, type MeetingNote, type PlanContent } from '../db/types';
@@ -40,6 +41,7 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
   const nav = useNavigate();
   const rs = useRecordSet(person?.id);
   const planData = usePlanData(person?.id);
+  const revisions = useRevisions(person?.id);
   const [f, setF] = useState<MeetingInput>(() =>
     note
       ? { ...note }
@@ -69,7 +71,7 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
         : [],
     [note?.id],
   );
-  if (!person || !userId || !rs || !planData) return null;
+  if (!person || !userId || !rs || !planData || !revisions) return null;
   if (!me) return null; // 役割の読み込みを待つ（待たずに判定すると、権限なしで戻してしまう）
   const editable = canEditMeeting(me?.role, note ?? undefined, userId);
   if (!note && !editable) return <Navigate to="/meetings" replace />;
@@ -77,7 +79,7 @@ function MeetingEdit({ note }: { note: MeetingNote | null }) {
   const days = periodOf(f.heldAt);
   const planNow: PlanContent | null = planData.plan?.activeContent ?? null;
   // 保存済みのメモは保存したときのグラフ。新しいメモは今の記録から作った見本
-  const charts = note ? note.charts : takeSnapshots(behaviors, rs, days, 'week', planNow, planData.phases);
+  const charts = note ? note.charts : takeSnapshots(behaviors, rs, days, 'week', planNow, planData.phases, revisions);
   const planShown = note ? note.planSnapshot : planNow;
   const memberName = (uid: string) => members.find((m) => m.userId === uid)?.displayName ?? '退会したメンバー';
   const toggle = (mid: string) => set('participantIds', f.participantIds.includes(mid) ? f.participantIds.filter((x) => x !== mid) : [...f.participantIds, mid]);

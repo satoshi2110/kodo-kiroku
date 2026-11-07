@@ -6,7 +6,8 @@
  * - 達成基準（実施中の支援計画）は横線、条件変更は縦線
  * - rate = 頻度を1時間あたりの回数で見る（6.4.1）。達成基準は1日の回数で決めているので、そのときは横線を出さない
  */
-import { METHOD_LABEL, type Behavior, type PlanContent } from '../db/types';
+import { METHOD_LABEL, type Behavior, type BehaviorRevision, type PlanContent } from '../db/types';
+import { localDateOf } from './date';
 import { bucketize, canRate, dailyIntensity, dailyMain, dailyRate, dailySleepHours, mainFormat, mainUnit, type Granularity, type RecordSet } from './series';
 import type { ChartLine, Phase, Target } from '../components/LineChart';
 
@@ -138,7 +139,29 @@ export type { Phase };
  * 【暫定】（2026-11-07 の試作）条件の変更（支援計画が実施中になった日）があれば、前と後が3日以上ある最後の変更の前と後。
  * なければ、最初の7日と最近の7日（14日以上あるときだけ）。値のない日（未記録）は平均に入れない。
  */
-export function changeSummary(p: PanelSpec, phases: Phase[]): { label: string; text: string } | null {
+/**
+ * この枠の行動の、定義の変更の縦線（6.2「グラフに注記を入れる」）。同じ日に何回変えても1本。
+ * 変えた日から後を「変えたあと」として線を切る。
+ */
+export function revisionPhases(revisions: BehaviorRevision[], behaviors: Behavior[]): Phase[] {
+  const ids = new Set(behaviors.map((b) => b.id));
+  const days = new Set(revisions.filter((r) => !r.deletedAt && ids.has(r.behaviorId)).map((r) => localDateOf(r.createdAt)));
+  return [...days].sort().map((date) => ({ date, label: '定義の変更', kind: 'definition' as const }));
+}
+
+/** 計画の変更と、この枠の定義の変更を合わせた縦線（日付順。同じ日なら計画の変更を先に） */
+export function phasesFor(planPhases: Phase[], revisions: BehaviorRevision[], behaviors: Behavior[]): Phase[] {
+  const rev = revisionPhases(revisions, behaviors).filter((r) => !planPhases.some((p) => p.date === r.date && p.label === r.label));
+  return [...planPhases, ...rev].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'definition' ? 1 : 0) - (b.kind === 'definition' ? 1 : 0));
+}
+
+/**
+ * 変化のまとめ。比べる区切りは計画の変更（なければ最初と最近の7日）。
+ * 比べている期間の中で行動の定義を変えていたら、そのことを書き足す（数え方が変わっているので、そのまま比べられない）。
+ */
+export function changeSummary(p: PanelSpec, allPhases: Phase[]): { label: string; text: string } | null {
+  const phases = allPhases.filter((x) => x.kind !== 'definition');
+  const revDays = allPhases.filter((x) => x.kind === 'definition').map((x) => x.date);
   const d = p.dates;
   if (d.length < 2) return null;
   // 前と後がどちらも3日以上ある変更のうち、いちばん新しいもの（変えたばかりの日は、まだ比べられない）
@@ -168,5 +191,8 @@ export function changeSummary(p: PanelSpec, phases: Phase[]): { label: string; t
     const name = p.lines.length > 1 ? `${l.name} ` : '';
     return `${name}${a == null ? '—' : p.format(a)} → ${b == null ? '—' : p.format(b)}`;
   });
-  return { label, text: parts.join(' ／ ') };
+  const from = d[before[0]];
+  const to = d[after[after.length - 1]];
+  const revised = revDays.some((x) => x > from && x <= to);
+  return { label: revised ? `${label}・間に定義の変更あり` : label, text: parts.join(' ／ ') };
 }

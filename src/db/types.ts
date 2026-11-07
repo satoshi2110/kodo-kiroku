@@ -445,7 +445,7 @@ export interface ChartSnapshot {
   fixedMax?: number;
   dates: string[];
   lines: { name: string; color: string; dashed: boolean; values: (number | null)[] }[];
-  phases: { date: string; label: string }[];
+  phases: { date: string; label: string; kind?: 'plan' | 'definition' }[];
   targets: { value: number; label: string; color: string }[];
 }
 
@@ -472,8 +472,37 @@ export interface Comment extends BaseRecord {
   authorId: string; // User.id
 }
 
+/**
+ * 支援者の提案（5章の役割の表「行動定義: 提案」「支援計画編集: 提案」）。【暫定】（2026-11-07 の試作）
+ * 支援者以上が文で出し、支援リーダー以上が1回だけ採用・見送りを決める。決めた人と時刻はサーバーが書く（0017）。
+ * 採用しても、行動や計画は自動では変わらない（採用した人が編集して反映する）。
+ */
+export type ProposalStatus = 'open' | 'adopted' | 'rejected';
+export interface Proposal extends BaseRecord {
+  personId: string;
+  kind: 'behavior' | 'plan';
+  behaviorId: string | null; // kind が behavior のときだけ
+  proposedBy: string; // User.id
+  body: string;
+  status: ProposalStatus;
+  decidedBy: string | null;
+  decidedAt: ISODateTime | null;
+}
+export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = { open: 'まだ決めていない', adopted: '採用', rejected: '見送り' };
+
+/**
+ * 行動の定義の変更の記録（6.2「定義の変更は履歴を残し、グラフに注記を入れる」）。【暫定】（2026-11-07 の試作）
+ * 記録がある行動の、測り方に関わる項目を変えたときに1行足す。追記だけ（0017）。
+ */
+export interface BehaviorRevision extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  userId: string; // 変えた人
+  fields: string[]; // 変えた項目の名前（definition など）
+}
+
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'export';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment' | 'userSchedule';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment' | 'userSchedule' | 'proposal' | 'behaviorRevision';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {

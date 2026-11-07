@@ -1,6 +1,7 @@
 /**
  * 行動の一覧と削除（6.2、ワイヤーフレーム 8）。
  * 削除の既定は「非表示」（記録は残り、元に戻せる）。「記録ごと削除」は管理者だけに出す。
+ * 支援者以上は、行動の定義への提案を出せる（【暫定】2026-11-07 の試作）。
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,6 +11,7 @@ import { canEditBehaviors, deleteBehaviorWithRecords, recordCounts, setBehaviorH
 import { useApp } from '../state';
 import { KIND_LABEL, METHOD_LABEL, type Behavior, type BehaviorKind } from '../db/types';
 import { Sheet, TopBar } from '../components/ui';
+import { Proposals } from '../components/Proposals';
 
 export default function BehaviorList() {
   const { person, me, userId } = useApp();
@@ -102,6 +104,7 @@ export default function BehaviorList() {
         );
       })}
       {!shown.length && <p className="section help">まだ行動がありません。「＋ 追加」から足してください。</p>}
+      {shown.length > 0 && <Proposals kind="behavior" behaviors={shown} />}
 
       {hidden.length > 0 && (
         <div className="section">

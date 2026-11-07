@@ -22,6 +22,8 @@ import {
   type AuditEntity,
   type BaseRecord,
   type Behavior,
+  type BehaviorRevision,
+  type Proposal,
   type DeviceSetting,
   type Event,
   type IntervalResult,
@@ -169,12 +171,76 @@ export async function createBehavior(input: BehaviorInput, actorId: string): Pro
 }
 
 /** 名前・定義・強度の基準などを直す。前の内容は監査ログに残る（定義の変更履歴） */
+/**
+ * 測り方に関わる項目。記録がある行動でこれを変えたら、定義の変更の記録を1行足す（6.2、グラフに注記を入れる）。
+ * 名前だけを変えても、数え方は変わらないので入れない。
+ */
+const MEASURE_FIELDS = ['definition', 'examples', 'nonExamples', 'method', 'intensity', 'intervalSec', 'samplingMin'] as const;
+/** 比べるための文字列。サーバーから受け取った値はキーの順番が変わることがあるので、並べてから比べる。文の前後の空白は見ない */
+const stable = (v: unknown): string =>
+  v == null ? 'null' : typeof v === 'string' ? JSON.stringify(v.trim()) : Array.isArray(v) ? `[${v.map(stable).join(',')}]` : typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${k}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}` : JSON.stringify(v);
+
 export async function updateBehavior(id: string, patch: Partial<BehaviorInput>, actorId: string) {
-  const before = await db.behaviors.get(id);
-  if (!before) return;
-  const after: Behavior = { ...before, ...patch, updatedAt: nowISO() };
-  await db.behaviors.put(after);
-  await audit(after.personId, 'behavior', id, 'update', actorId, before, after);
+  await db.transaction('rw', [db.behaviors, db.events, db.observations, db.behaviorRevisions, db.auditLogs], async () => {
+    const before = await db.behaviors.get(id);
+    if (!before) return;
+    const after: Behavior = { ...before, ...patch, updatedAt: nowISO() };
+    await db.behaviors.put(after);
+    await audit(after.personId, 'behavior', id, 'update', actorId, before, after);
+    const fields = MEASURE_FIELDS.filter((k) => stable(before[k]) !== stable(after[k]));
+    if (!fields.length) return;
+    const hasRecords =
+      (await db.events.where('behaviorId').equals(id).filter((e) => !e.deletedAt).count()) > 0 ||
+      (await db.observations.where('behaviorId').equals(id).filter((o) => !o.deletedAt).count()) > 0;
+    if (!hasRecords) return; // まだ記録がなければ、前後を比べることもないので残さない
+    const rev: BehaviorRevision = { ...base(), personId: before.personId, behaviorId: id, userId: actorId, fields: [...fields] };
+    await db.behaviorRevisions.add(rev);
+    await audit(before.personId, 'behaviorRevision', rev.id, 'create', actorId, null, rev);
+  });
+}
+
+/** 行動ごとの定義の変更（古い順） */
+export async function behaviorRevisions(personId: string): Promise<BehaviorRevision[]> {
+  return (await db.behaviorRevisions.where('personId').equals(personId).filter((r) => !r.deletedAt).toArray()).sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  );
+}
+
+// ---------- 支援者の提案（5章の役割の表。【暫定】2026-11-07 の試作） ----------
+
+/** 提案を出せるのは支援者以上。採用・見送りを決めるのは支援リーダー以上（サーバーの 0017 でも同じ決まり） */
+export const canPropose = (r?: Role) => !!r && RANK[r] >= RANK.supporter;
+export const canDecideProposal = (r?: Role) => !!r && RANK[r] >= RANK.leader;
+
+export async function createProposal(personId: string, kind: Proposal['kind'], behaviorId: string | null, body: string, actorId: string) {
+  const p: Proposal = {
+    ...base(),
+    personId,
+    kind,
+    behaviorId: kind === 'behavior' ? behaviorId : null,
+    proposedBy: actorId,
+    body: body.trim().slice(0, 2000),
+    status: 'open',
+    decidedBy: null,
+    decidedAt: null,
+  };
+  await db.transaction('rw', [db.proposals, db.auditLogs], async () => {
+    await db.proposals.add(p);
+    await audit(personId, 'proposal', p.id, 'create', actorId, null, p);
+  });
+  return p;
+}
+
+/** 採用・見送りを決める（まだ決めていないものだけ、1回だけ）。サーバーでは決めた人と時刻をサーバーが書く */
+export async function decideProposal(id: string, status: 'adopted' | 'rejected', actorId: string) {
+  await db.transaction('rw', [db.proposals, db.auditLogs], async () => {
+    const before = await db.proposals.get(id);
+    if (!before || before.status !== 'open') return;
+    const t = nowISO();
+    const after: Proposal = { ...before, status, decidedBy: actorId, decidedAt: t, updatedAt: t };
+    await db.proposals.put(after);
+    await audit(before.personId, 'proposal', id, 'update', actorId, before, after);
+  });
 }
 
 /** 非表示（削除の既定）: ホーム・グラフ・集計から消えるが、記録は残り、元に戻せる */
@@ -682,6 +748,7 @@ const teamTables = () => [
   db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
   db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
   db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments, db.ownerTransfers,
+  db.proposals, db.behaviorRevisions,
 ];
 
 /**

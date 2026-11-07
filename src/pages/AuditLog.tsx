@@ -57,6 +57,8 @@ const ENTITY_LABEL: Record<string, string> = {
   ai_analyses: 'AI の分析', aiAnalysis: 'AI の分析',
   ai_suggestions: 'AI の提案', aiSuggestion: 'AI の提案',
   aiSummary: 'AI のまとめ',
+  proposals: '提案', proposal: '提案',
+  behavior_revisions: '行動の定義の変更', behaviorRevision: '行動の定義の変更',
   invite: '招待',
   user: 'アカウント',
 };
@@ -77,7 +79,7 @@ const KEY_LABEL: Record<string, string> = {
   duration_sec: '時間', intensity: '強度', place_name: '場所', text: '文', note: 'メモ', notes: 'メモ',
   hidden_at: '非表示', sort_order: '並び順', ai_enabled: 'AI の利用', content: '内容', status: '状態',
   reason: '理由', decision: '採否', results: '確かめた成果', decisions: '決めたこと', revoked_at: '取り消し',
-  bed_at: '寝た時刻', wake_at: '起きた時刻', radius_m: '半径', antecedent: 'A（きっかけ）', consequence: 'C（その後）',
+  body: '文', decided_by: '決めた人', decided_at: '決めた時刻', bed_at: '寝た時刻', wake_at: '起きた時刻', radius_m: '半径', antecedent: 'A（きっかけ）', consequence: 'C（その後）',
 };
 const IGNORE = new Set(['updated_at', 'server_at', 'created_at', 'deleted_at', 'id']);
 const snake = (k: string) => k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);

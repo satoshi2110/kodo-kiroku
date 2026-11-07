@@ -14,6 +14,7 @@ import { canExport, logExport } from '../db/repo';
 import { addDays, dateRange, formatDateJa, formatDateTimeJa, formatShortDate, toLocalDate } from '../lib/date';
 import { dailyMain, mainFormat, useRecordSet } from '../lib/series';
 import { usePlanData } from '../lib/usePlan';
+import { useRevisions } from '../lib/useRevisions';
 import { takeSnapshots } from '../lib/snapshot';
 import { sleepPanel } from '../lib/panels';
 import { computeWins } from '../lib/wins';
@@ -39,6 +40,7 @@ export default function Report() {
   const { person, behaviors, members, me, userId } = useApp();
   const rs = useRecordSet(person?.id);
   const planData = usePlanData(person?.id);
+  const revisions = useRevisions(person?.id);
   const today = toLocalDate();
   const [period, setPeriod] = useState<Period>('4w');
   const [cFrom, setCFrom] = useState(addDays(today, -27));
@@ -54,7 +56,7 @@ export default function Report() {
     ]);
     return { meetings, restraints, details, optionName: new Map(options.map((o) => [o.id, o.name])) };
   }, [person?.id]);
-  if (!person || !userId || !rs || !planData || !extra) return null;
+  if (!person || !userId || !rs || !planData || !extra || !revisions) return null;
   if (!me) return null; // 役割の読み込みを待つ（待たずに判定すると、権限なしで戻してしまう）
   if (!canExport(me?.role)) return <Navigate to="/plan" replace />;
 
@@ -81,7 +83,7 @@ export default function Report() {
     return c.activeSince! <= to && end >= from;
   });
   const planAtEnd: PlanContent | null = [...activated].reverse().find((c) => c.activeSince! <= to)?.after ?? null;
-  const charts = takeSnapshots(behaviors, rs, days, g, planAtEnd, planData.phases);
+  const charts = takeSnapshots(behaviors, rs, days, g, planAtEnd, planData.phases, revisions);
   const sleepChart = takeSleep(rs, days, g);
   const last7 = dateRange(addDays(to, -6), to);
   const wins = computeWins(behaviors, rs, planAtEnd, to).filter((w) => w.date >= from);
