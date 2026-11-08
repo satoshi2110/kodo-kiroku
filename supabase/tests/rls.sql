@@ -2909,6 +2909,10 @@ begin
   select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and delete_requested_at = now();
   if n <> 1 then raise exception 'NG: 削除の申し込みの日時が、サーバーの時刻になっていない'; end if;
 end $$;
+-- 後片づけ: 申し込みを取り消しておく（このあとの「申し込んでいないチームは消せない」の試験のため）
+alter table team_settings disable trigger user;
+update team_settings set delete_requested_at = null where id = '10000000-0000-0000-0000-000000000001';
+alter table team_settings enable trigger user;
 
 -- ---------- チームの削除をサーバーでも行う（0023） ----------
 -- 最後にチーム1（テスト1）を消す。消す前の件数を覚えておく
