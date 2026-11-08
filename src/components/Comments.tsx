@@ -94,7 +94,7 @@ export function CommentThread({ target, targetId, title = 'コメント' }: { ta
 
 const PLACE: Record<CommentTarget, string> = { team: '申し送り', meeting: '会議メモへのコメント', event: '記録へのコメント', graph: 'グラフへのコメント', plan: '支援計画へのコメント' };
 const linkOf = (c: Comment) =>
-  c.target === 'event' ? `/abc/${c.targetId}` : c.target === 'meeting' ? `/meetings/${c.targetId}` : c.target === 'graph' ? '/graph' : c.target === 'plan' ? '/plan' : '/team';
+  c.target === 'event' ? `/abc/${c.targetId}` : c.target === 'meeting' ? `/meetings/${c.targetId}` : c.target === 'graph' ? '/graph' : c.target === 'plan' ? '/plan' : '/'; // 申し送りはホームにある（決定122）
 
 /** 自分が呼ばれたコメントの知らせ（まだ「確かめた」を押していない分、新しい3件まで） */
 export function MentionBanner() {

@@ -5,17 +5,17 @@
  * 管理者・副管理者・支援リーダーは、ほかのメンバーの役割を変えたり、停止したりできる（7章 #2）。
  * 所属（家族・施設・学校・その他）で絞って、まとめて停止もできる（7.4.2、14.2 #26。【暫定】2026-11-07 の試作）。
  * 管理者の引き継ぎ（6.9）: 管理者が指名して相手が受ける／副管理者が申し込み、14日のあいだ管理者が断らなければ入れかわる。
- * 申し送りは TeamNotes（ホームにも新しい3件を出す。決定116）。
+ * 申し送りはホームだけに置く（決定122）。
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import QRCode from 'qrcode';
-import { inviteUrl } from '../lib/inviteLink';
+import { inviteMessage, inviteQrText, inviteUrl } from '../lib/inviteLink';
+import { canShare, shareText } from '../lib/share';
 import { Link } from 'react-router-dom';
 import { useApp } from '../state';
 import { assignableRoles, canExport, canInvite, canManageMember, setMemberFlags } from '../db/repo';
 import { supabase } from '../server/supabase';
 import { runSync, syncStatus } from '../server/sync';
-import { TeamNotes } from '../components/TeamNotes';
 import { formatDateTimeJa, nowISO } from '../lib/date';
 import { AFFILIATION_LABEL, ROLE_LABEL, type Affiliation, type Role, type TeamMember } from '../db/types';
 import { Chip, Sheet, TopBar } from '../components/ui';
@@ -85,8 +85,6 @@ export default function Team() {
       {canInvite(me?.role) && <BulkSuspend />}
 
       {supabase && <Handover personId={person.id} />}
-
-      <TeamNotes />
 
       <div className="section">
         <Link to="/team/settings" className="card row row--between team-settings-link">
@@ -250,38 +248,39 @@ function Invite({ personId, isAdmin }: { personId: string; isAdmin: boolean }) {
       )}
       {error && <p className="ai-error" role="alert">{error}</p>}
       <p className="help">
-        コード・リンク・QR のどれか1つを、相手に直接渡してください。相手はリンクか QR から開くか、「はじめて使う」でコードを入れてアカウントを作ります。
+        コード・リンク・QR のどれか1つを、相手に直接渡してください。相手はリンクから開くか、「はじめて使う」でコードを入れるか QR を読んで、アカウントを作ります。
         参加したあと、ここで承認すると記録が見られます。リンクを知っている人はだれでも参加を申し込めるので、グループのチャットなどには貼らないでください。
       </p>
     </div>
   );
 }
 
-/** 招待リンクと QR。QR はこの端末の中で作る（外のサービスには送らない） */
+/**
+ * 招待リンクと QR。QR はこの端末の中で作る（外のサービスには送らない）
+ * スマホのアプリの中では、相手が開ける住所がないので、リンクの代わりにコードを送り、QR にもコードを入れる（決定120）
+ */
 function InviteLink({ code }: { code: string }) {
   const url = inviteUrl(code);
+  const qrText = inviteQrText(code);
+  const message = inviteMessage(code);
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     let alive = true;
-    QRCode.toDataURL(url, { margin: 1, width: 200, errorCorrectionLevel: 'M' })
+    QRCode.toDataURL(qrText, { margin: 1, width: 200, errorCorrectionLevel: 'M' })
       .then((d) => alive && setQr(d))
       .catch(() => alive && setQr(null));
     return () => {
       alive = false;
     };
-  }, [url]);
-  const canShare = typeof navigator.share === 'function';
+  }, [qrText]);
+  const sharable = canShare();
   async function share() {
-    try {
-      await navigator.share({ title: '行動の記録への招待', text: 'チームへの招待です。72時間以内に開いてください。', url });
-    } catch {
-      // 閉じたときは何もしない
-    }
+    await shareText({ title: '行動の記録への招待', text: message, url });
   }
   async function copy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(url ?? message);
       setCopied(true);
     } catch {
       setCopied(false);
@@ -289,16 +288,20 @@ function InviteLink({ code }: { code: string }) {
   }
   return (
     <div className="stack">
-      <span className="label">招待リンク</span>
-      <input className="input" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="招待リンク" />
-      <div className={canShare ? 'grid-2' : undefined}>
-        {canShare && <button type="button" className="btn btn--primary" onClick={share}>リンクを送る</button>}
-        <button type="button" className="btn btn--outline" onClick={copy}>{copied ? 'コピーしました' : 'リンクをコピー'}</button>
+      {url && (
+        <>
+          <span className="label">招待リンク</span>
+          <input className="input" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="招待リンク" />
+        </>
+      )}
+      <div className={sharable ? 'grid-2' : undefined}>
+        {sharable && <button type="button" className="btn btn--primary" onClick={share}>{url ? 'リンクを送る' : 'コードを送る'}</button>}
+        <button type="button" className="btn btn--outline" onClick={copy}>{copied ? 'コピーしました' : url ? 'リンクをコピー' : '招待の文をコピー'}</button>
       </div>
       {qr && (
         <div className="stack" style={{ alignItems: 'center' }}>
-          <img src={qr} width={200} height={200} alt={`招待リンクの QR コード（${code}）`} />
-          <span className="help">目の前の人には、この QR を読んでもらえます。</span>
+          <img src={qr} width={200} height={200} alt={`招待の QR コード（${code}）`} />
+          <span className="help">目の前の人には、この QR を、アカウントを作る画面の「QR を読む」で読んでもらえます。</span>
         </div>
       )}
     </div>
@@ -453,7 +456,7 @@ function Account() {
           {st.pending > 0 && ` ・ 送れていない変更 ${st.pending} 件`}
         </span>
         {st.error && <p className="ai-error" role="alert">{st.error}</p>}
-        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・支援者の提案・行動の定義の変更・身体拘束の記録・支援会議メモ・申し送り・管理者の引き継ぎ・AI の分析と提案（採否も）です。ABC集計の AI のまとめは、この端末の中だけです。ログアウトは「あなたの設定」からできます。</p>
+        <p className="help">いまサーバーと共有しているのは、対象者・メンバー・チームの設定・行動・記録・インターバル記録・ABC記録・睡眠・場所・「観察していなかった日」・好きなもの（写真も）・支援計画（変更と合意）・支援者の提案・行動の定義の変更・身体拘束の記録・支援会議メモ・申し送り・管理者の引き継ぎ・AI の分析と提案（採否も）です。ABC分析の AI のまとめは、この端末の中だけです。ログアウトは「あなたの設定」からできます。</p>
       </div>
     </div>
   );

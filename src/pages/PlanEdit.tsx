@@ -14,6 +14,8 @@ import { useApp } from '../state';
 import { canEditPlan, canSign, diffFields, emptyPlan, FUNCTION_HINT, savePlan } from '../db/phase2';
 import { usePlanData } from '../lib/usePlan';
 import { valueUnit } from '../lib/series';
+import { taskAllowed } from '../db/tasks';
+import { PCT_MIN, RUNS_MAX } from '../lib/tasks';
 import { formatDateTimeJa, toLocalDate } from '../lib/date';
 import { FUNCTION_LABEL, PLAN_FIELD_LABEL, ROLE_LABEL, type BehaviorFunction, type PlanContent, type PlanCriterion } from '../db/types';
 import { Chip, Sheet, TopBar } from '../components/ui';
@@ -126,10 +128,41 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
             return (
               <div key={i} className="stack criterion">
                 <div className="row">
-                  <select className="input" aria-label="行動" value={c.behaviorId} onChange={(e) => setCriterion(i, { behaviorId: e.target.value })}>
+                  <select
+                    className="input"
+                    aria-label="行動"
+                    value={c.behaviorId}
+                    onChange={(e) => {
+                      const nb = behaviors.find((x) => x.id === e.target.value);
+                      setCriterion(i, nb && !taskAllowed(nb) && c.kind === 'task' ? { behaviorId: e.target.value, kind: 'daily', runs: null, op: 'lte', value: 0 } : { behaviorId: e.target.value });
+                    }}
+                  >
                     {behaviors.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>
                 </div>
+                {b && taskAllowed(b) && (
+                  <select
+                    className="input"
+                    aria-label="基準の種類"
+                    value={c.kind ?? 'daily'}
+                    onChange={(e) =>
+                      setCriterion(i, e.target.value === 'task' ? { kind: 'task', op: 'gte', value: 100, runs: 3, weeks: null } : { kind: 'daily', runs: null, value: 0 })
+                    }
+                  >
+                    <option value="daily">1日の値（グラフと同じ）</option>
+                    <option value="task">手順の自立率（一人でできた割合）</option>
+                  </select>
+                )}
+                {c.kind === 'task' ? (
+                  <div className="row">
+                    <input className="input" style={{ maxWidth: 96 }} type="number" min={PCT_MIN} max={100} step={5} aria-label="一人でできた割合" value={c.value} onChange={(e) => setCriterion(i, { value: Math.min(100, Math.max(PCT_MIN, Number(e.target.value) || PCT_MIN)) })} />
+                    <span className="muted nowrap">% 以上を</span>
+                    <select className="input" style={{ maxWidth: 96 }} aria-label="何回続けて届いたら達成か" value={c.runs ?? 1} onChange={(e) => setCriterion(i, { runs: Number(e.target.value) })}>
+                      {Array.from({ length: RUNS_MAX }, (_, k) => k + 1).map((n) => <option key={n} value={n}>{n}回連続</option>)}
+                    </select>
+                  </div>
+                ) : (
+                <>
                 <div className="row">
                   <input className="input" style={{ maxWidth: 96 }} type="number" min={0} step="0.1" inputMode="decimal" aria-label="値" value={c.value} onChange={(e) => setCriterion(i, { value: Number(e.target.value) })} />
                   <span className="muted">{b ? valueUnit(b) : ''}</span>
@@ -147,6 +180,8 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
                     <option value={4}>4週連続</option>
                   </select>
                 </label>
+                </>
+                )}
                 <label className="row">
                   <span className="muted nowrap">期限</span>
                   <input className="input" type="date" value={c.deadline ?? ''} onChange={(e) => setCriterion(i, { deadline: e.target.value || null })} aria-label="期限（いつまでに）" />
@@ -159,7 +194,7 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
             );
           })}
           <button type="button" className="btn btn--sm" style={{ alignSelf: 'flex-start' }} disabled={behaviors.length === 0} onClick={addCriterion}>+ 達成基準を足す</button>
-          <p className="help">達成基準はグラフに横の点線で出ます。値はグラフと同じ「1日あたり」です。「2週連続」などにすると、7日ごとの平均が続けて届いたときに「達成」と出ます。期限を入れると、過ぎても届いていないときに計画の画面で見直しをすすめます。</p>
+          <p className="help">達成基準はグラフに横の点線で出ます。値はグラフと同じ「1日あたり」です。「2週連続」などにすると、7日ごとの平均が続けて届いたときに「達成」と出ます。期限を入れると、過ぎても届いていないときに計画の画面で見直しをすすめます。手順のある望ましい行動・代替行動は、「手順の自立率」（一人でできた割合が何%以上を何回連続）も選べます。</p>
         </div>
       </div>
 
@@ -167,7 +202,7 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
         <div className="card stack">
           <span className="label">支援内容</span>
           <label className="field">
-            先行子操作（予防: 先にできる工夫）
+            先にできる工夫（予防）
             <textarea value={p.antecedent} onChange={(e) => set('antecedent', e.target.value)} placeholder="例: 課題は絵カードで予告。量を半分にして「終わり」を見せる" />
           </label>
           <label className="field">
@@ -183,7 +218,7 @@ function PlanEdit({ initial, isNew }: { initial: PlanContent; isNew: boolean }) 
             </div>
           )}
           <label className="field">
-            プロンプト（手がかりの出し方）
+            手助けの出し方
             <textarea value={p.prompting} onChange={(e) => set('prompting', e.target.value)} placeholder="例: 手が上がりかけたら、カードを指さす" />
           </label>
           <label className="field">

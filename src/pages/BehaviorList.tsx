@@ -12,6 +12,7 @@ import { useApp } from '../state';
 import { KIND_LABEL, METHOD_LABEL, type Behavior, type BehaviorKind } from '../db/types';
 import { Sheet, TopBar } from '../components/ui';
 import { Proposals } from '../components/Proposals';
+import { canEditTask, taskAllowed } from '../db/tasks';
 
 export default function BehaviorList() {
   const { person, me, userId } = useApp();
@@ -24,6 +25,10 @@ export default function BehaviorList() {
     [personId],
   );
   const counts = useLiveQuery(() => (personId ? recordCounts(personId) : new Map<string, number>()), [personId]);
+  const tasks = useLiveQuery(
+    async () => new Map(personId ? (await db.taskAnalyses.where('personId').equals(personId).toArray()).filter((t) => !t.deletedAt).map((t) => [t.behaviorId, t.steps.length]) : []),
+    [personId],
+  );
   const [showHidden, setShowHidden] = useState(false);
   const [removing, setRemoving] = useState<Behavior | null>(null);
 
@@ -39,6 +44,7 @@ export default function BehaviorList() {
     const parts = [
       b.method === 'interval' ? `${m} ${b.intervalSec}秒` : b.method === 'sampling' ? `${m} ${b.samplingMin}分` : m,
       b.intensity ? `強度 ${b.intensity.levels}段階` : null,
+      tasks?.get(b.id) ? `手順 ${tasks.get(b.id)}ステップ` : null,
     ].filter(Boolean);
     const extra = [b.kind === 'alternative' && nameOf(b.replacesBehaviorId) ? `${nameOf(b.replacesBehaviorId)}の代替` : null, `記録 ${counts!.get(b.id) ?? 0}件`]
       .filter(Boolean)
@@ -93,6 +99,11 @@ export default function BehaviorList() {
                       <strong>{b.name}</strong>
                       {sub(b)}
                     </span>
+                  )}
+                  {taskAllowed(b) && canEditTask(me?.role) && (
+                    <Link to={`/task/${b.id}`} className="btn btn--sm nowrap" aria-label={`${b.name}の手順を${tasks?.get(b.id) ? '直す' : '作る'}`}>
+                      {tasks?.get(b.id) ? '手順' : '＋手順'}
+                    </Link>
                   )}
                   {editable && (
                     <button type="button" className="btn btn--sm" aria-label={`${b.name}を削除`} onClick={() => setRemoving(b)}>削除</button>

@@ -1,6 +1,6 @@
 /**
  * PDF レポート（6.12、ワイヤーフレーム 19、Phase 2）。支援計画の画面とグラフ画面から開く。
- * - 期間と入れるものを選ぶ。グラフ・ABC集計・支援計画と達成状況・できたことは既定で入れ、時間帯の図・睡眠・身体拘束の記録は選んだときだけ
+ * - 期間と入れるものを選ぶ。グラフ・ABC分析・支援計画と達成状況・できたことは既定で入れ、時間帯の図・睡眠・身体拘束の記録は選んだときだけ
  * - 写真と住所は入れない。名前は呼び名のまま。A4 縦。白黒でも線の形（実線・点線）で区別できる
  * - 「PDF を作る」でブラウザの印刷画面を開き、「PDF に保存」を選ぶ。作ったことは監査ログに残す（管理者へのメールはサーバーができてから）
  * - 作れるのは管理者・副管理者・支援リーダー（CSV と同じ）
@@ -20,6 +20,8 @@ import { sleepPanel } from '../lib/panels';
 import { computeWins } from '../lib/wins';
 import { count, scene } from '../lib/tally';
 import { criterionText, fieldText } from '../lib/planText';
+import { printPage } from '../lib/print';
+import { taskCriterionStatus } from '../lib/tasks';
 import { PLAN_FIELD_LABEL, type PlanContent } from '../db/types';
 import { Segmented, TopBar } from '../components/ui';
 import SnapshotChart from '../components/SnapshotChart';
@@ -99,7 +101,7 @@ export default function Report() {
   async function print() {
     if (!person || !userId) return;
     await logExport(person.id, `PDF レポート ${from}〜${to}`, userId);
-    window.print();
+    await printPage(`行動記録レポート ${from}〜${to}`);
   }
 
   return (
@@ -199,6 +201,10 @@ export default function Report() {
                 {planAtEnd.criteria.map((cr, i) => {
                   const b = behaviors.find((x) => x.id === cr.behaviorId);
                   if (!b) return null;
+                  if (cr.kind === 'task') {
+                    const st = taskCriterionStatus(rs.stepChecks.filter((x) => x.localDate <= last7[last7.length - 1]), b.id, cr.value, cr.runs ?? 1);
+                    return <p key={i}>{criterionText(cr, behaviors)} → {st.last == null ? '記録なし' : `直近の回 ${st.last}%（${st.met ? '届いた' : `${st.streak}回連続`}）`}</p>;
+                  }
                   const v = dailyMain(b, last7, rs).filter((x): x is number => x != null);
                   const m = v.length ? Math.round((v.reduce((a, x) => a + x, 0) / v.length) * 10) / 10 : null;
                   const ok = m != null && (cr.op === 'lte' ? m <= cr.value : m >= cr.value);

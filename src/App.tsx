@@ -10,6 +10,8 @@ import BehaviorList from './pages/BehaviorList';
 import BehaviorEdit from './pages/BehaviorEdit';
 import ABC from './pages/ABC';
 import Observe from './pages/Observe';
+import TaskEdit from './pages/TaskEdit';
+import TaskCheck from './pages/TaskCheck';
 import Sleep from './pages/Sleep';
 import Backfill from './pages/Backfill';
 import Reinforcers from './pages/Reinforcers';
@@ -40,7 +42,7 @@ import { MfaCode } from './components/Mfa';
 import { Notices } from './components/Notices';
 
 const NO_NAV = ['/setup', '/behaviors/new', '/sleep', '/backfill', '/reinforcers', '/places', '/team/settings', '/team/audit', '/me', '/person', '/wins', '/plan/edit', '/plan/history', '/plan/signoff'];
-const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/');
+const hideNav = (path: string) => NO_NAV.includes(path) || path.startsWith('/restraint') || path.startsWith('/meetings') || path === '/report' || path.startsWith('/behaviors') || path.startsWith('/abc/') || path.startsWith('/observe/') || path.startsWith('/task/');
 
 function Shell() {
   const { loading, userId, person } = useApp();
@@ -63,6 +65,8 @@ function Shell() {
         <Route path="/behaviors/:behaviorId" element={<BehaviorEdit />} />
         <Route path="/abc/:eventId" element={<ABC />} />
         <Route path="/observe/:behaviorId" element={<Observe />} />
+        <Route path="/task/:behaviorId" element={<TaskEdit />} />
+        <Route path="/task/:behaviorId/check" element={<TaskCheck />} />
         <Route path="/sleep" element={<Sleep />} />
         <Route path="/backfill" element={<Backfill />} />
         <Route path="/reinforcers" element={<Reinforcers />} />

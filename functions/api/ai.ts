@@ -10,24 +10,30 @@
  *   チームの一員か・閲覧者でないか・AI「あり」か・1人ごと（決定63）・チームごと（決定60）・アプリ全体（14.2 #36、月1600回）の回数が残っているかを確かめてから1回と数える
  * - Supabase の設定がない公開（端末内だけの版。審査用のお試し）では、ログインなしで呼べる。そのときは AI_USAGE（KV）が必須で、
  *   つながっていなければ AI を呼ばずに断る（【暫定】9章）
+ * - 手順の下書き（steps、6.15）は「提案」1回として数える（決定129）。手を添える手助けと拘束の境目を越える言葉も禁止語にする
  * - AI_USAGE（KV）をつないだときは、サイト全体の1日の上限（AI_DAILY_LIMIT、既定 30）も守る
  */
 import Anthropic from '@anthropic-ai/sdk';
 import {
   ANALYSIS_SCHEMA,
   MIN_ABC_RECORDS,
+  STEPS_SCHEMA,
   SUGGESTION_SCHEMA,
   SUMMARY_MAX_CHARS,
   SUMMARY_SCHEMA,
   findBannedWords,
+  findTaskBannedWords,
+  stepsOutputOk,
   findSummaryBannedWords,
   quotedInputsOf,
   quotedSummaryInputs,
   validateAnalysisInput,
+  validateStepsInput,
   validateSuggestionInput,
   validateSummaryInput,
   type AiRequest,
   type AiResponse,
+  type StepsOutput,
 } from '../../src/ai/schema';
 
 interface Env {
@@ -60,7 +66,7 @@ const ANALYZE_TASK = `次の ABC記録（A: 直前のこと、B: 行動、C: そ
 - これは記録にもとづく「仮説」であり、支援者が確かめて決めるものです。`;
 
 const SUGGEST_TASK = `支援者が採用した機能の仮説にもとづいて、支援の候補を出してください。
-- alternatives: 同じ機能を満たす、より適切な代わりの行動（例: 回避なら「休憩カード」で休みを求める、注目なら「呼びかけ」のスキル）と、その教え方、手がかり（プロンプト）の出し方。2〜3件。
+- alternatives: 同じ機能を満たす、より適切な代わりの行動（例: 回避なら「休憩カード」で休みを求める、注目なら「呼びかけ」のスキル）と、その教え方、手助け（プロンプト）の出し方。2〜3件。
 - antecedentStrategies: 先にできる工夫（予定の見える化、選択肢を出す、課題の量や難しさの調整、きっかけになるものを減らす、非随伴性強化 など）。2〜4件。
 - reinforcement: 代わりの行動や望ましい行動ができたときに、すぐ認める・望むものが得られるようにする方法。2〜3件。
 - reinforcers（対象者の好きなもの。level はハマり度 1〜5）があれば、その中から強化の候補を名前で挙げて使う。好きなものを取り上げる・お預けにする使い方は書かない。
@@ -72,17 +78,35 @@ const SUMMARIZE_TASK = `次は、ある行動の ABC記録を項目ごとに数�
 - 行動の機能（はたらき）の見立てや、支援の方法・すすめ（〜しましょう、〜すべき）は書かない。それは別の「AI分析」が行う。
 - 集計にないことは書かない。`;
 
+const STEPS_TASK = `次の行動を、本人が身につけるための「手順」（課題分析: 行動を小さなステップに分けたもの）の下書きを作ってください。
+- steps: 2〜7個。1ステップは本人の観察できる動き1つ（action、短い文で60字以内。例:「休憩カードを手に取る」）。
+  support には、そのステップでの支援者の動き・留意点（100字以内。なければ空）。手助けは、軽いものから「声かけ・指さし」「手本を見せる」「手を添える」の順に考え、できるだけ早く減らす。
+- 手を添えるのは、本人が受け入れるときに軽く添えるだけ。本人の体を動かないようにする・力で動かす・引く・連れて行く・閉じこめることは、手助けではないので書かない。
+- hardSteps: はじめに手助けが多く要りそうなステップ（steps の action の文をそのまま）。
+- materials: 準備するもの（カード・絵・タイマーなど）。なければ空。
+- chain: 教える順番。total（全部通して）/ forward（前から順に）/ backward（後ろから順に）。chainReason にその理由を短く。
+- cautions: 留意点。必ず「本人が手助けを嫌がったら手を離して中断し、『途中でやめた』で記録する」を入れる。
+- 代替行動なら、元の行動（replaces）と同じ目的（機能）が、より楽に・だれにでも伝わる形で満たせる手順にする。
+- 問題行動が起きた直後に、代替行動を促したり、休み・好きなものなどを与えたりする書き方をしない（問題行動が「代替行動につながる流れの最初の一歩」として身についてしまうため）。代替行動を促すのは、問題行動の前ぶれのときや落ち着いた場面にする。問題行動が起きたときについて書くなら、本人と周りの安全を守ることだけを書く。
+- これは下書きです。支援チームが本人に合わせて直してから使います。`;
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // 同じサイトの画面からの呼び出しだけを受ける
   const origin = request.headers.get('Origin');
   if (origin && new URL(origin).host !== new URL(request.url).host) return json({ status: 'error', message: '呼び出し元が正しくありません' }, 403);
 
   const req = (await request.json().catch(() => null)) as AiRequest | null;
-  if (!req || (req.kind !== 'analyze' && req.kind !== 'suggest' && req.kind !== 'summarize')) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
+  if (!req || (req.kind !== 'analyze' && req.kind !== 'suggest' && req.kind !== 'summarize' && req.kind !== 'steps')) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
   if (typeof req.personId !== 'string' || !UUID.test(req.personId)) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
 
   const invalid =
-    req.kind === 'analyze' ? validateAnalysisInput(req.input) : req.kind === 'suggest' ? validateSuggestionInput(req.input) : validateSummaryInput(req.input);
+    req.kind === 'analyze'
+      ? validateAnalysisInput(req.input)
+      : req.kind === 'suggest'
+        ? validateSuggestionInput(req.input)
+        : req.kind === 'steps'
+          ? validateStepsInput(req.input)
+          : validateSummaryInput(req.input);
   if (invalid) return json({ status: 'error', message: invalid }, 400);
   if (req.kind === 'analyze' && req.input.abcRecords.length < MIN_ABC_RECORDS) {
     return json({ status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` });
@@ -92,7 +116,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
     const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
     if (!token) return json({ status: 'error', message: 'ログインしてからお試しください' }, 401);
-    const denied = await takeTeamRun(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token, req.personId, req.kind);
+    // 手順の下書きは「提案」1回として数える（決定129）
+    const denied = await takeTeamRun(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token, req.personId, req.kind === 'steps' ? 'suggest' : req.kind);
     if (denied) return denied;
   } else if (!env.AI_USAGE) {
     // ログインなしで呼べる公開では、サイト全体の1日の上限がないと AI を呼ばない
@@ -103,15 +128,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const quoted = req.kind === 'analyze' ? quotedInputsOf(req.input) : req.kind === 'summarize' ? quotedSummaryInputs(req.input) : [];
-  const schema = req.kind === 'analyze' ? ANALYSIS_SCHEMA : req.kind === 'suggest' ? SUGGESTION_SCHEMA : SUMMARY_SCHEMA;
-  const task = req.kind === 'analyze' ? ANALYZE_TASK : req.kind === 'suggest' ? SUGGEST_TASK : SUMMARIZE_TASK;
+  const schema = req.kind === 'analyze' ? ANALYSIS_SCHEMA : req.kind === 'suggest' ? SUGGESTION_SCHEMA : req.kind === 'steps' ? STEPS_SCHEMA : SUMMARY_SCHEMA;
+  const task = req.kind === 'analyze' ? ANALYZE_TASK : req.kind === 'suggest' ? SUGGEST_TASK : req.kind === 'steps' ? STEPS_TASK : SUMMARIZE_TASK;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     let res;
     try {
       res = await client.beta.messages.create({
         model: MODEL,
-        max_tokens: req.kind === 'summarize' ? 1500 : 8000,
+        max_tokens: req.kind === 'summarize' ? 1500 : req.kind === 'steps' ? 4000 : 8000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         system: PRINCIPLES,
@@ -145,6 +170,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (typeof summary !== 'string' || summary.length > SUMMARY_MAX_CHARS * 1.2) continue;
       if (findSummaryBannedWords(output, quoted).length > 0) continue;
       return json({ status: 'ok', kind: 'summarize', output: { summary }, model: res.model });
+    }
+    if (req.kind === 'steps') {
+      // 手順の下書き: 形と数を確かめ、手順だけの禁止語も見る（6.15）
+      if (!stepsOutputOk(output as StepsOutput) || findTaskBannedWords(output).length > 0) continue;
+      return json({ status: 'ok', kind: 'steps', output: output as StepsOutput, model: res.model });
     }
     if (findBannedWords(output, quoted).length > 0) continue;
 

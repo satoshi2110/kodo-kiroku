@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import { canRecordRestraint } from '../db/phase2';
 import { canEditSleep, canRecord, createEvent, lastUndoableEvent, observedRatio, restoreEvent, setPlaceChoice, undoEvent, updateEvent } from '../db/repo';
 import { getPositionOnce, matchPlace } from '../lib/place';
 import { useApp } from '../state';
@@ -84,6 +85,12 @@ export default function Home() {
     async () => (personId ? (await db.sleepLogs.where('[personId+wakeDate]').equals([personId, today]).toArray()).find((l) => !l.deletedAt) ?? null : null),
     [personId, today],
   );
+  // 手順（6.15）: 手順のある行動（今日の回数と取消は、手順のチェックの画面に出す）
+  const tasks = useLiveQuery(async () => {
+    if (!personId) return new Set<string>();
+    const ts = (await db.taskAnalyses.where('personId').equals(personId).toArray()).filter((t) => !t.deletedAt);
+    return new Set(ts.map((t) => t.behaviorId));
+  }, [personId]);
   const events = useMemo(() => [...(todayEvents ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [todayEvents]);
   const rows = useMemo(() => pairRows(behaviors), [behaviors]);
   const [pickingPlace, setPickingPlace] = useState(false);
@@ -321,6 +328,7 @@ export default function Home() {
                 disabled={!recordable}
                 onTap={() => tap(b)}
                 onUndo={() => undo(b)}
+                hasTask={tasks?.has(b.id) ?? false}
               />
             ))}
           </div>
@@ -330,6 +338,16 @@ export default function Home() {
           <p className="help">回数・時間で記録する行動は、記録を付けた日に記録がなければ、自動で 0 になります。観察していなかった日は「さかのぼって入力」で直せます。</p>
         )}
       </div>
+
+      {canRecordRestraint(me?.role) && (
+        <div className="section">
+          {/* 身体拘束の記録（決定119）。問題行動の +1 とは分け、専用の入力画面を開く */}
+          <Link to="/restraint/new?from=home" className="btn btn--outline btn--block restraint-home">
+            身体拘束を記録する
+            <span className="restraint-home__sub">緊急やむを得ない場合だけ</span>
+          </Link>
+        </div>
+      )}
 
       {wins.length > 0 && (
         <div className="section">
@@ -345,7 +363,7 @@ export default function Home() {
         </div>
       )}
 
-      <TeamNotes limit={3} compact />
+      <TeamNotes />
 
       <div className="section">
         <div className="card">
@@ -462,6 +480,7 @@ function BehaviorCard({
   disabled,
   onTap,
   onUndo,
+  hasTask,
 }: {
   b: Behavior;
   replaces?: string;
@@ -472,6 +491,7 @@ function BehaviorCard({
   disabled: boolean;
   onTap: () => void;
   onUndo: () => void;
+  hasTask: boolean; // 手順があれば、右上に「手順」を出す（6.15）
 }) {
   const total = events.reduce((s, e) => s + e.count, 0);
   const totalSec = events.reduce((s, e) => s + (e.durationSec ?? 0), 0);
@@ -486,27 +506,51 @@ function BehaviorCard({
   else if (b.method === 'latency') action = timer ? `始まった（${formatDuration(running)}）` : '指示を出した';
   else action = '観察を始める';
   const ratio = observedRatio(observations);
+  // 丸い印の中身: 頻度は ＋、計測中は ■、それ以外（開始・指示・観察）は ▶。読み上げには action の文を使う
+  const icon = b.method === 'frequency' ? 'plus' : timer ? 'stop' : 'play';
+  const hint = timer ? formatDuration(running) : b.method === 'latency' ? '指示で' : null;
 
   return (
-    <div className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${flash ? ` bcard--flash-${flash}` : ''}`}>
+    <div className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${!disabled && hasTask ? ' bcard--task' : ''}${flash ? ` bcard--flash-${flash}` : ''}`}>
       <button type="button" className="bcard__tap" disabled={disabled} onClick={onTap} aria-label={`${b.name}: ${action}`}>
         <KindBadge kind={b.kind} />
         <span className="bcard__name">{b.name}</span>
         {replaces && <span className="bcard__for">「{replaces}」の代わり</span>}
-        <span className="bcard__count">
-          {b.method === 'frequency' && <>今日 <strong>{total}</strong> 回</>}
-          {b.method === 'duration' && <>今日 <strong>{formatDuration(totalSec)}</strong></>}
-          {b.method === 'latency' && <>{lastLatency != null ? <>最後 <strong>{formatDuration(lastLatency)}</strong></> : '今日はまだ'}</>}
-          {sessionType && (ratio != null ? <>今日 <strong>{ratio}</strong> %</> : METHOD_LABEL[b.method])}
+        <span className="bcard__foot">
+          <span className="bcard__count">
+            {b.method === 'frequency' && <>今日 <strong>{total}</strong> 回</>}
+            {b.method === 'duration' && <>今日 <strong>{formatDuration(totalSec)}</strong></>}
+            {b.method === 'latency' && <>{lastLatency != null ? <>最後 <strong>{formatDuration(lastLatency)}</strong></> : '今日はまだ'}</>}
+            {sessionType && (ratio != null ? <>今日 <strong>{ratio}</strong> %</> : METHOD_LABEL[b.method])}
+          </span>
+          {hint && <span className={`bcard__hint${timer ? ' bcard__hint--running' : ''}`}>{hint}</span>}
+          <span className={`bcard__fab${timer ? ' bcard__fab--running' : ''}`} aria-hidden="true">
+            <FabIcon kind={icon} />
+          </span>
         </span>
-        <span className={`bcard__action${timer ? ' bcard__action--running' : ''}`}>{action}</span>
       </button>
       {!disabled && !sessionType && (
         <button type="button" className="undo-badge" onClick={onUndo} aria-label={`${b.name} の${timerType ? '直前の計測' : '最後の記録'}を取り消す`}>
           <span>{timerType ? '取消' : '−1'}</span>
         </button>
       )}
+      {!disabled && hasTask && (
+        <Link to={`/task/${b.id}/check`} className={`task-badge${sessionType ? ' task-badge--edge' : ''}`} aria-label={`${b.name} の手順をチェックする`}>
+          <span>手順</span>
+        </Link>
+      )}
     </div>
+  );
+}
+
+/** カードの丸い印（＋・▶・■）。文字の代わりに、押すと何が起きるかを形で見せる */
+function FabIcon({ kind }: { kind: 'plus' | 'play' | 'stop' }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill={kind === 'plus' ? 'none' : 'currentColor'} stroke="currentColor" strokeWidth={kind === 'plus' ? 2.6 : 0} strokeLinecap="round" strokeLinejoin="round">
+      {kind === 'plus' && <path d="M12 5v14M5 12h14" />}
+      {kind === 'play' && <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" />}
+      {kind === 'stop' && <rect x="6" y="6" width="12" height="12" rx="2" />}
+    </svg>
   );
 }
 

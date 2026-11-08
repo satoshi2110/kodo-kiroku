@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0024）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0026）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2694,6 +2694,143 @@ begin
   end;
 end $$;
 
+-- ---------- 手順と手順のチェック（0026） ----------
+-- チーム1 に望ましい行動を1つ、チーム2 に望ましい行動と手順を1つ用意する（管理者として。RLS はかからない）
+select set_config('request.jwt.claims', '', true);
+reset role;
+insert into behaviors (id, person_id, kind, name, method) values
+  ('30260000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'desirable', '望ましい1', 'frequency'),
+  ('30260000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'desirable', '望ましい2', 'frequency');
+alter table task_analyses disable trigger user;
+insert into task_analyses (id, person_id, behavior_id, steps, created_by) values
+  ('a0260000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '30260000-0000-0000-0000-000000000002',
+   '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000b1');
+alter table task_analyses enable trigger user;
+
+-- W（チーム1 の支援者）は、手順を作ってチェックできる。問題行動とほかのチームの行動には付けられない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000301","aal":"aal2"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  insert into task_analyses (id, person_id, behavior_id, steps, created_by) values
+    ('a0260000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001',
+     '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000ab');
+  insert into step_checks (id, person_id, behavior_id, task_id, version, steps, results, occurred_at, local_date, place_name, recorder_id) values
+    ('a0260000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001', 'a0260000-0000-0000-0000-000000000001',
+     1, '["a","b"]', '["independent","verbal"]', now(), current_date, '家', '00000000-0000-0000-0000-0000000000ab');
+  begin
+    insert into task_analyses (id, person_id, behavior_id, steps, created_by) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001',
+       '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000ab');
+    raise exception 'NG: 問題行動に手順を付けられた';
+  exception when insufficient_privilege or unique_violation then null;
+  end;
+  begin
+    insert into task_analyses (id, person_id, behavior_id, steps, created_by) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000002',
+       '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000ab');
+    raise exception 'NG: ほかのチームの行動に手順を付けられた';
+  exception when insufficient_privilege or unique_violation then null;
+  end;
+  -- ほかのチームの手順を指すチェックは作れない
+  begin
+    insert into step_checks (id, person_id, behavior_id, task_id, version, steps, results, occurred_at, local_date, recorder_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001', 'a0260000-0000-0000-0000-000000000002',
+       1, '["a","b"]', '["independent","verbal"]', now(), current_date, '00000000-0000-0000-0000-0000000000ab');
+    raise exception 'NG: ほかのチームの手順にチェックを付けられた';
+  exception when insufficient_privilege then null;
+  end;
+  -- ほかの人を記録者にはできない
+  begin
+    insert into step_checks (id, person_id, behavior_id, task_id, version, steps, results, occurred_at, local_date, recorder_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001', 'a0260000-0000-0000-0000-000000000001',
+       1, '["a","b"]', '["independent","verbal"]', now(), current_date, '00000000-0000-0000-0000-0000000000a1');
+    raise exception 'NG: ほかの人を記録者にしてチェックを作れた';
+  exception when insufficient_privilege then null;
+  end;
+  -- ステップは2〜9個
+  begin
+    update task_analyses set steps = '[{"action":"a","support":""}]', updated_at = now() + interval '1 second' where id = 'a0260000-0000-0000-0000-000000000001';
+    raise exception 'NG: ステップが1個の手順を保存できた';
+  exception when check_violation then null;
+  end;
+  -- 直すと、最後に直した人は自分のまま。取り消し（論理削除）はできる
+  update task_analyses set version = 2, updated_at = now() + interval '1 second' where id = 'a0260000-0000-0000-0000-000000000001';
+  update step_checks set deleted_at = now(), updated_at = now() + interval '1 second' where id = 'a0260000-0000-0000-0000-000000000011';
+  update step_checks set deleted_at = null, updated_at = now() + interval '2 seconds' where id = 'a0260000-0000-0000-0000-000000000011';
+  select count(*) into n from task_analyses where id = 'a0260000-0000-0000-0000-000000000001' and version = 2;
+  if n <> 1 then raise exception 'NG: 支援者が手順を直せない'; end if;
+  -- ほかのチームの手順とチェックは見えない
+  select count(*) into n from task_analyses where person_id = '10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'NG: ほかのチームの手順が見える'; end if;
+end $$;
+-- 消す権限はない
+do $$ begin
+  begin
+    delete from step_checks where id = 'a0260000-0000-0000-0000-000000000011';
+    raise exception 'NG: 手順のチェックを本当に消せた';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+-- V（閲覧者）は見るだけ
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from step_checks where id = 'a0260000-0000-0000-0000-000000000011';
+  if n <> 1 then raise exception 'NG: 閲覧者に自分のチームのチェックが見えない'; end if;
+  begin
+    insert into step_checks (id, person_id, behavior_id, task_id, version, steps, results, occurred_at, local_date, recorder_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001', 'a0260000-0000-0000-0000-000000000001',
+       2, '["a","b"]', '["independent","verbal"]', now(), current_date, '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者がチェックを付けられた';
+  exception when insufficient_privilege then null;
+  end;
+  update task_analyses set mastery_pct = 80, created_by = '00000000-0000-0000-0000-0000000000d1', updated_at = now() + interval '5 seconds' where id = 'a0260000-0000-0000-0000-000000000001';
+  update step_checks set note = 'x', updated_at = now() + interval '5 seconds' where id = 'a0260000-0000-0000-0000-000000000011';
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from task_analyses where id = 'a0260000-0000-0000-0000-000000000001' and mastery_pct = 100;
+  if n <> 1 then raise exception 'NG: 閲覧者が手順を書きかえられた'; end if;
+  select count(*) into n from step_checks where id = 'a0260000-0000-0000-0000-000000000011' and note = '';
+  if n <> 1 then raise exception 'NG: 閲覧者がチェックを書きかえられた'; end if;
+end $$;
+
+-- B（チーム2 の管理者）には、チーム1 の手順とチェックは見えず、書けない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from task_analyses where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: ほかのチームの手順が見える'; end if;
+  select count(*) into n from step_checks where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: ほかのチームのチェックが見える'; end if;
+  begin
+    insert into step_checks (id, person_id, behavior_id, task_id, version, steps, results, occurred_at, local_date, recorder_id) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001', 'a0260000-0000-0000-0000-000000000001',
+       2, '["a","b"]', '["independent","verbal"]', now(), current_date, '00000000-0000-0000-0000-0000000000b1');
+    raise exception 'NG: ほかのチームにチェックを書けた';
+  exception when insufficient_privilege then null;
+  end;
+  update task_analyses set mastery_pct = 50, created_by = '00000000-0000-0000-0000-0000000000b1', updated_at = now() + interval '9 seconds' where id = 'a0260000-0000-0000-0000-000000000001';
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from task_analyses where id = 'a0260000-0000-0000-0000-000000000001' and mastery_pct = 100;
+  if n <> 1 then raise exception 'NG: ほかのチームの人が手順を書きかえられた'; end if;
+  select count(*) into n from audit_logs where entity = 'step_checks' and entity_id = 'a0260000-0000-0000-0000-000000000011';
+  if n < 3 then raise exception 'NG: 手順のチェックの作成・取り消し・戻しが監査ログに残っていない（% 件）', n; end if;
+end $$;
+
 -- ---------- チームの削除をサーバーでも行う（0023） ----------
 -- 最後にチーム1（テスト1）を消す。消す前の件数を覚えておく
 select set_config('request.jwt.claims', '', true);
@@ -2775,6 +2912,10 @@ begin
   if n <> 0 then raise exception 'NG: チームを消したのに、設定が残っている'; end if;
   select count(*) into n from view_days where person_id = '10000000-0000-0000-0000-000000000001';
   if n <> 0 then raise exception 'NG: チームを消したのに、閲覧の記録が残っている'; end if;
+  select count(*) into n from step_checks where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、手順のチェックが残っている（% 件）', n; end if;
+  select count(*) into n from task_analyses where person_id = '10000000-0000-0000-0000-000000000001';
+  if n <> 0 then raise exception 'NG: チームを消したのに、手順が残っている（% 件）', n; end if;
   select count(*) into n from behaviors where person_id = '10000000-0000-0000-0000-000000000001';
   if n <> 0 then raise exception 'NG: チームを消したのに、行動が残っている（% 件）', n; end if;
   if (select display_name from persons where id = '10000000-0000-0000-0000-000000000001') <> '（削除したチーム）' then

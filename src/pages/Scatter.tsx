@@ -2,6 +2,7 @@
  * 時間帯の図（スキャッタープロット、6.4.2、ワイヤーフレーム 20、Phase 2）。グラフ画面の「時間帯」から開く。
  * 横に日付（1週間）、縦に時刻（30分ごと）。起きた時間帯のマスに、強度（強度を記録しない行動は回数）を色と数字で出す。
  * 観察しなかった日（記録のない日・「観察していなかった」日）は灰色にする。
+ * 身体拘束の記録があれば、行動と同じように選べる（決定119）。始めた時刻のマスに回数を出す。
  */
 import { useState } from 'react';
 import { useApp } from '../state';
@@ -19,11 +20,18 @@ export default function Scatter() {
   const [behaviorId, setBehaviorId] = useState<string | null>(null);
   const [end, setEnd] = useState(toLocalDate());
   if (!person || !rs) return null;
-  const b = choices.find((x) => x.id === behaviorId) ?? choices[0];
+  const hasRestraint = rs.restraintLogs.length > 0;
+  const isRestraint = hasRestraint && (behaviorId === RESTRAINT || (!choices.length && behaviorId == null));
+  const b = isRestraint ? undefined : choices.find((x) => x.id === behaviorId) ?? choices[0];
+  const name = isRestraint ? '身体拘束' : b?.name;
   const days = dateRange(addDays(end, -6), end);
   const today = toLocalDate();
 
-  const events = b ? rs.events.filter((e) => e.behaviorId === b.id) : [];
+  const events = isRestraint
+    ? rs.restraintLogs.map((l) => ({ localDate: l.localDate, occurredAt: l.startedAt, count: 1, intensity: null as number | null }))
+    : b
+      ? rs.events.filter((e) => e.behaviorId === b.id)
+      : [];
   const slotOf = (iso: string) => {
     const d = new Date(iso);
     return d.getHours() * 2 + (d.getMinutes() >= 30 ? 1 : 0);
@@ -42,24 +50,28 @@ export default function Scatter() {
     if (e.intensity != null) c.max = Math.max(c.max ?? 0, e.intensity);
     cell.set(k, c);
   }
-  const from = b ? zeroFrom(b, events) : '';
-  const observed = (d: string) => d >= from && rs.recordedDays.has(d) && !(b && rs.notObserved.has(`${b.id}|${d}`));
+  const from = b ? zeroFrom(b, rs.events.filter((e) => e.behaviorId === b.id)) : '';
+  const restraintDays = new Set(rs.restraintLogs.map((l) => l.localDate));
+  // 身体拘束は、その対象者に何か記録がある日（拘束の記録を含む）を「観察あり」にする
+  const observed = (d: string) =>
+    isRestraint ? rs.recordedDays.has(d) || restraintDays.has(d) : d >= from && rs.recordedDays.has(d) && !(b && rs.notObserved.has(`${b.id}|${d}`));
   const trend = trendSentence(cell, days);
   const levels = b?.intensity?.levels ?? 3;
 
   return (
     <div className="page">
-      <TopBar title="時間帯の図" sub={b ? `${b.name} ・ 30分ごと` : person.displayName} />
+      <TopBar title="時間帯の図" sub={name ? `${name} ・ 30分ごと` : person.displayName} />
       <GraphTabs />
-      {!b ? (
+      {!name ? (
         <p className="empty">回数・時間で記録する行動を登録すると、ここに時間帯の図が出ます。</p>
       ) : (
         <>
           <div className="section stack">
             <label className="field">
               行動
-              <select value={b.id} onChange={(e) => setBehaviorId(e.target.value)}>
+              <select value={isRestraint ? RESTRAINT : b?.id} onChange={(e) => setBehaviorId(e.target.value)}>
                 {choices.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                {hasRestraint && <option value={RESTRAINT}>身体拘束</option>}
               </select>
             </label>
             <div className="row row--between">
@@ -71,7 +83,7 @@ export default function Scatter() {
           <div className="section">
             <div className="card">
               <p className="scatter__trend">{trend}</p>
-              <div className="scatter" role="table" aria-label={`${b.name}の時間帯の図`}>
+              <div className="scatter" role="table" aria-label={`${name}の時間帯の図`}>
                 <div className="scatter__row" role="row">
                   <span className="scatter__time" role="columnheader" />
                   {days.map((d) => {
@@ -105,7 +117,7 @@ export default function Scatter() {
               </div>
               <div className="scatter__legend">
                 <span><i className="scatter__cell" />なし</span>
-                {b.intensity ? (
+                {b?.intensity ? (
                   [1, 2, 3].map((l) => <span key={l}><i className={`scatter__cell scatter__cell--l${l}`} />{levels === 3 ? `強度${l}` : l === 1 ? '軽い' : l === 2 ? '中' : '重い'}</span>)
                 ) : (
                   <span><i className="scatter__cell scatter__cell--l2" />起きた</span>
@@ -113,8 +125,9 @@ export default function Scatter() {
                 <span><i className="scatter__cell scatter__cell--none" />観察なし</span>
               </div>
               <p className="help">
-                {b.intensity ? '数字はその30分でいちばん強かった強度です（未評価のときは回数）。' : '数字はその30分の回数です。'}
-                ABC記録と合わせて見ると、きっかけを絞り込めます。
+                {isRestraint
+                  ? '数字はその30分に始めた身体拘束の回数です。多い時間帯の前に、先にできる工夫がないかをチームで考えます。'
+                  : <>{b?.intensity ? '数字はその30分でいちばん強かった強度です（未評価のときは回数）。' : '数字はその30分の回数です。'}ABC記録と合わせて見ると、きっかけを絞り込めます。</>}
               </p>
             </div>
           </div>
@@ -123,6 +136,8 @@ export default function Scatter() {
     </div>
   );
 }
+
+const RESTRAINT = '__restraint';
 
 const hm = (slot: number) => `${Math.floor(slot / 2)}:${slot % 2 ? '30' : '00'}`;
 
@@ -145,7 +160,7 @@ function trendSentence(cell: Map<string, { n: number }>, days: string[]): string
     daysBySlot.get(slot)!.add(d);
     total += c.n;
   }
-  if (total === 0) return 'この週は、この行動の記録がありません。';
+  if (total === 0) return 'この週は、記録がありません。';
   if (total < 3) return `この週は ${total}回です。回数が少ないので、時間帯の傾向はまだ分かりません。`;
   let best = -1;
   let bestN = 0;

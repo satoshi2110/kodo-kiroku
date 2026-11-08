@@ -6,6 +6,7 @@
  * - 条件変更（支援計画が実施中になった日）は縦の点線、達成基準は横の点線（Phase 2）
  * - 表示する行動と睡眠時間のパネルを選べる
  * - 頻度は「回数」と「1時間あたり」を切りかえる（6.4.1）。既定は回数（【暫定】）
+ * - 身体拘束の記録があれば、専用のパネル（回数・合計時間、記録のある日だけ）を出す（決定119）
  * - 「まとめ方」の「まとめて」で、代替行動のない問題行動どうし・望ましい行動どうしを、測り方が同じなら1つのグラフに重ねる（決定112・113）。既定は行動ごと
  */
 import { useState } from 'react';
@@ -14,7 +15,8 @@ import { useApp } from '../state';
 import { canExport } from '../db/repo';
 import { formatShortDate } from '../lib/date';
 import { allDates, canRate, useRecordSet, type Granularity } from '../lib/series';
-import { buildGroups, changeSummary, groupTitle, phasesFor, sleepPanel, type PanelSpec } from '../lib/panels';
+import { buildGroups, changeSummary, groupTitle, phasesFor, restraintPanels, sleepPanel, taskPanel, taskPhases, type PanelSpec } from '../lib/panels';
+import { StepTable } from '../components/StepTable';
 import { useRevisions } from '../lib/useRevisions';
 import { usePlanData } from '../lib/usePlan';
 import { Chip, KindBadge, Segmented, TopBar } from '../components/ui';
@@ -32,11 +34,12 @@ export default function Graph() {
   const [params] = useSearchParams();
   const [showSleep, setShowSleep] = useState(params.get('sleep') === '1'); // 睡眠の画面の「グラフで見る」から来たときは睡眠時間も出す
   const [rate, setRate] = useState(false);
+  const [showRestraint, setShowRestraint] = useState(true);
   const [together, setTogether] = useState(false);
   const sync = useNewSync();
   if (!person || !rs) return null;
 
-  const empty = rs.events.length === 0 && rs.observations.length === 0;
+  const empty = rs.events.length === 0 && rs.observations.length === 0 && rs.stepChecks.length === 0;
   const days = allDates(rs);
   const shown = behaviors.filter((b) => !hidden.has(b.id));
   const hasFreq = shown.some(canRate);
@@ -150,6 +153,17 @@ export default function Graph() {
                   {grp.panels.map((p) => (
                     <Panel key={p.key} p={p} day={dayPanels.get(p.key)} g={g} phases={phasesFor(phases, revisions, grp.behaviors)} title={groupTitle(grp.behaviors)} />
                   ))}
+                  {grp.behaviors.map((b) => {
+                    const tp = taskPanel(b, rs, days, g);
+                    if (!tp) return null;
+                    const task = rs.tasks.find((t) => t.behaviorId === b.id);
+                    return (
+                      <div key={tp.key} className="stack">
+                        <Panel p={tp} day={taskPanel(b, rs, days, 'day') ?? undefined} g={g} phases={[...phasesFor(phases, revisions, [b]), ...taskPhases(rs, b.id)].sort((x, y) => x.date.localeCompare(y.date))} title={`${b.name}の手順`} />
+                        {task && <StepTable task={task} checks={rs.stepChecks} />}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -158,6 +172,17 @@ export default function Graph() {
                 <div className="card stack">
                   <strong className="graph-name">睡眠</strong>
                   <Panel p={sleepPanel(rs, days, g)} day={sleepPanel(rs, days, 'day')} g={g} phases={phases} title="睡眠" />
+                </div>
+              </div>
+            )}
+            {showRestraint && rs.restraintLogs.length > 0 && (
+              <div className="section">
+                <div className="card stack">
+                  <strong className="graph-name">身体拘束</strong>
+                  {restraintPanels(rs, days, g).map((p) => (
+                    <Panel key={p.key} p={p} g={g} phases={phases} title={`身体拘束の${p.key === 'restraint-count' ? '回数' : '合計時間'}`} />
+                  ))}
+                  <p className="help">身体拘束は治療や支援の方法ではありません。減らしていくために、行った日だけを点で出します。</p>
                 </div>
               </div>
             )}
@@ -170,6 +195,7 @@ export default function Graph() {
                   <Chip key={b.id} on={!hidden.has(b.id)} onClick={() => toggle(b.id)} problem={b.kind === 'problem'}>{b.name}</Chip>
                 ))}
                 <Chip on={showSleep} onClick={() => setShowSleep(!showSleep)} dashed>睡眠時間</Chip>
+                {rs.restraintLogs.length > 0 && <Chip on={showRestraint} onClick={() => setShowRestraint(!showRestraint)} dashed>身体拘束</Chip>}
               </div>
             </div>
           </div>

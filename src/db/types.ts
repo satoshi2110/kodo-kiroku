@@ -26,7 +26,7 @@ export type BehaviorFunction = 'attention' | 'demand' | 'escape' | 'sensory';
 /** 5つの役割（6.9、決定41） */
 export type Role = 'admin' | 'subadmin' | 'leader' | 'supporter' | 'viewer';
 
-/** 所属（ABC集計の「関わった人」は所属ごとに数える、決定71） */
+/** 所属（ABC分析の「関わった人」は所属ごとに数える、決定71） */
 export type Affiliation = 'family' | 'facility' | 'school' | 'other';
 
 /** ユーザー。ローカルでは「この端末でログインしている人」。サーバー接続後は Supabase Auth のユーザーと同じ id */
@@ -115,6 +115,47 @@ export interface Observation extends BaseRecord {
   results: IntervalResult[];
   recorderId: string;
   placeName?: string | null; // 観察を始めたときの場所の名前（6.3.3。緯度経度は持たない）。0019 より前の記録は空
+}
+
+/**
+ * 手順（課題分析、6.15、決定123）。望ましい行動・代替行動に1つだけ付ける付加項目。id は行動から決める（2台で作っても1件にまとまる）。
+ * ステップを変えると version を上げる。古いチェックは、そのときのステップ文を StepCheck.steps に持っている。
+ */
+export type ChainOrder = 'total' | 'forward' | 'backward'; // 全部通して / 前から / 後ろから
+export interface TaskStep {
+  action: string; // 本人の動き（60文字まで）
+  support: string; // 支援者の動き・留意点（任意、100文字まで）
+}
+export interface TaskAnalysis extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  version: number;
+  steps: TaskStep[]; // 2〜9 個
+  chain: ChainOrder;
+  masteryPct: number; // 達成の目安: 一人でできた割合が masteryPct% 以上の回が masteryRuns 回連続（決定126）
+  masteryRuns: number;
+  note: string; // 手順全体の留意点（既定は「嫌がったら手を離して中断」）
+  createdBy: string; // User.id（最後に直した人）
+}
+
+/** 手順のチェックのステップごとの結果（決定125）。stopped = 途中でやめた（分母に残す）、na = 機会なし（分母から外す） */
+export type StepResult = 'independent' | 'verbal' | 'model' | 'physical' | 'stopped' | 'na';
+
+/** 手順のチェック（データシート、6.15）。1回の機会で1件。+1（Event）は作らない（決定124） */
+export interface StepCheck extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  taskId: string;
+  version: number; // チェックしたときの手順の版
+  steps: string[]; // そのときのステップ文（本人の動き）
+  results: StepResult[]; // steps と同じ数
+  stopped: boolean; // 途中でやめた
+  occurredAt: ISODateTime;
+  localDate: LocalDate;
+  placeName: string | null; // 場所の名前だけ（決定42）
+  activity: string | null;
+  note: string; // 本人の様子
+  recorderId: string;
 }
 
 /** 睡眠ログ（6.3.4、決定36・37）。起きた日（その夜が明けた日）に1件。時刻は 'HH:MM' */
@@ -327,7 +368,7 @@ export interface Consent extends BaseRecord {
   revokedAt: ISODateTime | null;
 }
 
-/** ABC集計の AI のまとめ（6.4.3、決定72・Phase 3）。集計を文にするだけで、機能の判断や支援の方法は書かない */
+/** ABC分析の AI のまとめ（6.4.3、決定72・Phase 3）。集計を文にするだけで、機能の判断や支援の方法は書かない */
 export interface AiSummary extends BaseRecord {
   personId: string;
   behaviorId: string;
@@ -336,6 +377,16 @@ export interface AiSummary extends BaseRecord {
   requestedBy: string;
   input: import('../ai/schema').SummaryInput;
   output: import('../ai/schema').SummaryOutput;
+  model: string;
+}
+
+/** AI の手順の下書き（6.15、決定129）。端末の中だけに残す（同期しない。AI のまとめと同じ）。手順になるのは人が直して保存したときだけ */
+export interface AiTaskDraft extends BaseRecord {
+  personId: string;
+  behaviorId: string;
+  requestedBy: string;
+  input: import('../ai/schema').StepsInput;
+  output: import('../ai/schema').StepsOutput;
   model: string;
 }
 
@@ -349,6 +400,8 @@ export interface PlanCriterion {
   note: string; // そのほかの条件（自由に書く）
   weeks?: number | null; // 何週続けて届いたら達成か（2〜4）。空は直近7日だけで判定。【暫定】（2026-11-07 の試作）
   deadline?: LocalDate | null; // 期限（いつまでに達成するか、6.7）。過ぎても未達なら見直しをすすめる
+  kind?: 'daily' | 'task'; // task = 手順の自立率（6.15）。value は %、op は gte、runs 回連続。空は daily（1日の値）
+  runs?: number | null; // 手順の自立率: 何回続けて届いたら達成か（1〜10）
 }
 
 /** 計画の中身。1つの計画を上書きで保存し、変更は PlanChange に残す（決定67） */
@@ -374,9 +427,9 @@ export const PLAN_FIELD_LABEL: Record<keyof PlanContent, string> = {
   goal: '支援目標',
   scene: '場面',
   criteria: '達成基準',
-  antecedent: '先行子操作（予防）',
+  antecedent: '先にできる工夫（予防）',
   reinforcement: '代替行動への対応（強化）',
-  prompting: 'プロンプト（手がかり）',
+  prompting: '手助けの出し方',
   crisis: '危機時の対応（安全確保）',
   reviewDate: '見直し日',
   owner: '担当',
@@ -516,7 +569,7 @@ export interface BehaviorRevision extends BaseRecord {
 }
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'restore' | 'export';
-export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment' | 'userSchedule' | 'proposal' | 'behaviorRevision';
+export type AuditEntity = 'user' | 'person' | 'teamMember' | 'behavior' | 'event' | 'consent' | 'choiceOption' | 'abcDetail' | 'teamSetting' | 'aiAnalysis' | 'aiSuggestion' | 'aiSummary' | 'observation' | 'sleepLog' | 'notObservedDay' | 'reinforcer' | 'place' | 'supportPlan' | 'planChange' | 'planSignoff' | 'restraintLog' | 'meetingNote' | 'comment' | 'userSchedule' | 'proposal' | 'behaviorRevision' | 'taskAnalysis' | 'stepCheck' | 'aiTaskDraft';
 
 /** 監査ログ。追記のみで誰も消せない（7.4.2 #6） */
 export interface AuditLog {
@@ -623,4 +676,4 @@ export const INTENSITY_NAMES: Record<3 | 5, string[]> = {
 /** 同意文面の版（下書き、決定79） */
 export const CONSENT_TEXT_VERSION = 'draft-2026-11-05';
 /** AI の同意（外国にある第三者への提供、7.5）の文面の版。文面を変えたら上げる */
-export const AI_CONSENT_TEXT_VERSION = 'ai-draft-2026-11-07';
+export const AI_CONSENT_TEXT_VERSION = 'ai-draft-2026-11-08';

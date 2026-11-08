@@ -7,11 +7,14 @@
  *  4. 平均の強度が、2週間で1段階以上下がった（前の7日と直近7日の比較）
  *  5. 代替行動・望ましい行動（回数で記録）の1日の回数が、これまでのどの日よりも多くなった
  *     （【暫定】（2026-11-07 の試作）それより前に記録のある日が7日以上あり、2回以上のときだけ。増えるたびに出る）
+ *  6. 手順の「一人でできた割合」が初めて 100% になった（決定130 ①）
+ *  7. 手順の「一人でできた割合」が3回続けて前の回以上で、その間に上がった（決定130 ②）
  * 同じことが続く間は、届いた最初の日だけに出す。場所は、その間にいちばん多く記録された場所の名前。
  */
 import { addDays, dateRange } from './date';
 import { dailyIntensity, dailyMain, mainFormat, type RecordSet } from './series';
 import type { Behavior, PlanContent } from '../db/types';
+import { scoredChecks } from './tasks';
 
 export interface Win {
   date: string;
@@ -91,7 +94,7 @@ export function computeWins(behaviors: Behavior[], rs: RecordSet, plan: PlanCont
     }
 
     // 3. 直近7日の平均が達成基準に届いた
-    for (const c of (plan?.criteria ?? []).filter((x) => x.behaviorId === b.id)) {
+    for (const c of (plan?.criteria ?? []).filter((x) => x.behaviorId === b.id && x.kind !== 'task')) {
       const avg7 = (i: number) => (i < 6 ? null : mean(v.slice(i - 6, i + 1)));
       const met = (i: number) => {
         const a = avg7(i);
@@ -125,6 +128,19 @@ export function computeWins(behaviors: Behavior[], rs: RecordSet, plan: PlanCont
         }
       });
     }
+  }
+  // 6・7. 手順（6.15、決定130）。手順をやめても、チェックが残っていれば出す
+  for (const b of behaviors.filter((x) => x.kind !== 'problem')) {
+    const list = scoredChecks(rs.stepChecks.filter((c) => c.behaviorId === b.id && c.localDate <= until));
+    const firstFull = list.find((x) => x.pct === 100);
+    if (firstFull) wins.push({ date: firstFull.check.localDate, behaviorId: b.id, place: firstFull.check.placeName, text: `「${b.name}」の手順を、初めて全部一人でできました` });
+    const p = list.map((x) => x.pct);
+    const up = (i: number) => i >= 3 && p[i] >= p[i - 1] && p[i - 1] >= p[i - 2] && p[i - 2] >= p[i - 3] && p[i] > p[i - 3];
+    list.forEach((x, i) => {
+      if (up(i) && !up(i - 1)) {
+        wins.push({ date: x.check.localDate, behaviorId: b.id, place: x.check.placeName, text: `「${b.name}」の手順で、一人でできる所が増えています（${p[i - 3]}% → ${p[i]}%）` });
+      }
+    });
   }
   return wins.filter((w) => w.date >= rs.firstDate).sort((a, b) => b.date.localeCompare(a.date));
 }

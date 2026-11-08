@@ -216,8 +216,6 @@ h2.h { font-size: 1rem; font-weight: 700; margin: 0; }
 .bcard--good { border-left: 4px solid var(--primary); }
 .bcard--flash-problem { background: var(--flash-neutral); transition: background 0.1s; }
 .bcard--flash-good { background: var(--good-soft); transition: background 0.1s; }
-.bcard__action { margin-top: auto; font-size: 0.75rem; font-weight: 600; color: var(--primary-ink); }
-.bcard__action--running { color: var(--problem-ink); }
 .undo-badge {
   position: absolute; top: 0; right: 0; width: var(--tap); height: var(--tap);
   display: flex; align-items: flex-start; justify-content: flex-end; padding: 6px; background: none; border: none;
@@ -261,7 +259,7 @@ h2.h { font-size: 1rem; font-weight: 700; margin: 0; }
 .today-row--link { color: inherit; text-decoration: none; min-height: var(--tap); }
 .today-row__go { color: var(--text-3); font-size: 1.125rem; }
 
-/* ABC集計の横棒 */
+/* ABC分析の横棒 */
 .tally { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 0.875rem; }
 .tally__name { overflow-wrap: anywhere; }
 .tally__bar { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
@@ -335,7 +333,7 @@ span.dot { width: 22px; }
 .chart__target { font-size: 10px; font-weight: 700; }
 .chart__static { display: block; height: auto; }
 
-/* グラフの切りかえ（折れ線 / 時間帯 / ABC集計） */
+/* グラフの切りかえ（折れ線 / 時間帯 / ABC分析） */
 .tabs { display: flex; gap: 0; margin: 12px 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
 .tabs a { flex: 1; min-height: 48px; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 600; color: var(--text-2); text-decoration: none; }
 .tabs a + a { border-left: 1px solid var(--border); }
@@ -471,19 +469,25 @@ span.dot { width: 22px; }
 .bcard::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--primary); }
 .bcard--problem::before { background: var(--problem); }
 .bcard--problem, .bcard--good { border-left: 1px solid var(--border-soft); }
-.bcard__tap { gap: 6px; min-height: 148px; padding: 14px 12px 12px 17px; transition: transform var(--dur-1) var(--ease); }
+.bcard__tap { gap: 6px; min-height: 128px; padding: 14px 12px 12px 17px; transition: transform var(--dur-1) var(--ease); }
 .bcard__tap:not(:disabled):active { transform: scale(0.98); }
 .bcard__name { font-size: 1.125rem; line-height: 1.35; }
 .bcard__for { font-size: 0.75rem; color: var(--text-3); margin-top: -4px; }
 .bcard__count { font-size: 0.875rem; color: var(--text-3); }
 .bcard__count strong { font-size: 2rem; line-height: 1; color: var(--text); margin: 0 2px; display: inline-block; font-variant-numeric: tabular-nums; }
-.bcard__action {
-  align-self: stretch; text-align: center; padding: 8px 6px; border-radius: var(--radius-sm);
-  background: var(--primary-soft); color: var(--primary-ink); font-family: var(--font-round); font-size: 0.875rem; font-weight: 700;
+/* カードの下の段: 左に今日の回数、右に丸い印（＋ = 数える、▶ = 始める、■ = 止める）。文字の帯は置かない。
+   押せるのはカード全体なので、丸は「ここを押すと何が起きるか」の目印 */
+.bcard__foot { margin-top: auto; align-self: stretch; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; }
+.bcard__foot .bcard__count { margin-right: auto; min-width: 0; }
+.bcard__hint { font-size: 0.8125rem; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.bcard__hint--running { color: var(--problem-ink); }
+.bcard__fab {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary-ink);
 }
-.bcard--problem .bcard__action { background: var(--surface-2); color: var(--text-2); }
-.bcard__action--running { background: var(--problem-soft) !important; color: var(--problem-ink) !important; }
-.bcard__tap:disabled .bcard__action { display: none; }
+.bcard--problem .bcard__fab { background: var(--surface-2); color: var(--text-2); }
+.bcard__fab--running { background: var(--problem-soft) !important; color: var(--problem-ink) !important; }
+.bcard__tap:disabled .bcard__fab { display: none; }
 /* 記録できた合図: カードの色がふわっと変わり、数字が少しはねる（0.25秒） */
 .bcard--flash-good, .bcard--flash-problem { transition: background var(--dur-1) var(--ease); }
 .bcard--flash-good .bcard__count strong, .bcard--flash-problem .bcard__count strong { animation: pop var(--dur-2) var(--ease); }
@@ -504,9 +508,8 @@ span.dot { width: 22px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
-/* 「タップで +1」の帯はカードの下にそろえる */
+/* 下の段（回数と丸い印）はカードの下にそろえる */
 .bcard__tap { height: 100%; }
-.bcard__action { margin-top: auto; }
 .behavior-grid > *, .grid-2 > * { height: 100%; }
 /* 申し送り: 1件ずつ、やわらかい吹き出しに */
 .note-bubble { background: var(--surface-2); border: none !important; border-radius: 4px var(--radius-sm) var(--radius-sm) var(--radius-sm); padding: 10px 12px !important; font-size: 0.9375rem; line-height: 1.6; }
@@ -586,7 +589,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--primary-soft-2)
 .graph-change strong { font-family: var(--font-round); font-size: 1.0625rem; }
 /* 丸い書体の「日」「回」は小さい所で記号に見えるので、切りかえと変化の数字は本文の書体の太字にする */
 .seg button[aria-pressed='true'], .graph-change strong { font-family: var(--font-body); }
-/* ABC集計の棒: 件数の幅をそろえて棒の始まりを1本の線に。棒は少し太く */
+/* ABC分析の棒: 件数の幅をそろえて棒の始まりを1本の線に。棒は少し太く */
 .tally { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 3.6em; gap: 10px; font-size: 0.9375rem; min-height: 32px; }
 .tally__bar { height: 12px; }
 .tally__n { text-align: right; font-weight: 700; color: var(--text); font-size: 0.875rem; }
@@ -730,7 +733,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--primary); }
 .card.stack > .field + .field, .card.stack > .help + .field { margin-top: 6px; }
 .card.stack > .field + .help { margin-top: -4px; }
 
-/* ===== 時間帯の図・ABC集計 ===== */
+/* ===== 時間帯の図・ABC分析 ===== */
 /* 何もない枠は線を消して淡い面に。数字のある枠が浮き上がって、多い時間帯が一目で分かる */
 .scatter__cell { border-radius: 5px; }
 .scatter__cell:not([class*="scatter__cell--"]) { border-color: transparent; background: var(--surface-2); }
@@ -777,3 +780,43 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--primary); }
 /* ===== 全体の見直し: カードの中の余白を少し広げて、ゆったり見せる（角の丸み 16px とつり合う） ===== */
 .card { padding: 16px; }
 .behavior-group > .card { padding-left: 21px; }
+
+/* ホームの「身体拘束を記録する」（決定119）。目立たせすぎず、2行で */
+.restraint-home { flex-direction: column; gap: 2px; min-height: 56px; }
+.restraint-home__sub { font-size: 0.8125rem; font-weight: 400; color: var(--text-2); }
+
+/* 招待の QR を読む（決定120） */
+.qr-scan__video { width: 100%; max-width: 320px; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius); background: #000; align-self: center; }
+
+/* 手順のチェック（6.15）: 4段階の手助けを 2×2 の大きいボタンで */
+.task-step__action { margin: 2px 0 0; font-size: 1.0625rem; font-weight: 600; }
+.task-step__prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.task-step__prompts .btn { min-height: 48px; }
+.task-step__prompts .btn[aria-pressed='true'], .task-step .btn--quiet[aria-pressed='true'] { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+/* 「手順」の小さな札（6.15）。右上の −1 の左に並べ、カードの高さを増やさない。見た目は −1 と同じ 24px、タップ領域は 40×48px */
+.task-badge {
+  position: absolute; top: 0; right: var(--tap); width: 40px; height: var(--tap);
+  display: flex; align-items: flex-start; justify-content: flex-end; padding: 6px 0; text-decoration: none;
+}
+.task-badge--edge { right: 0; width: var(--tap); padding: 6px; }
+.task-badge span {
+  height: 24px; display: inline-flex; align-items: center; padding: 0 6px; border-radius: var(--radius-xs);
+  font-size: 0.75rem; font-weight: 700; color: var(--primary-ink); background: var(--surface); border: 1px solid var(--primary-soft-2);
+}
+.task-badge:active span { background: var(--primary-soft-2); }
+/* 種類の札が「手順」「−1」と重ならないよう、さらに右に場所をあける（長い名前は … で切る） */
+.bcard--task .bcard__tap > .badge:first-child { max-width: calc(100% - 78px); }
+
+/* ステップ × 回の表（6.15）。色だけでなく文字でも段階を示す */
+.step-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.step-table { border-collapse: collapse; font-size: 0.75rem; }
+.step-table th, .step-table td { border: 1px solid var(--border-soft); padding: 4px 6px; text-align: center; white-space: nowrap; }
+.step-table thead th { font-weight: 600; color: var(--text-3); }
+.step-table tbody th { text-align: left; font-weight: 500; max-width: 9em; overflow: hidden; text-overflow: ellipsis; position: sticky; left: 0; background: var(--surface); }
+.step-cell--independent { background: var(--primary); color: #fff; font-weight: 700; }
+.step-cell--verbal { background: var(--primary-soft-2); color: var(--primary-ink); }
+.step-cell--model { background: var(--primary-soft); color: var(--primary-ink); }
+.step-cell--physical { background: var(--surface-2); color: var(--text-2); }
+.step-cell--stopped { color: var(--problem-ink); font-weight: 700; }
+.step-cell--na { color: var(--text-3); }
+.step-table__sum td, .step-table__sum th { font-weight: 700; }

@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { ENCRYPTED, encryptMiddleware } from './encrypt';
-import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, UserSchedule, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, OwnerTransfer, Person, Proposal, BehaviorRevision, TeamMember, User } from './types';
+import type { AbcDetail, AiAnalysis, AiSuggestion, AiSummary, AiTaskDraft, SupportPlan, PlanChange, PlanSignoff, RestraintLog, MeetingNote, Comment, AuditLog, TeamSetting, Behavior, ChoiceOption, Consent, Observation, SleepLog, NotObservedDay, Place, UserSchedule, Reinforcer, ReinforcerPhoto, DeviceSetting, Event, TaskAnalysis, StepCheck, OwnerTransfer, Person, Proposal, BehaviorRevision, TeamMember, User } from './types';
 
 /**
  * 端末内の保存（IndexedDB）。電波がなくても記録でき（6.3.6）、サーバー接続後は同期の元になる。
@@ -27,6 +27,7 @@ export class AppDB extends Dexie {
   reinforcers!: Table<Reinforcer, string>;
   reinforcerPhotos!: Table<ReinforcerPhoto, string>;
   aiSummaries!: Table<AiSummary, string>;
+  aiTaskDrafts!: Table<AiTaskDraft, string>;
   supportPlans!: Table<SupportPlan, string>;
   planChanges!: Table<PlanChange, string>;
   planSignoffs!: Table<PlanSignoff, string>;
@@ -37,6 +38,8 @@ export class AppDB extends Dexie {
   ownerTransfers!: Table<OwnerTransfer, string>;
   proposals!: Table<Proposal, string>;
   behaviorRevisions!: Table<BehaviorRevision, string>;
+  taskAnalyses!: Table<TaskAnalysis, string>;
+  stepChecks!: Table<StepCheck, string>;
 
   constructor() {
     super('kodo-kiroku-v1');
@@ -106,6 +109,15 @@ export class AppDB extends Dexie {
           if (rows.length) await tx.table(name).bulkPut(rows);
         }
       });
+    // 手順と手順のチェック（6.15、決定123）
+    this.version(12).stores({
+      taskAnalyses: 'id, personId, behaviorId',
+      stepChecks: 'id, personId, behaviorId, [personId+localDate]',
+    });
+    // AI の手順の下書き（端末の中だけ。6.15）
+    this.version(13).stores({
+      aiTaskDrafts: 'id, personId, behaviorId, requestedBy',
+    });
   }
 }
 

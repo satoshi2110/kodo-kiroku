@@ -11,7 +11,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { latestSchedules, observedRatio } from '../db/repo';
 import { addDays, dateRange, formatDuration, localDateOf, parseLocalDate, startOfMonth, startOfWeek, toLocalDate } from './date';
-import type { Behavior, Event, Observation, SleepLog, UserSchedule } from '../db/types';
+import type { Behavior, Event, Observation, RestraintLog, SleepLog, StepCheck, TaskAnalysis, UserSchedule } from '../db/types';
 import { sleepMinutes } from './sleep';
 
 export type Granularity = 'day' | 'week' | 'month';
@@ -22,7 +22,10 @@ export interface RecordSet {
   notObserved: Set<string>; // `${behaviorId}|${date}`
   recordedDays: Set<string>;
   sleepLogs: SleepLog[];
+  restraintLogs: RestraintLog[]; // 身体拘束の記録（グラフ・時間帯の図だけに使う。記録を付けた日の判定には入れない）
   schedules: UserSchedule[]; // メンバーごとのいつもの時間（1人1つ）
+  tasks: TaskAnalysis[]; // 手順（6.15。やめた手順は除く）
+  stepChecks: StepCheck[]; // 手順のチェック（記録を付けた日の判定には入れない。決定124）
   firstDate: string; // いちばん古い記録の日（なければ今日）
 }
 
@@ -32,12 +35,15 @@ export function useRecordSet(personId: string | undefined): RecordSet | undefine
 }
 
 export async function loadRecordSet(personId: string): Promise<RecordSet> {
-  const [events, observations, marks, sleepLogs, schedules] = await Promise.all([
+  const [events, observations, marks, sleepLogs, schedules, restraintLogs, tasks, stepChecks] = await Promise.all([
     db.events.where('personId').equals(personId).filter((e) => !e.deletedAt).toArray(),
     db.observations.where('personId').equals(personId).filter((o) => !o.deletedAt && o.results.length > 0).toArray(),
     db.notObservedDays.where('personId').equals(personId).filter((x) => !x.deletedAt).toArray(),
     db.sleepLogs.where('personId').equals(personId).filter((l) => !l.deletedAt).toArray(),
     db.userSchedules.where('personId').equals(personId).toArray(),
+    db.restraintLogs.where('personId').equals(personId).filter((l) => !l.deletedAt).toArray(),
+    db.taskAnalyses.where('personId').equals(personId).filter((t) => !t.deletedAt).toArray(),
+    db.stepChecks.where('personId').equals(personId).filter((c) => !c.deletedAt).toArray(),
   ]);
   const days = [...events, ...observations].map((x) => x.localDate);
   const today = toLocalDate();
@@ -47,8 +53,11 @@ export async function loadRecordSet(personId: string): Promise<RecordSet> {
     notObserved: new Set(marks.map((x) => `${x.behaviorId}|${x.localDate}`)),
     recordedDays: new Set(days),
     sleepLogs,
+    restraintLogs,
     schedules: latestSchedules(schedules),
-    firstDate: days.reduce((m, d) => (d < m ? d : m), today),
+    tasks,
+    stepChecks,
+    firstDate: [...days, ...stepChecks.map((c) => c.localDate)].reduce((m, d) => (d < m ? d : m), today),
   };
 }
 
@@ -181,6 +190,20 @@ export function dailySleepHours(dates: string[], rs: RecordSet): (number | null)
     const l = byWake.get(d);
     return l ? round1(sleepMinutes(l) / 60) : null;
   });
+}
+
+/** 身体拘束（決定119）: 記録のある日だけ、1日の回数と合計の分。記録のない日は値なし（0 にしない） */
+export function dailyRestraint(dates: string[], rs: RecordSet): { count: (number | null)[]; minutes: (number | null)[] } {
+  const byDate = new Map<string, RestraintLog[]>();
+  for (const l of rs.restraintLogs) byDate.set(l.localDate, [...(byDate.get(l.localDate) ?? []), l]);
+  const min = (l: RestraintLog) => Math.max(0, Math.round((new Date(l.endedAt).getTime() - new Date(l.startedAt).getTime()) / 60000));
+  return {
+    count: dates.map((d) => byDate.get(d)?.length ?? null),
+    minutes: dates.map((d) => {
+      const ls = byDate.get(d);
+      return ls ? ls.reduce((s, l) => s + min(l), 0) : null;
+    }),
+  };
 }
 
 function groupByDate(events: Event[]) {

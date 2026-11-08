@@ -9,7 +9,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>登録した場所に入っているかを確かめ、場所を自動で切りかえるために、位置を1回だけ使います。いまいる位置は保存も送信もしません（「いまここを登録」で場所の中心にするときを除く）。</string>
 	<key>NSCameraUsageDescription</key>
-	<string>好きなもの・ごほうびの写真を撮るときに使います。</string>
+	<string>好きなもの・ごほうびの写真を撮るときと、招待の QR コードを読むときに使います。</string>
 	<key>CFBundleDisplayName</key>
 	<string>行動記録</string>
 	<key>CFBundleExecutable</key>

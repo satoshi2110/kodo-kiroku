@@ -6,6 +6,7 @@
  * 招待された人は、ここで招待コードを入れて参加し、管理者・副管理者・支援リーダーの承認を待つ（7.4.2 #3）。
  * 招待で参加した人は、承認されたら場所と「わたしのいつもの時間」だけを案内する（7.1）。
  */
+import { QrScan } from '../components/QrScan';
 import { InvitePreview, useInvitePreview } from '../components/InvitePreview';
 import { useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
@@ -70,7 +71,16 @@ export default function Setup() {
   if (person) return <Navigate to={saving ? '/behaviors/new?from=setup' : joinedRole.current && canEditPlaces(joinedRole.current) ? '/places?from=join' : '/'} replace />;
 
   // 作り終わると対象者ができ、上の Navigate でホームへ移る
-  const sample = () => createSampleTeam();
+  // 失敗したときは理由を出す（黙って何も起きないと、押した人が困るため）
+  const sample = async () => {
+    setError(null);
+    try {
+      await createSampleTeam();
+    } catch (e) {
+      console.error(e);
+      setError(`サンプルを作れませんでした: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
+    }
+  };
 
   async function save() {
     setSaving(true);
@@ -154,7 +164,8 @@ export default function Setup() {
                   autoComplete="off"
                 />
               </label>
-              <p className="help">新しいチームを作る保護者の方は運営から受け取った「開始コード」を、招待された人は招待した人から受け取った「招待コード」を入れます。</p>
+              {codeOk !== true && <QrScan onCode={(c) => { setCode(c); checkCode(c); }} />}
+              <p className="help">新しいチームを作る保護者の方は運営から受け取った「開始コード」を、招待された人は招待した人から受け取った「招待コード」を入れます。招待した人の QR は「QR を読む」で読めます。</p>
               {codeOk === true && (preview ? <InvitePreview info={preview} /> : <p className="notice-inline" role="status">使えるコードです。</p>)}
               {codeOk === true && <p className="help">下の内容を読んで、同意してください。</p>}
               {codeOk === false && (
@@ -191,8 +202,9 @@ export default function Setup() {
           )}
           <div className="card stack">
             <span className="card__title">お試し・審査用</span>
-            <p className="help">架空の対象者「サンプルさん」と3週間分の記録を、この端末の中に作ります。グラフ・ABC集計・AI分析をすぐに試せます。</p>
+            <p className="help">架空の対象者「サンプルさん」と3週間分の記録を、この端末の中に作ります。グラフ・ABC分析・AI分析をすぐに試せます。</p>
             <button type="button" className="btn btn--outline btn--block" disabled={!agreed || saving} onClick={sample}>サンプルで試す</button>
+            {error && <p className="ai-error" role="alert">{error}</p>}
           </div>
         </div>
       )}

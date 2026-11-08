@@ -72,7 +72,7 @@ export const RANK: Record<Role, number> = { admin: 5, subadmin: 4, leader: 3, su
 export const canRecord = (r?: Role) => !!r && RANK[r] >= RANK.supporter;
 export const canEditBehaviors = (r?: Role) => !!r && RANK[r] >= RANK.leader;
 /** 記録の取り消し・編集: 記録した本人と、管理者・副管理者・支援リーダー（6.3.5） */
-export const canUndoEvent = (r: Role | undefined, e: Event, userId: string) =>
+export const canUndoEvent = (r: Role | undefined, e: Pick<Event, 'recorderId'>, userId: string) =>
   !!r && (e.recorderId === userId ? canRecord(r) : RANK[r] >= RANK.leader);
 
 /** 睡眠の入力・変更: 管理者・副管理者と、「家族」の印か「睡眠の入力を許可」が付いた人（決定37） */
@@ -256,7 +256,7 @@ export async function setBehaviorHidden(id: string, hidden: boolean, actorId: st
 
 /** 記録ごと削除（管理者のみ、6.2）。論理削除で、何件消したかを監査ログに残す */
 export async function deleteBehaviorWithRecords(id: string, actorId: string) {
-  await db.transaction('rw', [db.behaviors, db.events, db.abcDetails, db.observations, db.notObservedDays, db.auditLogs], async () => {
+  await db.transaction('rw', [db.behaviors, db.events, db.abcDetails, db.observations, db.notObservedDays, db.stepChecks, db.auditLogs], async () => {
     const before = await db.behaviors.get(id);
     if (!before) return;
     const t = nowISO();
@@ -269,6 +269,8 @@ export async function deleteBehaviorWithRecords(id: string, actorId: string) {
     await db.events.bulkPut(gone(events));
     await db.abcDetails.bulkPut(gone(abcs));
     await db.observations.bulkPut(gone(obs));
+    const checks = await db.stepChecks.where('behaviorId').equals(id).filter((c) => !c.deletedAt).toArray();
+    await db.stepChecks.bulkPut(gone(checks));
     await db.notObservedDays.bulkPut(gone(marks).map((x) => ({ ...x, recorderId: actorId }))); // サーバーでは最後に変えた人を残す
     const after: Behavior = { ...before, deletedAt: t, updatedAt: t };
     await db.behaviors.put(after);
@@ -277,6 +279,7 @@ export async function deleteBehaviorWithRecords(id: string, actorId: string) {
       deletedEvents: events.length,
       deletedAbcDetails: abcs.length,
       deletedObservations: obs.length,
+      deletedStepChecks: checks.length,
       deletedNotObservedDays: marks.length,
     });
   });
@@ -660,16 +663,17 @@ export const AI_LIMITS = {
 /** チームの上限（決定60）。どの人の分もここに含まれる */
 export const AI_TEAM_LIMIT = { day: 30, month: 300 };
 
-/** 1回と数えるもの: 分析・提案・まとめのうち、結果が出たもの（見本の結果は数えない） */
+/** 1回と数えるもの: 分析・提案・まとめ・手順の下書きのうち、結果が出たもの（見本の結果は数えない） */
 async function aiRuns(filter: { userId?: string; personId?: string }) {
   const pick = <T extends { requestedBy: string; personId: string }>(x: T) =>
     (!filter.userId || x.requestedBy === filter.userId) && (!filter.personId || x.personId === filter.personId);
-  const [a, s, m] = await Promise.all([
+  const [a, s, m, t] = await Promise.all([
     db.aiAnalyses.filter(pick).toArray(),
     db.aiSuggestions.filter(pick).toArray(),
     db.aiSummaries.filter(pick).toArray(),
+    db.aiTaskDrafts.filter(pick).toArray(),
   ]);
-  return [...a, ...s, ...m].filter((x) => x.model !== 'mock' && (!('output' in x) || x.output !== null));
+  return [...a, ...s, ...m, ...t].filter((x) => x.model !== 'mock' && (!('output' in x) || x.output !== null));
 }
 
 /** 日本時間の今日と今月の始まり（サーバーの take_ai_run と同じ区切り）。ISO の文字列で返す */
@@ -756,9 +760,9 @@ export const TEAM_DELETE_DAYS = 30;
 
 const teamTables = () => [
   db.events, db.abcDetails, db.observations, db.sleepLogs, db.notObservedDays, db.reinforcers, db.reinforcerPhotos,
-  db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.teamMembers, db.consents,
+  db.places, db.userSchedules, db.behaviors, db.choiceOptions, db.aiAnalyses, db.aiSuggestions, db.aiSummaries, db.aiTaskDrafts, db.teamMembers, db.consents,
   db.supportPlans, db.planChanges, db.planSignoffs, db.restraintLogs, db.meetingNotes, db.comments, db.ownerTransfers,
-  db.proposals, db.behaviorRevisions,
+  db.proposals, db.behaviorRevisions, db.taskAnalyses, db.stepChecks,
 ];
 
 /**

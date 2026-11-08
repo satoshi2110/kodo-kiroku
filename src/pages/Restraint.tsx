@@ -2,7 +2,8 @@
  * 身体拘束の記録（6.8、ワイヤーフレーム 17、Phase 2）。計画の画面から開く。
  * - 治療や支援の方法ではないことを画面に示す
  * - 入力は支援者以上。修正は記録した人と管理者・副管理者・支援リーダーで、修正の履歴が残る
- * - 取り消し・削除はできない（行動の記録ごと削除の対象にも入らない）。「あとの組織での検討」は後から追記する
+ * - 取り消し・削除はできない（行動の記録ごと削除の対象にも入らない）。根拠・判断者・「あとの組織での検討」は後から書き足す（決定119）
+ * - ホームの「身体拘束を記録する」からも、同じ入力画面を開ける（決定119）
  * - 目安の期間の件数と目安を出し、超えたら支援計画の見直しをすすめる（決定64・74）
  * - 強度3や拘束の記録が入っても、すぐの通知は出さない（決定52）。AI は方法として提案しない
  */
@@ -73,7 +74,7 @@ export default function Restraint() {
                 <span className="stack" style={{ gap: 2, flex: 1, minWidth: 0 }}>
                   <span>{formatDateTimeJa(l.startedAt)} ・ {min}分{l.placeName ? ` ・ ${l.placeName}` : ''}</span>
                   <span className="muted">
-                    {allChecked ? '3要件 確認済み' : '3要件の確認が足りません'} ・ 家族への報告 {l.familyReported ? 'あり' : 'まだ'} ・ {l.review ? '組織での検討 あり' : '組織での検討 まだ'} ・ {nameOf(l.recorderId)}
+                    {allChecked ? '3要件 確認済み' : '3要件の確認が足りません'} ・ 家族への報告 {l.familyReported ? 'あり' : 'まだ'}{l.review ? ' ・ 組織での検討 あり' : ''} ・ {nameOf(l.recorderId)}
                   </span>
                 </span>
                 <span className="today-row__go" aria-hidden="true">›</span>

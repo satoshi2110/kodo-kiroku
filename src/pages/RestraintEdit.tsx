@@ -1,8 +1,11 @@
 /**
  * 身体拘束の記録の入力・修正（6.8、ワイヤーフレーム 17）。保存すると記録者と日時が付き、修正の履歴が残る。消すことはできない。
+ * 決定119: その場の入力では、3要件はチェックだけにし、判断者と「あとの組織での検討」は出さない。
+ * 3要件の根拠・判断者・あとの組織での検討は、保存した記録を開いたときに、落ち着いてから書き足せる。
+ * ホームから開いたとき（?from=home）は、戻る先と保存したあとの行き先をホームにする。
  */
 import { useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
@@ -23,6 +26,9 @@ export default function RestraintEditRoute() {
 function RestraintEdit({ log }: { log: RestraintLog | null }) {
   const { person, places, place, me, userId, members } = useApp();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const backTo = params.get('from') === 'home' ? '/' : '/restraint';
+  const isNew = !log; // その場の入力。根拠・判断者・あとの検討は出さない（決定119）
   const now = nowISO();
   const [f, setF] = useState<RestraintInput>(() =>
     log
@@ -56,7 +62,7 @@ function RestraintEdit({ log }: { log: RestraintLog | null }) {
   if (!person || !userId) return null;
   if (!me) return null; // 役割の読み込みを待つ（待たずに判定すると、権限なしで戻してしまう）
   const editable = log ? canEditRestraint(me?.role, log, userId) : canRecordRestraint(me?.role);
-  if (!log && !editable) return <Navigate to="/restraint" replace />;
+  if (!log && !editable) return <Navigate to={backTo} replace />;
   const set = <K extends keyof RestraintInput>(k: K, v: RestraintInput[K]) => setF((x) => ({ ...x, [k]: v }));
   const minutes = Math.round((new Date(f.endedAt).getTime() - new Date(f.startedAt).getTime()) / 60000);
   const allChecked = f.checks.urgency && f.checks.nonAlternative && f.checks.temporary;
@@ -68,7 +74,7 @@ function RestraintEdit({ log }: { log: RestraintLog | null }) {
     if (!log && !window.confirm('保存すると、この記録は消せません。保存しますか？')) return;
     setSaving(true);
     await saveRestraint(log?.id ?? null, { ...f, localDate: localDateOf(f.startedAt) }, userId);
-    nav('/restraint', { replace: true });
+    nav(backTo, { replace: true });
   }
 
   const req = (key: 'urgency' | 'nonAlternative' | 'temporary', title: string, q: string) => (
@@ -81,13 +87,15 @@ function RestraintEdit({ log }: { log: RestraintLog | null }) {
         </label>
       </div>
       <span className="help">{q}</span>
-      <textarea className="input textarea" value={f[key]} disabled={!editable} onChange={(e) => set(key, e.target.value)} aria-label={`${title}の根拠`} placeholder="根拠を書く" />
+      {!isNew && (
+        <textarea className="input textarea" value={f[key]} disabled={!editable} onChange={(e) => set(key, e.target.value)} aria-label={`${title}の根拠`} placeholder="根拠（落ち着いてから書き足せます）" />
+      )}
     </div>
   );
 
   return (
     <div className="page page--no-nav">
-      <TopBar title={log ? '身体拘束の記録' : '身体拘束を記録する'} sub={log ? `${formatDateTimeJa(log.createdAt)} に ${nameOf(log.recorderId)} が記録` : '緊急やむを得ない場合だけ'} back="/restraint" />
+      <TopBar title={log ? '身体拘束の記録' : '身体拘束を記録する'} sub={log ? `${formatDateTimeJa(log.createdAt)} に ${nameOf(log.recorderId)} が記録` : '緊急やむを得ない場合だけ'} back={backTo} />
       <div className="section"><RestraintNotice /></div>
 
       <div className="section">
@@ -122,6 +130,7 @@ function RestraintEdit({ log }: { log: RestraintLog | null }) {
       <div className="section">
         <div className="card stack">
           <span className="label">3つの要件（すべて必要）</span>
+          {isNew && <p className="help">当てはまるものにチェックします。根拠は、保存したあとで記録を開くと書き足せます。</p>}
           {req('urgency', '切迫性', '本人や他の人の命・体が危険にさらされる可能性が著しく高かったか')}
           {req('nonAlternative', '非代替性', '拘束のほかに方法がなかったか（何を試したか）')}
           {req('temporary', '一時性', '必要な最小限の時間だったか')}
@@ -131,11 +140,15 @@ function RestraintEdit({ log }: { log: RestraintLog | null }) {
 
       <div className="section">
         <div className="card stack">
-          <span className="label">誰が行い、誰が判断したか</span>
-          <div className="grid-2">
+          <span className="label">{isNew ? '誰が行ったか' : '誰が行い、誰が判断したか'}</span>
+          {isNew ? (
             <label className="field">実施者<input value={f.performer} disabled={!editable} onChange={(e) => set('performer', e.target.value)} /></label>
-            <label className="field">判断者（組織として）<input value={f.decider} disabled={!editable} onChange={(e) => set('decider', e.target.value)} /></label>
-          </div>
+          ) : (
+            <div className="grid-2">
+              <label className="field">実施者<input value={f.performer} disabled={!editable} onChange={(e) => set('performer', e.target.value)} /></label>
+              <label className="field">判断者（組織として）<input value={f.decider} disabled={!editable} onChange={(e) => set('decider', e.target.value)} placeholder="あとから書き足せます" /></label>
+            </div>
+          )}
           <label className="field">
             方法
             <textarea value={f.method} disabled={!editable} onChange={(e) => set('method', e.target.value)} placeholder="例: 両手首を軽く押さえた" />
@@ -158,12 +171,14 @@ function RestraintEdit({ log }: { log: RestraintLog | null }) {
         </div>
       </div>
 
-      <div className="section">
-        <div className="card stack">
-          <span className="label">あとの組織での検討（記録したあとに追記）</span>
-          <textarea className="input textarea" value={f.review} disabled={!editable} onChange={(e) => set('review', e.target.value)} placeholder="例: 課題の量を見直す。休憩カードを机の上に常に置く" aria-label="あとの組織での検討" />
+      {!isNew && (
+        <div className="section">
+          <div className="card stack">
+            <span className="label">あとの組織での検討（記録したあとに追記）</span>
+            <textarea className="input textarea" value={f.review} disabled={!editable} onChange={(e) => set('review', e.target.value)} placeholder="例: 課題の量を見直す。休憩カードを机の上に常に置く" aria-label="あとの組織での検討" />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="section stack">
         {editable && <button type="button" className="btn btn--primary btn--block" disabled={!valid || saving} onClick={save}>{log ? '修正を保存する' : '保存する'}</button>}

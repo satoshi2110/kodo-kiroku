@@ -13,8 +13,9 @@
  */
 import { METHOD_LABEL, type Behavior, type BehaviorRevision, type PlanContent } from '../db/types';
 import { localDateOf } from './date';
-import { bucketize, canRate, dailyIntensity, dailyMain, dailyRate, dailySleepHours, mainFormat, mainUnit, type Granularity, type RecordSet } from './series';
+import { bucketize, canRate, dailyIntensity, dailyMain, dailyRate, dailyRestraint, dailySleepHours, mainFormat, mainUnit, type Granularity, type RecordSet } from './series';
 import type { ChartLine, Marker, Phase, Target } from '../components/LineChart';
+import { dailyPct, versionChangeDays } from './tasks';
 
 /** 色覚の多様性に配慮した色（オレンジと青）。印刷でも線の形（実線・点線）で区別できる */
 export const PROBLEM_COLOR = '#b4502d';
@@ -124,7 +125,7 @@ export function buildGroups(
     });
     const targetsFor = (list: Behavior[]): Target[] =>
       (plan?.criteria ?? [])
-        .filter((c) => list.some((b) => b.id === c.behaviorId))
+        .filter((c) => c.kind !== 'task' && list.some((b) => b.id === c.behaviorId))
         .map((c) => {
           const b = list.find((x) => x.id === c.behaviorId)!;
           return { value: c.value, label: `目標 ${mainFormat(b)(c.value)}${c.op === 'lte' ? '以下' : '以上'}`, color: colors.get(b.id)! };
@@ -186,6 +187,60 @@ export function sleepPanel(rs: RecordSet, days: string[], g: Granularity): Panel
     format: (v) => `${v}時間`,
     targets: [],
   };
+}
+
+/** 身体拘束のパネル（決定119）: 回数と合計時間。記録のある日だけ点を打つ */
+export function restraintPanels(rs: RecordSet, days: string[], g: Granularity): PanelSpec[] {
+  const r = dailyRestraint(days, rs);
+  const c = bucketize(days, r.count, g);
+  const m = bucketize(days, r.minutes, g);
+  const per = g === 'day' ? '1日' : g === 'week' ? '1週間の平均' : '1か月の平均';
+  return [
+    {
+      key: 'restraint-count',
+      caption: '回数 ・ 記録のある日だけ',
+      dates: c.dates,
+      lines: [{ name: '身体拘束の回数', color: RESTRAINT_COLOR, values: c.values }],
+      unit: g === 'day' ? '1日の回数（回）' : `${per}（回/日）`,
+      format: (v) => `${v}回`,
+      targets: [],
+    },
+    {
+      key: 'restraint-minutes',
+      caption: '合計時間 ・ 記録のある日だけ',
+      dates: m.dates,
+      lines: [{ name: '身体拘束の合計時間', color: RESTRAINT_COLOR, values: m.values }],
+      unit: g === 'day' ? '1日の合計（分）' : `${per}（分/日）`,
+      format: (v) => `${v}分`,
+      targets: [],
+    },
+  ];
+}
+const RESTRAINT_COLOR = '#5f4b6b';
+
+/** 手順の「一人でできた割合」のパネル（6.15）。1日の平均で、チェックのない日は 0 にしない（線を切る） */
+export function taskPanel(b: Behavior, rs: RecordSet, days: string[], g: Granularity): PanelSpec | null {
+  const task = rs.tasks.find((t) => t.behaviorId === b.id);
+  const checks = rs.stepChecks.filter((c) => c.behaviorId === b.id);
+  if (!task && !checks.length) return null;
+  const byDay = dailyPct(checks);
+  const s = bucketize(days, days.map((d) => byDay.get(d) ?? null), g);
+  return {
+    key: `task-${b.id}`,
+    caption: '手順 ・ 一人でできた割合',
+    dates: s.dates,
+    lines: [{ name: `${b.name}（手順）`, color: GOOD_COLORS[0], values: s.values, marker: 'square' }],
+    unit: g === 'day' ? '1日の平均（%）' : g === 'week' ? '1週間の平均（%）' : '1か月の平均（%）',
+    format: (v) => `${v}%`,
+    fixedMin: 0,
+    fixedMax: 100,
+    targets: task ? [{ value: task.masteryPct, label: `達成の目安 ${task.masteryPct}%`, color: GOOD_COLORS[0] }] : [],
+  };
+}
+
+/** 手順を変えた日の縦線（6.15）。行動の「定義の変更」と同じ見た目 */
+export function taskPhases(rs: RecordSet, behaviorId: string): Phase[] {
+  return versionChangeDays(rs.stepChecks.filter((c) => c.behaviorId === behaviorId)).map((date) => ({ date, label: '手順の変更', kind: 'definition' as const }));
 }
 
 export function groupTitle(members: Behavior[]): string {

@@ -66,7 +66,7 @@ export interface SuggestionOutput {
   reinforcement: { method: string; detail: string }[];
 }
 
-/** ABC集計の AI のまとめ（6.4.3、決定72）に送る集計。件数だけで、記録の文章は送らない */
+/** ABC分析の AI のまとめ（6.4.3、決定72）に送る集計。件数だけで、記録の文章は送らない */
 export interface SummaryInput {
   behaviorName: string;
   period: { from: string; to: string };
@@ -81,17 +81,41 @@ export interface SummaryOutput {
 /** まとめは短く（受け取る量の上限、14.2 #36） */
 export const SUMMARY_MAX_CHARS = 300;
 
+/**
+ * 手順（課題分析）の下書き（6.15、決定128・129）。行動の名前・定義・種類と、代替行動なら元の問題行動の名前と機能、
+ * すでにある望ましい行動・代替行動の名前だけを送る（仮名化済み）。対象者の特性メモと「苦手なこと・気をつけること」は送らない（決定128）
+ */
+export interface StepsInput {
+  behavior: { name: string; definition: string; kind: 'desirable' | 'alternative' };
+  replaces: { name: string; func: AiFunction | null } | null;
+  existingBehaviors: string[];
+}
+
+export interface StepsOutput {
+  steps: { action: string; support: string }[];
+  hardSteps: string[]; // はじめに手助けが多く要りそうなステップ
+  materials: string[]; // 準備するもの
+  chain: 'total' | 'forward' | 'backward';
+  chainReason: string;
+  cautions: string[];
+}
+
+/** AI の下書きのステップは7個まで（6.15） */
+export const AI_STEPS_MAX = 7;
+
 /** personId: どのチームの回数として数えるか（サーバーが確かめる、決定84） */
 export type AiRequest = { personId: string } & (
   | { kind: 'analyze'; input: AnalysisInput }
   | { kind: 'suggest'; input: SuggestionInput }
   | { kind: 'summarize'; input: SummaryInput }
+  | { kind: 'steps'; input: StepsInput }
 );
 
 export type AiResponse =
   | { status: 'ok'; kind: 'analyze'; output: AnalysisOutput; model: string }
   | { status: 'ok'; kind: 'suggest'; output: SuggestionOutput; model: string }
   | { status: 'ok'; kind: 'summarize'; output: SummaryOutput; model: string }
+  | { status: 'ok'; kind: 'steps'; output: StepsOutput; model: string }
   | { status: 'insufficient'; message: string }
   | { status: 'error'; message: string };
 
@@ -125,6 +149,15 @@ export const SUGGESTION_SCHEMA = obj({
 });
 
 export const SUMMARY_SCHEMA = obj({ summary: str });
+
+export const STEPS_SCHEMA = obj({
+  steps: { type: 'array', items: obj({ action: str, support: str }) },
+  hardSteps: strList,
+  materials: strList,
+  chain: { type: 'string', enum: ['total', 'forward', 'backward'] },
+  chainReason: str,
+  cautions: strList,
+});
 
 /**
  * 出力に出てはいけない言葉（6.6 の絶対条件、9章、決定76）。
@@ -197,4 +230,28 @@ export function validateSummaryInput(x: SummaryInput): string | null {
 /** まとめの出力で「」付きで出てよい集計の項目名 */
 export function quotedSummaryInputs(input: SummaryInput): string[] {
   return [...new Set(input.tallies.flatMap((t) => t.items.map((i) => i.name)))];
+}
+
+/**
+ * 手順の下書きだけに足す禁止語（6.15）。手を添える手助けと身体拘束の境目を越えさせないため。
+ * 見つけたら結果を捨てて作り直す。入力の引用は除かない（下書きには引用するものがない）
+ */
+export const TASK_BANNED_WORDS = ['押さえ', '抑え', '制止', '無理に', '引っ張', '羽交い', '閉じ込め'];
+
+export function findTaskBannedWords(output: unknown): string[] {
+  const text = collectText(output);
+  return [...BANNED_WORDS, ...TASK_BANNED_WORDS].filter((w) => text.includes(w));
+}
+
+/** 手順の下書きの出力が決めた大きさに収まっているか（7個まで・1個以上）。収まらなければ作り直す */
+export function stepsOutputOk(x: StepsOutput): boolean {
+  return Array.isArray(x?.steps) && x.steps.length >= 2 && x.steps.length <= AI_STEPS_MAX && x.steps.every((s) => typeof s?.action === 'string' && s.action.trim().length > 0);
+}
+
+export function validateStepsInput(x: StepsInput): string | null {
+  if (!x?.behavior?.name || (x.behavior.kind !== 'desirable' && x.behavior.kind !== 'alternative')) return '手順を作れるのは望ましい行動と代替行動だけです';
+  if (!Array.isArray(x.existingBehaviors) || x.existingBehaviors.length > 50) return '入力の形が正しくありません';
+  if (x.replaces !== null && (typeof x.replaces?.name !== 'string' || (x.replaces.func !== null && !(AI_FUNCTIONS as readonly string[]).includes(x.replaces.func)))) return '入力の形が正しくありません';
+  if (JSON.stringify(x).length > 20_000) return '入力が大きすぎます';
+  return null;
 }

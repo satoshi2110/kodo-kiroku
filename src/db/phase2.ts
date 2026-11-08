@@ -1,6 +1,6 @@
 /**
  * Phase 2・3 の画面のデータ操作（決定83）: 支援計画と合意（6.7）、身体拘束の記録（6.8）、支援会議メモと申し送り（6.10）、
- * ABC集計の AI のまとめ（6.4.3）。どれも監査ログを残す。権限の判定は画面の出し分け用で、サーバーの行レベルセキュリティが正（決定45）。
+ * ABC分析の AI のまとめ（6.4.3）。どれも監査ログを残す。権限の判定は画面の出し分け用で、サーバーの行レベルセキュリティが正（決定45）。
  */
 import { db } from './db';
 import { audit, base, canRecord, RANK } from './repo';
@@ -276,7 +276,7 @@ export async function removeComment(id: string, actorId: string) {
   await audit(before.personId, 'comment', id, 'delete', actorId, before, after);
 }
 
-// ---------- ABC集計の AI のまとめ（6.4.3、Phase 3） ----------
+// ---------- ABC分析の AI のまとめ（6.4.3、Phase 3） ----------
 
 export async function saveSummary(s: Omit<AiSummary, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<AiSummary> {
   const rec: AiSummary = { ...base(), ...s };

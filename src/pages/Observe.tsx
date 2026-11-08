@@ -2,13 +2,12 @@
  * インターバル記録・時間サンプリングの観察画面（6.3.1、決定28）。
  * 区間ごとの結果を ○（起きた）×（起きなかった）で横一列に並べ、区間の残り時間をバーで示す（残り 20% を切ると赤）。
  * 区間が終わると画面の枠が光り「記録してください」と出す（対応端末は振動も）。観察中は画面を消さない（Wake Lock）。
- * - インターバル（部分インターバル）: 区間の途中でも「○ 起きた」を押せる。押した区間は終わったときに ○ になる
- * - 時間サンプリング（固定間隔のみ）: 区切りの瞬間に起きているかを ○× で答える
- * - 答えないまま次の区間も終わった区間と、画面を消した・ほかのアプリにいた間の区間は「未観察」にする（推測で埋めない）
- * - 【暫定】（2026-11-07 の試作）押し間違えたら「直前の区間を取り消す」で、いちばん新しく答えた区間だけを答え直せる。
- *   次の区間が終わるまでに答え直さないと「未観察」になる。未観察の区間は取り消せない（あとから埋めない）
- *   今の区間に先に付けた「起きた」の印は、答え直せば残る。答え直さないまま今の区間も終わると、取り消した区間は未観察、
- *   今の区間の印は消えて、もう一度聞く
+ * 決定118: 「○ 起きた」が押されなかった区間は、自動で「× 起きなかった」にする（× のボタンは置かない）。
+ * - インターバル（部分インターバル）: 区間の途中で「○ 起きた」を押せる。押した区間は ○、押さなかった区間は終わったときに ×
+ * - 時間サンプリング（固定間隔のみ）: 区切りで枠が光る。次の区切りまでに「○ 起きた」を押せば ○、押さなければ ×
+ * - 画面を消した・ほかのアプリにいた間に終わった区間は「未観察」にする（推測で埋めない）
+ * - 押し間違えたら「直前の区間を取り消す」で、いちばん新しい区間だけを答え直せる。
+ *   次の区間が終わるまでに「○ 起きた」を押さなければ × になる。未観察の区間は取り消せない（あとから埋めない）
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -55,10 +54,10 @@ export default function Observe() {
     // 更新関数の中では読まない（開発時は2回呼ばれ、2回目には印が消えているため）
     const { results: prev, preMarked: marked } = state.current;
     const next = [...prev];
-    // インターバルで「起きた」を押していた区間は ○ で確定
-    if (obs.method === 'interval' && marked && next.length === idx - 1) next.push('yes');
-    // 答えないまま次の区間も終わったものは未観察
-    while (next.length < idx - 1) next.push('missed');
+    // 答えを待っていた区間（時間サンプリングの前の区切り・取り消した区間）は、押されなかったので ×
+    while (next.length < idx - 1) next.push('no');
+    // インターバルは、終わった区間を「起きた」の印があれば ○、なければ × で確定
+    if (obs.method === 'interval' && next.length === idx - 1) next.push(marked ? 'yes' : 'no');
     if (next.length !== prev.length) {
       setResults(next);
       saveObservationResults(obs.id, next);
@@ -135,17 +134,17 @@ export default function Observe() {
     setObs(o);
   }
 
-  function answer(r: 'yes' | 'no') {
+  function answerYes() {
     if (!obs) return;
     if (pending) {
       const next = [...results];
-      next.push(r);
+      next.push('yes');
       setResults(next);
       saveObservationResults(obs.id, next);
       return;
     }
     // 待っている区間がないとき: インターバルは今の区間に「起きた」の印を付ける（押し直しで外す）
-    if (obs.method === 'interval' && r === 'yes') setPreMarked((v) => !v);
+    if (obs.method === 'interval') setPreMarked((v) => !v);
   }
 
   // 直前の区間を取り消す: いちばん新しく終わった区間に答えていて、それが未観察でないときだけ
@@ -161,7 +160,7 @@ export default function Observe() {
     const o = obs;
     if (!o || !userId) return;
     const final = [...results];
-    if (pending) final.push('missed'); // 答えていない区間
+    if (pending) final.push('no'); // 答えを待っていた区間は、押されなかったので ×
     // 途中の区間: インターバルで「起きた」を押していれば ○（部分インターバル）。押していなければ数えない
     if (o.method === 'interval' && preMarked && final.length === idx) final.push('yes');
     setObs(null);
@@ -193,8 +192,8 @@ export default function Observe() {
             </p>
             <p className="help">
               {isSampling
-                ? '区切りごとに画面の枠が光ります。その瞬間に行動が起きているかを ○× で答えてください。'
-                : '区間の途中で行動が起きたら「○ 起きた」を押します。押さなかった区間は、区切りで ○× を答えてください。'}
+                ? '区切りごとに画面の枠が光ります。その瞬間に行動が起きていたら、次の区切りまでに「○ 起きた」を押してください。押さなければ「× 起きなかった」になります。'
+                : '区間の途中で行動が起きたら「○ 起きた」を押します。押さなかった区間は「× 起きなかった」になります。'}
             </p>
             <p className="help">観察中は画面を消さないでください。画面を消したり、ほかのアプリに切り替えたりした間の区間は「未観察」になります。</p>
           </div>
@@ -223,17 +222,18 @@ export default function Observe() {
           </div>
 
           <p className={`obs-prompt${pending ? ' obs-prompt--on' : ''}`} role="status">
-            {pending ? `区間 ${results.length + 1} を記録してください` : isSampling ? '次の区切りを待っています' : preMarked ? 'この区間は「起きた」になります' : '観察しています'}
+            {pending
+              ? `区間 ${results.length + 1}: 起きていたら「○ 起きた」を押してください`
+              : isSampling
+                ? '次の区切りを待っています'
+                : preMarked
+                  ? 'この区間は「起きた」になります'
+                  : <>観察しています<span className="nowrap">（押さなければ ×）</span></>}
           </p>
 
-          <div className="grid-2">
-            <button type="button" className="btn obs-btn obs-btn--yes" disabled={!pending && isSampling} onClick={() => answer('yes')}>
-              ○ 起きた
-            </button>
-            <button type="button" className="btn obs-btn" disabled={!pending} onClick={() => answer('no')}>
-              × 起きなかった
-            </button>
-          </div>
+          <button type="button" className="btn btn--block obs-btn obs-btn--yes" disabled={!pending && isSampling} onClick={answerYes}>
+            ○ 起きた
+          </button>
           {canUndo && (
             <button type="button" className="btn btn--outline btn--block" onClick={undoLast}>
               直前の区間（区間 {results.length}）を取り消して答え直す

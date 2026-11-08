@@ -6,6 +6,8 @@ import { FUNCTION_LABEL, type Behavior, type PlanContent, type PlanCriterion } f
 export function criterionText(c: PlanCriterion, behaviors: Behavior[]): string {
   const b = behaviors.find((x) => x.id === c.behaviorId);
   if (!b) return '（非表示の行動）';
+  const tail = `${c.note ? `（${c.note}）` : ''}${c.deadline ? ` ・ ${formatShortDate(c.deadline)}までに` : ''}`;
+  if (c.kind === 'task') return `${b.name} の手順: 一人でできた割合 ${c.value}%以上を${c.runs ?? 1}回連続${tail}`;
   const perDay = b.method === 'frequency' || b.method === 'duration' ? '1日' : '';
   return `${b.name} ${perDay}${mainFormat(b)(c.value)}${c.op === 'lte' ? '以下' : '以上'}${(c.weeks ?? 1) > 1 ? `を${c.weeks}週連続` : ''}${c.note ? `（${c.note}）` : ''}${c.deadline ? ` ・ ${formatShortDate(c.deadline)}までに` : ''}`;
 }

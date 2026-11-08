@@ -1,5 +1,5 @@
 /**
- * ABC集計（6.4.3、ワイヤーフレーム 23）。グラフ画面の「ABC集計」から開く。
+ * ABC分析（6.4.3、ワイヤーフレーム 23）。グラフ画面の「ABC分析」から開く。
  * 行動と期間を選び、きっかけ・結果・場面・状況要因・関わった人（所属ごと、決定71）・記録者の機能の見立てを多い順に並べる。
  * 「支援開始から」は、支援計画が初めて実施中になった日から（計画がなければ記録の始めから）。
  * AI のまとめ（Phase 3、決定72）: AI あり のチームだけ。集計を短い文にするだけで、機能の判断や支援の方法は書かない。
@@ -105,7 +105,7 @@ export default function ABCSummary() {
 
   return (
     <div className="page">
-      <TopBar title="ABC集計" sub={`${formatShortDate(range[0])}〜${formatShortDate(range[1])} ・ ABC記録 ${rows.length}件`} />
+      <TopBar title="ABC分析" sub={`${formatShortDate(range[0])}〜${formatShortDate(range[1])} ・ ABC記録 ${rows.length}件`} />
       <GraphTabs />
 
       {choices.length === 0 ? (

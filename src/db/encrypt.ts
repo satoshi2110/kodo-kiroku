@@ -17,6 +17,8 @@ import type { DBCore, DBCoreCursor, DBCoreTable, Middleware } from 'dexie';
 export const ENCRYPTED: Record<string, readonly string[]> = {
   events: ['activity', 'placeName'],
   observations: ['placeName'],
+  taskAnalyses: ['steps', 'note'],
+  stepChecks: ['steps', 'placeName', 'activity', 'note'],
   sleepLogs: ['note'],
   abcDetails: ['antecedentNote', 'consequenceNote', 'note'],
   comments: ['text'],
@@ -31,6 +33,7 @@ export const ENCRYPTED: Record<string, readonly string[]> = {
   aiAnalyses: ['input', 'output', 'message', 'decisionNote'],
   aiSuggestions: ['output', 'decisionNote'],
   aiSummaries: ['input', 'output'],
+  aiTaskDrafts: ['input', 'output'],
   auditLogs: ['before', 'after'],
 };
 

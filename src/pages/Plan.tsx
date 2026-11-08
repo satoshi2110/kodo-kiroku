@@ -18,11 +18,14 @@ import { addDays, formatDateJa, formatShortDate, toLocalDate } from '../lib/date
 import { dailyMain, lastDays, mainFormat, useRecordSet } from '../lib/series';
 import { usePlanData } from '../lib/usePlan';
 import { criterionText } from '../lib/planText';
+import { taskCriterionStatus } from '../lib/tasks';
 import { FUNCTION_LABEL, KIND_LABEL, ROLE_LABEL, type PlanChange, type PlanContent } from '../db/types';
 import { KindBadge, TopBar } from '../components/ui';
 import { CommentThread } from '../components/Comments';
 import { FBA_LINK } from '../lib/links';
 import { Proposals } from '../components/Proposals';
+import { isNativeApp } from '../lib/inviteLink';
+import { shareText } from '../lib/share';
 
 export default function Plan() {
   const { person, behaviors, members, me, userId } = useApp();
@@ -150,6 +153,26 @@ export default function Plan() {
               {shown.criteria.map((c, i) => {
                 const b = nameOf(c.behaviorId);
                 if (!b) return null;
+                if (c.kind === 'task') {
+                  const st = taskCriterionStatus(rs.stepChecks, b.id, c.value, c.runs ?? 1);
+                  const overdueT = !st.met && !!c.deadline && c.deadline < today;
+                  return (
+                    <div key={i} className="stack">
+                      <div className="row row--between today-row">
+                        <span>{criterionText(c, behaviors)}</span>
+                        <span className={st.met ? 'badge badge--done' : 'badge badge--role'}>
+                          {st.last == null ? '記録なし' : `直近の回 ${st.last}% ・ ${st.met ? '達成' : st.streak > 0 ? `${st.streak}回連続` : '未達'}`}
+                        </span>
+                      </div>
+                      {st.met && <span className="help">届いています。手助けを減らす・場面を広げるなど、次の段階を考えましょう。</span>}
+                      {overdueT && (
+                        <span className="help notice-inline">
+                          期限（{formatDateJa(c.deadline!)}）を過ぎても届いていません。グラフの「ステップ × 回」で止まっているステップを見て、手順を見直しましょう。
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
                 // 7日ごとの平均（今日までの7日、その前の7日…）。続けて届いた週の数を数える（「2週連続」など）
                 const need = Math.max(1, c.weeks ?? 1);
                 const weekAvg = (k: number) => {
@@ -189,9 +212,9 @@ export default function Plan() {
           <div className="section">
             <div className="card stack">
               <span className="label">支援内容</span>
-              <PlanText title="先行子操作（予防）" text={shown.antecedent} />
+              <PlanText title="先にできる工夫（予防）" text={shown.antecedent} />
               <PlanText title="代替行動への対応（強化）" text={shown.reinforcement} />
-              <PlanText title="プロンプト（手がかり）" text={shown.prompting} />
+              <PlanText title="手助けの出し方" text={shown.prompting} />
               <PlanText title="危機時の対応（安全確保）" text={shown.crisis} />
               {shown.owner && <span className="muted">担当: {shown.owner}</span>}
             </div>
@@ -241,19 +264,15 @@ export default function Plan() {
  */
 function RequestCheck() {
   const [copied, setCopied] = useState(false);
-  const url = `${location.origin}/plan/signoff`;
-  const text = '支援計画の確認をお願いします。アプリを開いて、合意の画面で内容を確かめてください。';
+  // スマホのアプリの中では、相手が開ける住所がないので、リンクを付けずに文だけ送る
+  const url = isNativeApp() ? null : `${location.origin}/plan/signoff`;
+  const text = url
+    ? '支援計画の確認をお願いします。アプリを開いて、合意の画面で内容を確かめてください。'
+    : '支援計画の確認をお願いします。「行動の記録」のアプリを開いて、支援計画の合意の画面で内容を確かめてください。';
   async function send() {
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: '計画の確認をお願いします', text, url });
-      } catch {
-        // 閉じたときは何もしない
-      }
-      return;
-    }
+    if (await shareText({ title: '計画の確認をお願いします', text, url })) return;
     try {
-      await navigator.clipboard.writeText(`${text}\n${url}`);
+      await navigator.clipboard.writeText(url ? `${text}\n${url}` : text);
       setCopied(true);
     } catch {
       setCopied(false);

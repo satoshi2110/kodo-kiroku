@@ -351,7 +351,7 @@ function SuggestionCard({ s, canDecide, onDecide }: { s: AiSuggestion; canDecide
           <div key={i} className="stack" style={{ gap: 2 }}>
             <strong>{x.behavior}</strong>
             <span className="help">教え方: {x.howToTeach}</span>
-            <span className="help">手がかりの出し方: {x.prompting}</span>
+            <span className="help">手助けの出し方: {x.prompting}</span>
           </div>
         ))}
         <span className="card__title">先にできる工夫</span>

@@ -1,4 +1,4 @@
-/** ABC集計の数え方（6.4.3）。ABC集計の画面と PDF レポートで共通に使う */
+/** ABC分析の数え方（6.4.3）。ABC分析の画面と PDF レポートで共通に使う */
 import type { Event } from '../db/types';
 
 export function scene(e: Event) {

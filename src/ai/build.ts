@@ -7,7 +7,7 @@
 import { db } from '../db/db';
 import { addDays, parseLocalDate, toLocalDate } from '../lib/date';
 import { AFFILIATION_LABEL, type Behavior, type Person, type TeamMember } from '../db/types';
-import { MAX_DAYS, MAX_RECORDS, type AbcRecordInput, type AnalysisInput } from './schema';
+import { MAX_DAYS, MAX_RECORDS, type AbcRecordInput, type AnalysisInput, type StepsInput } from './schema';
 
 const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土'];
 const letter = (i: number) => String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : '');
@@ -88,4 +88,21 @@ export function makeMasker(person: Person, members: TeamMember[], places: string
   ] as [string, string][]).filter(([name]) => name.trim().length > 0);
   pairs.sort((a, b) => b[0].length - a[0].length);
   return (text: string) => pairs.reduce((t, [name, alias]) => t.split(name).join(alias), text);
+}
+
+/**
+ * 手順の下書き（6.15）に送る入力。行動の名前・定義・種類、代替行動なら元の問題行動の名前と機能、
+ * ほかの望ましい行動・代替行動の名前だけ（仮名化済み）。対象者の特性メモと「苦手なこと・気をつけること」は読まない（決定128）
+ */
+export async function buildStepsInput(person: Person, behavior: Behavior, behaviors: Behavior[], members: TeamMember[]): Promise<StepsInput> {
+  const mask = makeMasker(person, members, await placeNamesFor(person.id));
+  const original = behavior.kind === 'alternative' && behavior.replacesBehaviorId ? behaviors.find((x) => x.id === behavior.replacesBehaviorId) : undefined;
+  return {
+    behavior: { name: mask(behavior.name), definition: mask(behavior.definition), kind: behavior.kind === 'alternative' ? 'alternative' : 'desirable' },
+    replaces: original ? { name: mask(original.name), func: original.func ?? behavior.func ?? null } : null,
+    existingBehaviors: behaviors
+      .filter((x) => x.id !== behavior.id && x.kind !== 'problem' && !x.deletedAt)
+      .slice(0, 50)
+      .map((x) => mask(x.name)),
+  };
 }

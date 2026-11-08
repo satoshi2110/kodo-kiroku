@@ -7,6 +7,7 @@
  * ログインとアカウントを作るときに「自分専用／共用の端末」を選ぶ（7.4.2 #1、決定61。【暫定】2026-11-07 の試作）。
  * 90日使われなかったためにログアウトしたときは、そのことを知らせる。
  */
+import { QrScan } from '../components/QrScan';
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -119,10 +120,11 @@ export default function Login() {
                 招待コード または 開始コード
                 <input required value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="off" />
               </label>
+              <QrScan onCode={setCode} />
               <InvitePreview info={preview} />
               <p className="help">
                 招待された人は、招待した人から受け取った「招待コード」を、新しいチームを作る保護者の方は、運営から受け取った「開始コード」を入れます。
-                コードがないと、アカウントは作れません。招待リンクから開いたときは、コードが最初から入っています。
+                コードがないと、アカウントは作れません。招待リンクから開いたときは、コードが最初から入っています。招待した人の QR は「QR を読む」で読めます。
               </p>
               {pendingInviteCode() && <p className="help">すでにアカウントがある人は「ログイン」からログインしてください。参加の画面にコードが入っています。</p>}
             </>

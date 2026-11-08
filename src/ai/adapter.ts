@@ -11,6 +11,8 @@ import {
   type AiResponse,
   type AnalysisInput,
   type AnalysisOutput,
+  type StepsInput,
+  type StepsOutput,
   type SuggestionInput,
   type SuggestionOutput,
   type SummaryInput,
@@ -54,6 +56,7 @@ async function mock(req: AiRequest): Promise<AiResponse> {
   await new Promise((r) => setTimeout(r, 600));
   if (req.kind === 'analyze') return { status: 'ok', kind: 'analyze', output: mockAnalysis(req.input), model: 'mock' };
   if (req.kind === 'summarize') return { status: 'ok', kind: 'summarize', output: mockSummary(req.input), model: 'mock' };
+  if (req.kind === 'steps') return { status: 'ok', kind: 'steps', output: mockSteps(req.input), model: 'mock' };
   return { status: 'ok', kind: 'suggest', output: mockSuggestion(req.input), model: 'mock' };
 }
 
@@ -85,8 +88,24 @@ function mockAnalysis(input: AnalysisInput): AnalysisOutput {
 
 function mockSuggestion(input: SuggestionInput): SuggestionOutput {
   return {
-    alternatives: [{ behavior: `（見本）「${input.behavior.name}」と同じ目的を満たす行動`, howToTeach: '（見本）教え方が出ます。', prompting: '（見本）手がかりの出し方が出ます。' }],
+    alternatives: [{ behavior: `（見本）「${input.behavior.name}」と同じ目的を満たす行動`, howToTeach: '（見本）教え方が出ます。', prompting: '（見本）手助けの出し方が出ます。' }],
     antecedentStrategies: [{ strategy: '（見本）先にできる工夫', detail: '（見本）くわしい内容が出ます。' }],
     reinforcement: [{ method: '（見本）望ましい行動をほめる・認める方法', detail: '（見本）くわしい内容が出ます。' }],
+  };
+}
+
+/** 見本の手順の下書き。外には何も送らない */
+function mockSteps(input: StepsInput): StepsOutput {
+  return {
+    steps: [
+      { action: `（見本）「${input.behavior.name}」の準備をする`, support: '（見本）使うものを本人の見える所に置く' },
+      { action: '（見本）始める', support: '（見本）はじめは指さしで知らせる' },
+      { action: '（見本）終わりを伝える', support: '（見本）できたらすぐに認める' },
+    ],
+    hardSteps: ['（見本）始める'],
+    materials: ['（見本）カードや絵'],
+    chain: 'total',
+    chainReason: '（見本）実際の下書きでは、教える順番とその理由が出ます。',
+    cautions: ['本人が手助けを嫌がったら手を離して中断し、「途中でやめた」で記録する'],
   };
 }
