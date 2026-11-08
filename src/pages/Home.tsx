@@ -22,6 +22,7 @@ import { usePlanData } from '../lib/usePlan';
 import { needsMyAnswer, useOwnerTransfers } from '../lib/ownerTransfer';
 import { addDays, formatShortDate } from '../lib/date';
 import { useHomeOrder, type Group } from './homeOrder';
+import { taskAllowed } from '../db/tasks';
 
 type Timer = { behaviorId: string; startedAt: number };
 
@@ -347,7 +348,7 @@ export default function Home() {
                 disabled={!recordable}
                 onTap={() => !order.editing && tap(b)}
                 onUndo={() => undo(b)}
-                hasTask={tasks?.has(b.id) ?? false}
+                hasTask={(tasks?.has(b.id) ?? false) && taskAllowed(b)}
               />
             ),
           )}

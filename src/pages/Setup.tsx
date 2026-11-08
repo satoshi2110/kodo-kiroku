@@ -182,7 +182,7 @@ export default function Setup() {
             <span className="card__title">このアプリで扱う情報について（下書き）</span>
             <p className="help">
               このアプリには、障害に関わる情報（要配慮個人情報）を記録します。記録はチームに招待した人だけが見られます。
-              本人の実名は必要ありません。呼び名やイニシャルで使えます。支援者がいまどこにいるかの位置は保存しません。
+              本人や支援者の本名は入れないでください。呼び名やイニシャルで使います。支援者がいまどこにいるかの位置は保存しません。
               AI の機能は初めは「なし」です。
             </p>
             <p className="help">利用規約とプライバシーポリシーは、試用を始める前に専門家の確認を受けて差し替えます。</p>
@@ -217,6 +217,7 @@ export default function Setup() {
               あなたの呼び名（チームの人に表示されます）
               <input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="例: 母" />
             </label>
+            <p className="help">本名は入れないでください。「母」「担任の先生」など、チームの人に分かる呼び名にします。</p>
             <span className="label">あなたの所属</span>
             <div className="chips">
               {(Object.keys(AFFILIATION_LABEL) as Affiliation[]).map((a) => (
@@ -227,7 +228,7 @@ export default function Setup() {
               記録する人（対象者）の呼び名（必須）
               <input value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="例: Aさん" />
             </label>
-            <p className="help">本名でなくてかまいません。ニックネームやイニシャルで登録できます。</p>
+            <p className="help">本名は入れないでください。ニックネームやイニシャルで登録します。</p>
             <label className="field">
               生まれた年と月（任意）
               <input type="month" value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)} />
@@ -306,8 +307,9 @@ function Join(props: {
         <InvitePreview info={preview} />
         <label className="field">
           あなたの呼び名（チームの人に表示されます）
-          <input value={props.userName} onChange={(e) => props.setUserName(e.target.value)} placeholder="例: 〇〇先生" />
+          <input value={props.userName} onChange={(e) => props.setUserName(e.target.value)} placeholder="例: 担任の先生" />
         </label>
+        <p className="help">本名は入れないでください。「母」「担任の先生」など、チームの人に分かる呼び名にします。</p>
         <span className="label">あなたの所属</span>
         <div className="chips">
           {(Object.keys(AFFILIATION_LABEL) as Affiliation[]).map((a) => (

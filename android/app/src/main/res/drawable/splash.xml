@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 起動したときの画面（iPhone と同じ: 薄い地の真ん中にアプリのアイコン） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item android:width="88dp" android:height="88dp" android:gravity="center" android:drawable="@mipmap/ic_launcher" />
+</layer-list>

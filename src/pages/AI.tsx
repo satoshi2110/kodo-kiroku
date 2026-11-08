@@ -10,7 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useApp } from '../state';
 import { aiTeamUsage, aiUsage, canDecideAi, canRunAi, decideAi, saveAnalysis, saveSuggestion } from '../db/repo';
-import { buildAnalysisInput, makeMasker, placeNamesFor } from '../ai/build';
+import { buildAnalysisInput, makeMasker, membersForMask, placeNamesFor } from '../ai/build';
 import { isMockProvider, requestAi } from '../ai/adapter';
 import { MAX_REINFORCERS, MIN_ABC_RECORDS } from '../ai/schema';
 import { formatDateTimeJa, formatShortDate } from '../lib/date';
@@ -79,7 +79,7 @@ export default function AI() {
     setBusy('suggest');
     setError(null);
     // 分析と同じ置きかえをする。分析の入力も置きかえ直す（置きかえを直す前に保存した分析のため）
-    const mask = makeMasker(person, members, await placeNamesFor(person.id));
+    const mask = makeMasker(person, await membersForMask(person.id), await placeNamesFor(person.id));
     const b0 = a.input.behavior;
     // 好きなもの（6.6 #4）。隠したもの・消したものは除き、ハマり度の高い順に。写真と「使い方」のメモは送らない
     const reinforcers = (await db.reinforcers.where('personId').equals(person.id).toArray())
@@ -94,7 +94,7 @@ export default function AI() {
         behavior: { name: mask(b0.name), definition: mask(b0.definition), intensityCriteria: b0.intensityCriteria.map(mask) },
         adoptedFunctions: a.output.functions.filter((f) => f.count > 0).map((f) => f.func).slice(0, 2),
         hypothesisNote: mask(a.decisionNote),
-        likelyConditions: a.output.likelyConditions,
+        likelyConditions: a.output.likelyConditions.map(mask),
         existingAlternatives: behaviors.filter((b) => b.kind !== 'problem').map((b) => mask(b.name)),
         reinforcers,
       },
