@@ -163,7 +163,13 @@ export const STEPS_SCHEMA = obj({
  * 出力に出てはいけない言葉（6.6 の絶対条件、9章、決定76）。
  * 罰・弱化・嫌悪刺激・身体拘束・隔離・叱責を提案しない。計画的無視は専門家が決めるまで提案しない。診断・治療方針の語を使わない。
  */
-export const BANNED_WORDS = ['罰', '弱化', '嫌悪', '拘束', '隔離', '取り上げ', '叱', '無視', 'タイムアウト', '診断', '治療方針', '服薬', '投薬'];
+export const BANNED_WORDS = ['罰', '弱化', '嫌悪', '拘束', '隔離', '取り上げ', '叱', '無視', 'タイムアウト', '診断', '治療方針', '服薬', '投薬', '消去', 'お預け', '没収'];
+
+/**
+ * 支援の候補と手順の下書きだけに足す禁止語（決定139）。計画的無視を言いかえた言葉。
+ * 分析では「周りが反応しないときは起きにくい」のような事実の書き方があるので、分析には使わない
+ */
+export const IGNORE_WORDS = ['注目しない', '反応しない', '相手にしない'];
 
 /**
  * 出力の文字をすべて集めて、禁止語を探す。
@@ -236,11 +242,17 @@ export function quotedSummaryInputs(input: SummaryInput): string[] {
  * 手順の下書きだけに足す禁止語（6.15）。手を添える手助けと身体拘束の境目を越えさせないため。
  * 見つけたら結果を捨てて作り直す。入力の引用は除かない（下書きには引用するものがない）
  */
-export const TASK_BANNED_WORDS = ['押さえ', '抑え', '制止', '無理に', '引っ張', '羽交い', '閉じ込め'];
+export const TASK_BANNED_WORDS = [
+  '押さえつけ', '押さえ込', '抑えつけ', '抑え込', '体を押さえ', '手を押さえ', '腕を押さえ',
+  '制止', '無理に', '引っ張', '羽交い', '閉じ込め', '閉じこめ', '連れて行', '動かないように', '力で',
+];
+// 「気持ちを抑える」のような言い方まで止めないように、「押さえ」「抑え」は体を押さえる言い方だけにした（決定139）
 
-export function findTaskBannedWords(output: unknown): string[] {
-  const text = collectText(output);
-  return [...BANNED_WORDS, ...TASK_BANNED_WORDS].filter((w) => text.includes(w));
+/** 手順の下書きと、支援の候補（手助けの出し方を書くので）に使う。quotedInputs の「」付きの引用は除く */
+export function findTaskBannedWords(output: unknown, quotedInputs: string[] = []): string[] {
+  let text = collectText(output);
+  for (const q of quotedInputs) if (q) text = text.split(`「${q}」`).join('「」');
+  return [...BANNED_WORDS, ...IGNORE_WORDS, ...TASK_BANNED_WORDS].filter((w) => text.includes(w));
 }
 
 /** 手順の下書きの出力が決めた大きさに収まっているか（7個まで・1個以上）。収まらなければ作り直す */

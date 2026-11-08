@@ -256,7 +256,7 @@ export async function setBehaviorHidden(id: string, hidden: boolean, actorId: st
 
 /** 記録ごと削除（管理者のみ、6.2）。論理削除で、何件消したかを監査ログに残す */
 export async function deleteBehaviorWithRecords(id: string, actorId: string) {
-  await db.transaction('rw', [db.behaviors, db.events, db.abcDetails, db.observations, db.notObservedDays, db.stepChecks, db.auditLogs], async () => {
+  await db.transaction('rw', [db.behaviors, db.events, db.abcDetails, db.observations, db.notObservedDays, db.stepChecks, db.taskAnalyses, db.auditLogs], async () => {
     const before = await db.behaviors.get(id);
     if (!before) return;
     const t = nowISO();
@@ -271,6 +271,8 @@ export async function deleteBehaviorWithRecords(id: string, actorId: string) {
     await db.observations.bulkPut(gone(obs));
     const checks = await db.stepChecks.where('behaviorId').equals(id).filter((c) => !c.deletedAt).toArray();
     await db.stepChecks.bulkPut(gone(checks));
+    const tasks = await db.taskAnalyses.where('behaviorId').equals(id).filter((x) => !x.deletedAt).toArray(); // 手順も一緒に消す（点検 2026-11-08）
+    await db.taskAnalyses.bulkPut(gone(tasks));
     await db.notObservedDays.bulkPut(gone(marks).map((x) => ({ ...x, recorderId: actorId }))); // サーバーでは最後に変えた人を残す
     const after: Behavior = { ...before, deletedAt: t, updatedAt: t };
     await db.behaviors.put(after);
@@ -280,6 +282,7 @@ export async function deleteBehaviorWithRecords(id: string, actorId: string) {
       deletedAbcDetails: abcs.length,
       deletedObservations: obs.length,
       deletedStepChecks: checks.length,
+      deletedTasks: tasks.length,
       deletedNotObservedDays: marks.length,
     });
   });

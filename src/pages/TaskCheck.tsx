@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { canCheckTask, createStepCheck, getTask, lastUndoableCheck, restoreStepCheck, stepChecks, undoStepCheck } from '../db/tasks';
+import { canCheckTask, taskAllowed, createStepCheck, getTask, lastUndoableCheck, restoreStepCheck, stepChecks, undoStepCheck } from '../db/tasks';
 import { useApp } from '../state';
 import type { Behavior, Event, StepCheck, StepResult, TaskAnalysis } from '../db/types';
 import { CHAIN_LABEL, PROMPTS, independentPct, masteryText, scoredChecks } from '../lib/tasks';
@@ -18,6 +18,8 @@ export default function TaskCheckRoute() {
   const data = useLiveQuery(async () => ({ b: await db.behaviors.get(behaviorId), t: await getTask(behaviorId) }), [behaviorId]);
   if (data === undefined) return null;
   if (!data.b || data.b.deletedAt) return <p className="empty">行動が見つかりません。</p>;
+  // 問題行動には手順を付けない（決定123）。あとで種類を問題行動に変えた行動の手順も、チェックできないようにする
+  if (!taskAllowed(data.b)) return <p className="empty">手順は、望ましい行動と代替行動にだけ付けられます。</p>;
   if (!data.t) return <NoTask b={data.b} />;
   return <TaskCheck key={data.t.id + data.t.version} b={data.b} task={data.t} />;
 }
@@ -43,6 +45,7 @@ function TaskCheck({ b, task }: { b: Behavior; task: TaskAnalysis }) {
   const [stopped, setStopped] = useState(false);
   const [saved, setSaved] = useState<StepCheck | null>(null);
   const [counted, setCounted] = useState(false); // 保存のときに +1 も付けたか
+  const [saving, setSaving] = useState(false);
   const history = useLiveQuery(() => stepChecks(b.personId, b.id), [b.personId, b.id]);
 
   if (!userId) return null;
@@ -54,11 +57,17 @@ function TaskCheck({ b, task }: { b: Behavior; task: TaskAnalysis }) {
   const pick = (i: number, r: StepResult) => setAnswers(answers.map((a, j) => (j === i ? (a === r ? null : r) : a)));
 
   async function save() {
-    // 日時は保存した時、場所はホームで選んでいる場所が自動で入る（画面では直さない）
-    const { check, event } = await createStepCheck(task, { results: results as StepResult[], stopped, note: '', placeName: place?.name ?? null, occurredAt: nowISO() }, userId!);
-    setCounted(!!event);
-    setSaved(check);
-    window.scrollTo(0, 0);
+    if (saving) return; // 2回押しても、チェックが2つできないようにする
+    setSaving(true);
+    try {
+      // 日時は保存した時、場所はホームで選んでいる場所が自動で入る（画面では直さない）
+      const { check, event } = await createStepCheck(task, { results: results as StepResult[], stopped, note: '', placeName: place?.name ?? null, occurredAt: nowISO() }, userId!);
+      setCounted(!!event);
+      setSaved(check);
+      window.scrollTo(0, 0);
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (saved) {
@@ -125,7 +134,7 @@ function TaskCheck({ b, task }: { b: Behavior; task: TaskAnalysis }) {
         })}
 
         {!done && <p className="help">すべてのステップに付けてください（途中でやめたときは、上の「途中でやめた」をオンに）。</p>}
-        <button type="button" className="btn btn--primary btn--block" disabled={!done} onClick={save}>保存</button>
+        <button type="button" className="btn btn--primary btn--block" disabled={!done || saving} onClick={save}>保存</button>
         {task.note && <p className="help">留意点: {task.note}</p>}
       </div>
     </div>

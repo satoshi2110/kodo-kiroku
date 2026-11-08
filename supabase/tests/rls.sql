@@ -1,5 +1,5 @@
 -- チームの分離のテスト（7.4.3a、決定45）
--- 使い方: supabase/migrations の SQL（0001〜0026）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
+-- 使い方: supabase/migrations の SQL（0001〜0027）をすべて順に適用したあと、Supabase の SQL Editor にこのファイルの中身を全部貼り付けて Run する。
 -- 結果: 最後に「すべて合格」と出れば合格。どこかで止まったら、エラーの文（「NG: …」）が不合格の項目。
 -- テスト用の人・チームは最後の rollback で消えるので、本番のデータには何も残らない。
 
@@ -2724,14 +2724,14 @@ begin
       (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001',
        '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000ab');
     raise exception 'NG: 問題行動に手順を付けられた';
-  exception when insufficient_privilege or unique_violation then null;
+  exception when insufficient_privilege then null;
   end;
   begin
     insert into task_analyses (id, person_id, behavior_id, steps, created_by) values
       (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000002',
        '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000ab');
     raise exception 'NG: ほかのチームの行動に手順を付けられた';
-  exception when insufficient_privilege or unique_violation then null;
+  exception when insufficient_privilege then null;
   end;
   -- ほかのチームの手順を指すチェックは作れない
   begin
@@ -2829,6 +2829,85 @@ begin
   if n <> 1 then raise exception 'NG: ほかのチームの人が手順を書きかえられた'; end if;
   select count(*) into n from audit_logs where entity = 'step_checks' and entity_id = 'a0260000-0000-0000-0000-000000000011';
   if n < 3 then raise exception 'NG: 手順のチェックの作成・取り消し・戻しが監査ログに残っていない（% 件）', n; end if;
+end $$;
+
+-- ---------- 点検で見つかった穴をふさぐ（0027） ----------
+-- 手順の行動は、あとから問題行動やほかの行動に付けかえられない。ほかの人が記録したチェックは、支援者には直せない
+select set_config('request.jwt.claims', '', true);
+reset role;
+alter table step_checks disable trigger user;
+insert into step_checks (id, person_id, behavior_id, task_id, version, steps, results, occurred_at, local_date, recorder_id) values
+  ('a0270000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001', 'a0260000-0000-0000-0000-000000000001',
+   1, '["a","b"]', '["independent","verbal"]', now(), current_date, '00000000-0000-0000-0000-0000000000c1');
+alter table step_checks enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000ab","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000301","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin
+  update task_analyses set behavior_id = '30000000-0000-0000-0000-000000000001', updated_at = now() + interval '20 seconds'
+    where id = 'a0260000-0000-0000-0000-000000000001';
+  update step_checks set note = 'x', updated_at = now() + interval '20 seconds' where id = 'a0270000-0000-0000-0000-000000000011';
+end $$;
+-- V（閲覧者）は手順を作れない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000103"}', true);
+set local role authenticated;
+do $$ begin
+  begin
+    insert into task_analyses (id, person_id, behavior_id, steps, created_by) values
+      (gen_random_uuid(), '10000000-0000-0000-0000-000000000001', '30260000-0000-0000-0000-000000000001',
+       '[{"action":"a","support":""},{"action":"b","support":""}]', '00000000-0000-0000-0000-0000000000d1');
+    raise exception 'NG: 閲覧者が手順を作れた';
+  exception when insufficient_privilege or unique_violation then null;
+  end;
+end $$;
+-- B（チーム2 の管理者）は、チーム1 のチェックを直せない
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  update step_checks set note = 'y', updated_at = now() + interval '21 seconds' where id = 'a0260000-0000-0000-0000-000000000011';
+end $$;
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from task_analyses where id = 'a0260000-0000-0000-0000-000000000001' and behavior_id = '30260000-0000-0000-0000-000000000001';
+  if n <> 1 then raise exception 'NG: 手順の行動を付けかえられた'; end if;
+  select count(*) into n from step_checks where id = 'a0270000-0000-0000-0000-000000000011' and note = '';
+  if n <> 1 then raise exception 'NG: 支援者が、ほかの人の記録したチェックを直せた'; end if;
+  select count(*) into n from step_checks where id = 'a0260000-0000-0000-0000-000000000011' and note = 'y';
+  if n <> 0 then raise exception 'NG: ほかのチームの管理者がチェックを直せた'; end if;
+  select count(*) into n from audit_logs where entity = 'task_analyses' and entity_id = 'a0260000-0000-0000-0000-000000000001';
+  if n < 2 then raise exception 'NG: 手順の作成・直しが監査ログに残っていない（% 件）', n; end if;
+end $$;
+
+-- 削除の申し込みの日時は、管理者が送った値ではなく、サーバーの時刻になる（30日の待ちを飛ばせない）
+alter table team_settings disable trigger user;
+insert into team_settings (id, person_id, delete_requested_at) values
+  ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', null)
+  on conflict (id) do update set delete_requested_at = null;
+alter table team_settings enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","session_id":"a0210000-0000-0000-0000-000000000202","aal":"aal2"}', true);
+set local role authenticated;
+do $$ begin
+  update team_settings set delete_requested_at = now() - interval '40 days', updated_at = now() + interval '30 seconds'
+    where id = '10000000-0000-0000-0000-000000000001';
+  -- 申し込み中に、日時を前にずらすこともできない
+  update team_settings set delete_requested_at = now() - interval '50 days', updated_at = now() + interval '31 seconds'
+    where id = '10000000-0000-0000-0000-000000000001';
+  begin
+    perform purge_team('10000000-0000-0000-0000-000000000001');
+    raise exception 'NG: 過去の日時を送って、30日待たずにチームを消せた';
+  exception when others then
+    if sqlerrm not like '%30日たってから%' then raise; end if;
+  end;
+end $$;
+select set_config('request.jwt.claims', '', true);
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from team_settings where id = '10000000-0000-0000-0000-000000000001' and delete_requested_at = now();
+  if n <> 1 then raise exception 'NG: 削除の申し込みの日時が、サーバーの時刻になっていない'; end if;
 end $$;
 
 -- ---------- チームの削除をサーバーでも行う（0023） ----------

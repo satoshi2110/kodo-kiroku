@@ -50,7 +50,7 @@ export default function PersonProfile() {
             呼び名（必須）
             <input value={form.displayName} disabled={!editable} onChange={(e) => set('displayName', e.target.value)} />
           </label>
-          <p className="help">本名でなくてかまいません。ニックネームやイニシャルで使えます。</p>
+          <p className="help">本名は入れないでください。ニックネームやイニシャルで使います。</p>
           <label className="field">
             生まれた年と月（任意）
             <input type="month" value={form.birthMonth} disabled={!editable} onChange={(e) => set('birthMonth', e.target.value)} />

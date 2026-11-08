@@ -2,7 +2,7 @@
  * 手順（課題分析）の編集（6.15）。望ましい行動・代替行動に付ける。作る・変えるのは支援者以上（決定127）。
  * ステップ（本人の動き）を変えると版が上がり、古いチェックは古いステップ文のまま残る。
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -26,7 +26,7 @@ export default function TaskEditRoute() {
 }
 
 function TaskEdit({ b, task }: { b: Behavior; task: TaskAnalysis | undefined }) {
-  const { me, userId, person, behaviors, members, aiEnabled } = useApp();
+  const { me, userId, person, behaviors, aiEnabled } = useApp();
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -72,7 +72,7 @@ function TaskEdit({ b, task }: { b: Behavior; task: TaskAnalysis | undefined }) 
     if (!person || !userId) return;
     setBusy(true);
     setAiError('');
-    const input = await buildStepsInput(person, b, behaviors, members);
+    const input = await buildStepsInput(person, b, behaviors);
     const res = await requestAi({ personId: person.id, kind: 'steps', input });
     if (res.status === 'ok' && res.kind === 'steps') {
       const rec = { ...base(), personId: person.id, behaviorId: b.id, requestedBy: userId, input, output: res.output, model: res.model };
@@ -170,11 +170,11 @@ function TaskEdit({ b, task }: { b: Behavior; task: TaskAnalysis | undefined }) 
           <div className="grid-2">
             <label className="field">
               一人でできた割合（{PCT_MIN}〜100%）
-              <input type="number" min={PCT_MIN} max={100} step={5} value={form.masteryPct} onChange={(e) => set({ masteryPct: clamp(+e.target.value, PCT_MIN, 100) })} />
+              <NumInput min={PCT_MIN} max={100} step={5} value={form.masteryPct} onChange={(v) => set({ masteryPct: v })} />
             </label>
             <label className="field">
               続けて何回（1〜{RUNS_MAX}回）
-              <input type="number" min={1} max={RUNS_MAX} value={form.masteryRuns} onChange={(e) => set({ masteryRuns: clamp(+e.target.value, 1, RUNS_MAX) })} />
+              <NumInput min={1} max={RUNS_MAX} value={form.masteryRuns} onChange={(v) => set({ masteryRuns: v })} />
             </label>
           </div>
           <p className="help">{form.masteryPct}% 以上の回が {form.masteryRuns} 回続いたら、達成の目安に届いたと表示します。</p>
@@ -183,7 +183,7 @@ function TaskEdit({ b, task }: { b: Behavior; task: TaskAnalysis | undefined }) 
         <div className="card stack">
           <label className="field">
             全体の留意点（任意）
-            <textarea value={form.note} onChange={(e) => set({ note: e.target.value })} />
+            <textarea value={form.note} maxLength={2000} onChange={(e) => set({ note: e.target.value })} />
           </label>
         </div>
 
@@ -202,6 +202,36 @@ function TaskEdit({ b, task }: { b: Behavior; task: TaskAnalysis | undefined }) 
 }
 
 const clamp = (v: number, lo: number, hi: number) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo);
+
+/**
+ * 数の入力。打っている途中（例: 80 を打つときの「8」）は直さず、欄を離れたときに範囲に収める。
+ * 打つたびに収めると、1文字目で最小値に戻ってしまい、2けたの数が打てないため（点検 2026-11-08）
+ */
+function NumInput({ value, min, max, step, onChange }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = () => {
+    const v = clamp(Math.round(Number(text)), min, max);
+    setText(String(v));
+    if (v !== value) onChange(v);
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      step={step}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = Number(e.target.value);
+        if (e.target.value !== '' && Number.isInteger(n) && n >= min && n <= max) onChange(n);
+      }}
+      onBlur={commit}
+    />
+  );
+}
 
 /** AI の案（6.15）。人が「欄に入れる」を押して、直して保存するまでは手順にならない */
 function DraftView({ o, onUse }: { o: StepsOutput; onUse: () => void }) {

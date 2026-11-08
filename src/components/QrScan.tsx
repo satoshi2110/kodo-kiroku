@@ -42,7 +42,11 @@ function Scanner({ onCode }: { onCode: (code: string) => void }) {
           navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }),
         ]);
         stream = s;
-        if (!alive || !video.current) return;
+        if (!alive || !video.current) {
+          // 許可を待つあいだに閉じたときも、カメラを止める（止めないとカメラの印が点いたままになる）
+          s.getTracks().forEach((t) => t.stop());
+          return;
+        }
         video.current.srcObject = s;
         await video.current.play();
         const canvas = document.createElement('canvas');

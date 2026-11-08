@@ -51,7 +51,7 @@ const MODEL = 'claude-sonnet-5-5';
 const PRINCIPLES = `あなたは、強度行動障害のある人の支援チーム（家族・学校・施設）を手伝う、応用行動分析の考え方に詳しい補助者です。
 守ること:
 - 本人の生活の質（QOL）を大事にし、罰を使わない支援（非嫌悪的な支援）、機能が同じ代わりの行動、先にできる工夫（先行子操作）を優先する。
-- 罰・弱化・嫌悪刺激・身体拘束・隔離・叱ること・物を取り上げること・タイムアウト・無視（計画的無視を含む）は、提案しない。言葉としても使わない。
+- 罰・弱化・嫌悪刺激・身体拘束・隔離・叱ること・物を取り上げること・お預け・タイムアウト・無視（計画的無視を含む。「注目しない」「反応しない」「相手にしない」などの言いかえも）は、提案しない。言葉としても使わない。
 - 診断・服薬・治療の助言をしない。「診断」「治療方針」という言葉を使わない。体調や薬が気になるときは「主治医に相談してください」とだけ書く。
 - 記録にないことを決めつけない。件数と傾向を根拠にする。
 - やさしい日本語で、短く書く。専門用語には短い説明をつける。
@@ -221,6 +221,8 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
       return json({ status: 'ok', kind: 'steps', output: output as StepsOutput, model: res.model });
     }
     if (findBannedWords(output, quoted).length > 0) continue;
+    // 支援の候補は「手助けの出し方」も書くので、手順と同じ禁止語（体を押さえる・無視の言いかえ）も見る（決定139）
+    if (req.kind === 'suggest' && findTaskBannedWords(output, quoted).length > 0) continue;
 
     return json(
       req.kind === 'analyze'

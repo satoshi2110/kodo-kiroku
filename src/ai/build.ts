@@ -22,10 +22,12 @@ export async function buildAnalysisInput(person: Person, behavior: Behavior, mem
   ]);
   const optName = new Map(options.map((o) => [o.id, o.name]));
   const eventById = new Map(events.map((e) => [e.id, e]));
-  const memberById = new Map(members.map((m) => [m.id, m]));
+  // 抜けた人が書いた記録も、所属が分かるように、抜けた人も含めて引く
+  const allMembers = await membersForMask(person.id);
+  const memberById = new Map([...allMembers, ...members].map((m) => [m.id, m]));
 
   const places = await placeNamesFor(person.id, events.map((e) => e.placeName));
-  const mask = makeMasker(person, members, places);
+  const mask = makeMasker(person, allMembers, places);
 
   const counts = new Map<string, number>();
   for (const e of events) counts.set(e.localDate, (counts.get(e.localDate) ?? 0) + e.count);
@@ -78,6 +80,15 @@ export async function placeNamesFor(personId: string, extra: (string | null | un
   return [...new Set([...registered.map((p) => p.name), ...extra].filter((p): p is string => !!p && p.trim().length > 0))];
 }
 
+/**
+ * 置きかえる支援者の名前。チームを抜けた人も入れる（前に書いたメモに名前が残っていることがあるため。点検 2026-11-08）。
+ * 並びは参加した順にして、同じ人がいつも同じ記号になるようにする
+ */
+export async function membersForMask(personId: string): Promise<TeamMember[]> {
+  const all = await db.teamMembers.where('personId').equals(personId).toArray();
+  return all.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
 /** 名前を置きかえる関数を作る。長い名前から先に置きかえる（「Aさん」と「A」のような重なりを避ける） */
 export function makeMasker(person: Person, members: TeamMember[], places: string[]) {
   const pairs = ([
@@ -94,8 +105,8 @@ export function makeMasker(person: Person, members: TeamMember[], places: string
  * 手順の下書き（6.15）に送る入力。行動の名前・定義・種類、代替行動なら元の問題行動の名前と機能、
  * ほかの望ましい行動・代替行動の名前だけ（仮名化済み）。対象者の特性メモと「苦手なこと・気をつけること」は読まない（決定128）
  */
-export async function buildStepsInput(person: Person, behavior: Behavior, behaviors: Behavior[], members: TeamMember[]): Promise<StepsInput> {
-  const mask = makeMasker(person, members, await placeNamesFor(person.id));
+export async function buildStepsInput(person: Person, behavior: Behavior, behaviors: Behavior[]): Promise<StepsInput> {
+  const mask = makeMasker(person, await membersForMask(person.id), await placeNamesFor(person.id));
   const original = behavior.kind === 'alternative' && behavior.replacesBehaviorId ? behaviors.find((x) => x.id === behavior.replacesBehaviorId) : undefined;
   return {
     behavior: { name: mask(behavior.name), definition: mask(behavior.definition), kind: behavior.kind === 'alternative' ? 'alternative' : 'desirable' },
