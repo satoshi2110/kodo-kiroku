@@ -36,6 +36,15 @@
         "VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npx vite build --outDir dist.local && npx wrangler pages dev dist.local --port 8789 -b SUPABASE_URL= -b SUPABASE_ANON_KEY= --kv AI_USAGE"
       ],
       "port": 8789
+    },
+    {
+      "name": "pages-dev-lan",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npx vite build --outDir dist.local && npx wrangler pages dev dist.local --ip 0.0.0.0 --port 8789 -b SUPABASE_URL= -b SUPABASE_ANON_KEY= --kv AI_USAGE"
+      ],
+      "port": 8789
     }
   ]
 }

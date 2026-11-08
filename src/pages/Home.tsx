@@ -21,6 +21,7 @@ import { TeamNotes } from '../components/TeamNotes';
 import { usePlanData } from '../lib/usePlan';
 import { needsMyAnswer, useOwnerTransfers } from '../lib/ownerTransfer';
 import { addDays, formatShortDate } from '../lib/date';
+import { useHomeOrder, type Group } from './homeOrder';
 
 type Timer = { behaviorId: string; startedAt: number };
 
@@ -92,7 +93,7 @@ export default function Home() {
     return new Set(ts.map((t) => t.behaviorId));
   }, [personId]);
   const events = useMemo(() => [...(todayEvents ?? [])].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [todayEvents]);
-  const rows = useMemo(() => pairRows(behaviors), [behaviors]);
+  const order = useHomeOrder(personId, behaviors); // 並べかえ（長押し。決定137）
   const [pickingPlace, setPickingPlace] = useState(false);
   const rs = useRecordSet(personId);
   const planData = usePlanData(personId);
@@ -314,11 +315,29 @@ export default function Home() {
       </div>
 
       <div className="section stack">
-        {rows.map((row) => (
-          <div key={row.map((b) => b.id).join()} className="grid-2">
-            {row.map((b) => (
+        {order.editing && (
+          <div className="reorder-bar card" role="status">
+            <span className="reorder-bar__text">
+              <strong>並べかえ中</strong>
+              <span className="help">カードを指で引っぱって動かします。代替行動は問題行動といっしょに動きます。この端末だけの並びです。</span>
+            </span>
+            <span className="reorder-bar__actions">
+              {order.customized && <button type="button" className="btn btn--sm btn--quiet" onClick={order.reset}>はじめの並び</button>}
+              <button type="button" className="btn btn--primary" onClick={order.finish}>完了</button>
+            </span>
+          </div>
+        )}
+        <div className={`grid-2 home-grid${order.editing ? ' home-grid--editing' : ''}`}>
+          {homeCells(order.groups).map(({ g, b, key, before }) =>
+            !g || !b ? (
+              // 空きのマスに重ねたら、すぐ後ろのまとまりの前に入れる
+              <div key={key} className="home-grid__gap" data-head={before} aria-hidden="true" />
+            ) : (
               <BehaviorCard
                 key={b.id}
+                bind={order.bind(g.head)}
+                editing={order.editing}
+                dragging={order.dragging === g.head}
                 b={b}
                 replaces={b.kind === 'alternative' && b.replacesBehaviorId ? behaviors.find((x) => x.id === b.replacesBehaviorId)?.name : undefined}
                 events={byBehavior(b.id)}
@@ -326,13 +345,13 @@ export default function Home() {
                 timer={timers[b.id]}
                 flash={flash?.id === b.id ? (flash.good ? 'good' : 'problem') : null}
                 disabled={!recordable}
-                onTap={() => tap(b)}
+                onTap={() => !order.editing && tap(b)}
                 onUndo={() => undo(b)}
                 hasTask={tasks?.has(b.id) ?? false}
               />
-            ))}
-          </div>
-        ))}
+            ),
+          )}
+        </div>
         {behaviors.length === 0 && <p className="empty">まだ行動がありません。</p>}
         {behaviors.some((b) => b.method === 'frequency' || b.method === 'duration') && (
           <p className="help">回数・時間で記録する行動は、記録を付けた日に記録がなければ、自動で 0 になります。観察していなかった日は「さかのぼって入力」で直せます。</p>
@@ -481,6 +500,9 @@ function BehaviorCard({
   onTap,
   onUndo,
   hasTask,
+  bind,
+  editing,
+  dragging,
 }: {
   b: Behavior;
   replaces?: string;
@@ -491,7 +513,10 @@ function BehaviorCard({
   disabled: boolean;
   onTap: () => void;
   onUndo: () => void;
-  hasTask: boolean; // 手順があれば、右上に「手順」を出す（6.15）
+  hasTask: boolean; // 手順があれば、行動の名前の後ろに「手順」を出す（6.15）
+  bind: ReturnType<ReturnType<typeof useHomeOrder>['bind']>; // 長押し・引っぱり（決定137）
+  editing: boolean; // 並べかえ中は、押しても記録しない。−1・手順は隠す
+  dragging: boolean;
 }) {
   const total = events.reduce((s, e) => s + e.count, 0);
   const totalSec = events.reduce((s, e) => s + (e.durationSec ?? 0), 0);
@@ -511,12 +536,21 @@ function BehaviorCard({
   const hint = timer ? formatDuration(running) : b.method === 'latency' ? '指示で' : null;
 
   return (
-    <div className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${!disabled && hasTask ? ' bcard--task' : ''}${flash ? ` bcard--flash-${flash}` : ''}`}>
-      <button type="button" className="bcard__tap" disabled={disabled} onClick={onTap} aria-label={`${b.name}: ${action}`}>
+    <div {...bind} className={`bcard bcard--${b.kind === 'problem' ? 'problem' : 'good'}${flash ? ` bcard--flash-${flash}` : ''}${dragging ? ' bcard--dragging' : ''}`}>
+      {/* カード全体が押せるボタン（下に敷く）。中身は上に重ねて見せるだけにし、「手順」だけを別に押せるようにする（6.15） */}
+      <button type="button" className="bcard__hit" disabled={disabled} onClick={onTap} aria-label={editing ? `${b.name}（並べかえ中）` : `${b.name}: ${action}`} />
+      <div className="bcard__tap">
         <KindBadge kind={b.kind} />
-        <span className="bcard__name">{b.name}</span>
-        {replaces && <span className="bcard__for">「{replaces}」の代わり</span>}
-        <span className="bcard__foot">
+        <span className="bcard__name">
+          <span aria-hidden="true">{b.name}</span>
+          {!disabled && !editing && hasTask && (
+            <Link to={`/task/${b.id}/check`} className="task-chip" aria-label={`${b.name} の手順をチェックする`}>
+              手順
+            </Link>
+          )}
+        </span>
+        {replaces && <span className="bcard__for" aria-hidden="true">「{replaces}」の代わり</span>}
+        <span className="bcard__foot" aria-hidden="true">
           <span className="bcard__count">
             {b.method === 'frequency' && <>今日 <strong>{total}</strong> 回</>}
             {b.method === 'duration' && <>今日 <strong>{formatDuration(totalSec)}</strong></>}
@@ -524,20 +558,17 @@ function BehaviorCard({
             {sessionType && (ratio != null ? <>今日 <strong>{ratio}</strong> %</> : METHOD_LABEL[b.method])}
           </span>
           {hint && <span className={`bcard__hint${timer ? ' bcard__hint--running' : ''}`}>{hint}</span>}
-          <span className={`bcard__fab${timer ? ' bcard__fab--running' : ''}`} aria-hidden="true">
-            <FabIcon kind={icon} />
-          </span>
+          {!disabled && (
+            <span className={`bcard__fab${timer ? ' bcard__fab--running' : ''}`}>
+              <FabIcon kind={icon} />
+            </span>
+          )}
         </span>
-      </button>
-      {!disabled && !sessionType && (
+      </div>
+      {!disabled && !editing && !sessionType && (
         <button type="button" className="undo-badge" onClick={onUndo} aria-label={`${b.name} の${timerType ? '直前の計測' : '最後の記録'}を取り消す`}>
           <span>{timerType ? '取消' : '−1'}</span>
         </button>
-      )}
-      {!disabled && hasTask && (
-        <Link to={`/task/${b.id}/check`} className={`task-badge${sessionType ? ' task-badge--edge' : ''}`} aria-label={`${b.name} の手順をチェックする`}>
-          <span>手順</span>
-        </Link>
       )}
     </div>
   );
@@ -554,22 +585,14 @@ function FabIcon({ kind }: { kind: 'plus' | 'play' | 'stop' }) {
   );
 }
 
-/** 代替行動を、対応する問題行動の右隣に並べる（決定29）。2列に収まらない分は次の行へ */
-function pairRows(behaviors: Behavior[]): Behavior[][] {
-  const used = new Set<string>();
-  const ordered: Behavior[] = [];
-  for (const p of behaviors.filter((b) => b.kind === 'problem')) {
-    ordered.push(p);
-    used.add(p.id);
-    for (const a of behaviors.filter((b) => b.replacesBehaviorId === p.id)) {
-      ordered.push(a);
-      used.add(a.id);
-    }
+/** 2列に並べるマス。代替行動のあるまとまりが右の列から始まるときは、左に空きを1つ入れて、代替行動を問題行動の右隣に保つ（決定29） */
+function homeCells(groups: Group[]): { key: string; g?: Group; b?: Behavior; before?: string }[] {
+  const cells: { key: string; g?: Group; b?: Behavior; before?: string }[] = [];
+  for (const g of groups) {
+    if (g.members.length > 1 && cells.length % 2 === 1) cells.push({ key: `gap-${g.head}`, before: g.head });
+    for (const b of g.members) cells.push({ key: b.id, g, b });
   }
-  for (const b of behaviors) if (!used.has(b.id)) ordered.push(b);
-  const rows: Behavior[][] = [];
-  for (let i = 0; i < ordered.length; i += 2) rows.push(ordered.slice(i, i + 2));
-  return rows;
+  return cells;
 }
 
 function useNow(ms: number | null) {

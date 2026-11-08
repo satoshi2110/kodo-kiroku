@@ -6,6 +6,7 @@
  * - 入力は画面側で仮名化済み。ここでも形と大きさを確かめ、ABC記録が10件未満なら API を呼ばずに「データ不足」を返す
  * - 出力は JSON スキーマで受け取る
  * - 出力に禁止語（罰・弱化・嫌悪刺激・拘束・隔離・叱責・無視・診断・治療方針 など）があれば捨てて1回だけ作り直し、それでもだめなら結果を出さない
+ * - 呼べるのは、同じサイトの画面と、スマホのアプリ（Capacitor）の画面だけ（ブラウザの Origin で確かめる。アプリには CORS の印を返す）
  * - Supabase の設定（SUPABASE_URL・SUPABASE_ANON_KEY）があるときは、呼べるのはログインした人だけ（決定84）。画面から受け取ったログインの証（アクセストークン）で Supabase の take_ai_run を呼び、
  *   チームの一員か・閲覧者でないか・AI「あり」か・1人ごと（決定63）・チームごと（決定60）・アプリ全体（14.2 #36、月1600回）の回数が残っているかを確かめてから1回と数える
  * - Supabase の設定がない公開（端末内だけの版。審査用のお試し）では、ログインなしで呼べる。そのときは AI_USAGE（KV）が必須で、
@@ -90,10 +91,53 @@ const STEPS_TASK = `次の行動を、本人が身につけるための「手順
 - 問題行動が起きた直後に、代替行動を促したり、休み・好きなものなどを与えたりする書き方をしない（問題行動が「代替行動につながる流れの最初の一歩」として身についてしまうため）。代替行動を促すのは、問題行動の前ぶれのときや落ち着いた場面にする。問題行動が起きたときについて書くなら、本人と周りの安全を守ることだけを書く。
 - これは下書きです。支援チームが本人に合わせて直してから使います。`;
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  // 同じサイトの画面からの呼び出しだけを受ける
+// 同じサイトの画面のほかに受け付ける呼び出し元: スマホのアプリ（Capacitor）の画面。iOS は capacitor://localhost、Android は https://localhost
+const APP_ORIGINS = new Set(['capacitor://localhost', 'https://localhost']);
+
+/** 受け付ける呼び出し元か。Origin がない（ブラウザ以外）のときはここでは止めない（守りはログインと回数の上限） */
+function allowedOrigin(origin: string | null, requestUrl: string): boolean {
+  if (!origin) return true;
+  if (APP_ORIGINS.has(origin)) return true;
+  try {
+    return new URL(origin).host === new URL(requestUrl).host;
+  } catch {
+    return false;
+  }
+}
+
+/** アプリからの呼び出しには、どの返事（断りも含む）にも CORS の印を付ける。付けないと画面には「通信できませんでした」としか出ない */
+function withCors(res: Response, origin: string | null): Response {
+  if (!origin || !APP_ORIGINS.has(origin)) return res;
+  const headers = new Headers(res.headers);
+  headers.set('Access-Control-Allow-Origin', origin);
+  headers.append('Vary', 'Origin');
+  return new Response(res.body, { status: res.status, headers });
+}
+
+// アプリの画面から送る前の問い合わせ（プリフライト）
+export const onRequestOptions: PagesFunction<Env> = async ({ request }) => {
   const origin = request.headers.get('Origin');
-  if (origin && new URL(origin).host !== new URL(request.url).host) return json({ status: 'error', message: '呼び出し元が正しくありません' }, 403);
+  if (!origin || !APP_ORIGINS.has(origin)) return new Response(null, { status: 403 });
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+      Vary: 'Origin',
+    },
+  });
+};
+
+export const onRequestPost: PagesFunction<Env> = async (ctx) => {
+  const origin = ctx.request.headers.get('Origin');
+  return withCors(await handlePost(ctx.request, ctx.env), origin);
+};
+
+async function handlePost(request: Request, env: Env): Promise<Response> {
+  // 同じサイトの画面と、このアプリの画面からの呼び出しだけを受ける
+  if (!allowedOrigin(request.headers.get('Origin'), request.url)) return json({ status: 'error', message: '呼び出し元が正しくありません' }, 403);
 
   const req = (await request.json().catch(() => null)) as AiRequest | null;
   if (!req || (req.kind !== 'analyze' && req.kind !== 'suggest' && req.kind !== 'summarize' && req.kind !== 'steps')) return json({ status: 'error', message: '入力の形が正しくありません' }, 400);
@@ -185,7 +229,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
   return json({ status: 'error', message: '安全に使える結果が作れませんでした。記録を見直すか、時間をおいてお試しください。' }, 422);
-};
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

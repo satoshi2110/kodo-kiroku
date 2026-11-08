@@ -210,21 +210,25 @@ h2.h { font-size: 1rem; font-weight: 700; margin: 0; }
 .bcard__tap {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; min-height: 120px; padding: 12px;
   background: none; border: none; text-align: left; border-radius: var(--radius);
+  position: relative; z-index: 1; pointer-events: none; /* 押すのは下に敷いた .bcard__hit。「手順」だけは押せる */
 }
-.bcard__tap:disabled { cursor: default; color: inherit; }
+/* カード全体を覆う押す場所（中身の見た目は .bcard__tap に重ねる） */
+.bcard__hit { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; background: none; border: none; border-radius: var(--radius); }
+.bcard__hit:disabled { cursor: default; }
+.undo-badge { z-index: 2; }
 .bcard--problem { border-left: 4px solid var(--problem); }
 .bcard--good { border-left: 4px solid var(--primary); }
 .bcard--flash-problem { background: var(--flash-neutral); transition: background 0.1s; }
 .bcard--flash-good { background: var(--good-soft); transition: background 0.1s; }
 .undo-badge {
-  position: absolute; top: 0; right: 0; width: var(--tap); height: var(--tap);
+  position: absolute; top: 0; right: 0; width: auto; min-width: var(--tap); height: var(--tap);
   display: flex; align-items: flex-start; justify-content: flex-end; padding: 6px; background: none; border: none;
 }
 /* 「−1」「取消」の小さな札（6.3.1・決定117: 見た目 24px・タップ領域は外側の 48px）。赤い丸ではなく、落ち着いた色で文字を見せる */
 .undo-badge span {
   min-width: 32px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
   font-size: 0.75rem; font-weight: 700; color: var(--text-2); background: var(--surface-2);
-  border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 0 6px; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 0 6px; font-variant-numeric: tabular-nums; white-space: nowrap; /* 「取消」が縦に折り返さないように */
   transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
 }
 /* 種類の札が右上の −1 と重ならないよう、右に場所をあける */
@@ -470,7 +474,7 @@ span.dot { width: 22px; }
 .bcard--problem::before { background: var(--problem); }
 .bcard--problem, .bcard--good { border-left: 1px solid var(--border-soft); }
 .bcard__tap { gap: 6px; min-height: 128px; padding: 14px 12px 12px 17px; transition: transform var(--dur-1) var(--ease); }
-.bcard__tap:not(:disabled):active { transform: scale(0.98); }
+.bcard__hit:not(:disabled):active + .bcard__tap { transform: scale(0.98); }
 .bcard__name { font-size: 1.125rem; line-height: 1.35; }
 .bcard__for { font-size: 0.75rem; color: var(--text-3); margin-top: -4px; }
 .bcard__count { font-size: 0.875rem; color: var(--text-3); }
@@ -487,7 +491,6 @@ span.dot { width: 22px; }
 }
 .bcard--problem .bcard__fab { background: var(--surface-2); color: var(--text-2); }
 .bcard__fab--running { background: var(--problem-soft) !important; color: var(--problem-ink) !important; }
-.bcard__tap:disabled .bcard__fab { display: none; }
 /* 記録できた合図: カードの色がふわっと変わり、数字が少しはねる（0.25秒） */
 .bcard--flash-good, .bcard--flash-problem { transition: background var(--dur-1) var(--ease); }
 .bcard--flash-good .bcard__count strong, .bcard--flash-problem .bcard__count strong { animation: pop var(--dur-2) var(--ease); }
@@ -601,6 +604,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--primary-soft-2)
 .ai-note { background: var(--surface); color: var(--text); border: 1px solid var(--border-soft); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); box-shadow: var(--shadow-1); font-size: 0.875rem; }
 .ai-note strong { color: var(--primary-ink); }
 .ai-usage .muted { font-size: 0.8125rem; }
+.ai-usage .ai-usage__out { color: var(--problem); font-weight: 700; }
 /* 確信度: 3つの点（形）と文字で。色だけに頼らない */
 .ai-hyp__head { align-items: center; }
 .confidence { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-ink); font-size: 0.875rem; font-weight: 700; white-space: nowrap; }
@@ -794,18 +798,14 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--primary); }
 .task-step__prompts .btn { min-height: 48px; }
 .task-step__prompts .btn[aria-pressed='true'], .task-step .btn--quiet[aria-pressed='true'] { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
 /* 「手順」の小さな札（6.15）。右上の −1 の左に並べ、カードの高さを増やさない。見た目は −1 と同じ 24px、タップ領域は 40×48px */
-.task-badge {
-  position: absolute; top: 0; right: var(--tap); width: 40px; height: var(--tap);
-  display: flex; align-items: flex-start; justify-content: flex-end; padding: 6px 0; text-decoration: none;
+/* 「手順」は行動の名前のすぐ後ろに置く小さな札（見た目 24px・タップ範囲 32px 以上） */
+.task-chip {
+  position: relative; display: inline-flex; align-items: center; vertical-align: 0.15em; height: 24px; margin-left: 6px; padding: 0 8px;
+  border-radius: var(--radius-xs); font-family: var(--font-body); font-size: 0.75rem; font-weight: 700; line-height: 1; white-space: nowrap;
+  color: var(--primary-ink); background: var(--surface); border: 1px solid var(--primary-soft-2); text-decoration: none; pointer-events: auto;
 }
-.task-badge--edge { right: 0; width: var(--tap); padding: 6px; }
-.task-badge span {
-  height: 24px; display: inline-flex; align-items: center; padding: 0 6px; border-radius: var(--radius-xs);
-  font-size: 0.75rem; font-weight: 700; color: var(--primary-ink); background: var(--surface); border: 1px solid var(--primary-soft-2);
-}
-.task-badge:active span { background: var(--primary-soft-2); }
-/* 種類の札が「手順」「−1」と重ならないよう、さらに右に場所をあける（長い名前は … で切る） */
-.bcard--task .bcard__tap > .badge:first-child { max-width: calc(100% - 78px); }
+.task-chip::after { content: ''; position: absolute; inset: -5px -4px; }
+.task-chip:active { background: var(--primary-soft-2); }
 
 /* ステップ × 回の表（6.15）。色だけでなく文字でも段階を示す */
 .step-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -820,3 +820,20 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--primary); }
 .step-cell--stopped { color: var(--problem-ink); font-weight: 700; }
 .step-cell--na { color: var(--text-3); }
 .step-table__sum td, .step-table__sum th { font-weight: 700; }
+
+/* 手順のチェックで全部一人でできたときの +1 の知らせ（決定134） */
+.task-counted { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--primary-soft); color: var(--text); font-size: 0.9375rem; }
+
+/* ホームの並べかえ（決定137）。長押しで入り、カードが小さく揺れる。引っぱっているカードは浮かせる */
+.bcard { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.home-grid--editing .bcard { touch-action: none; cursor: grab; animation: wiggle 0.28s ease-in-out infinite alternate; }
+.home-grid--editing .bcard:nth-child(2n) { animation-delay: -0.14s; }
+.home-grid--editing .bcard--dragging { animation: none; z-index: 5; cursor: grabbing; scale: 1.04; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); }
+@keyframes wiggle { from { rotate: -0.8deg; } to { rotate: 0.8deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .home-grid--editing .bcard { animation: none; outline: 2px dashed var(--primary-soft-2); outline-offset: 2px; }
+}
+.reorder-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.reorder-bar__text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.reorder-bar__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.reorder-bar__actions .btn--primary { min-width: 96px; }

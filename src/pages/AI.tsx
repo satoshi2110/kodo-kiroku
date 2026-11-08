@@ -3,6 +3,7 @@
  * 結果はいつも「AI による仮説（支援者の確認が必要）」と示す。採否（採用 / 修正して採用 / 却下）は管理者・副管理者・支援リーダーが決める。
  * 採用したものは「採用した仮説」「採用した案」として残り、支援計画ができたら（Phase 2）計画に取り込む。
  */
+import { AiUsageLine } from '../components/AiUsageLine';
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -133,13 +134,8 @@ export default function AI() {
                 <span className="muted">
                   {input ? `${formatShortDate(input.period.from)}〜${formatShortDate(input.period.to)} ・ ABC記録 ${input.abcRecords.length}件` : '読み込み中…'}
                 </span>
-                {usage && <span className="muted">あなたの残り: 今日 {usage.dayLeft}回 ・ 今月 {usage.monthLeft}回</span>}
-                {teamUsage && (
-                  <span className="muted">
-                    チームの残り: 今日 {teamUsage.dayLeft}回 ・ 今月 {teamUsage.monthLeft}回（上限 1日{teamUsage.limit.day}回・月{teamUsage.limit.month}回）
-                  </span>
-                )}
               </div>
+              <AiUsageLine mine={usage} team={teamUsage} />
               {input && input.abcRecords.length < MIN_ABC_RECORDS && (
                 <p className="help">ABC記録が {MIN_ABC_RECORDS} 件以上になると分析できます（いま {input.abcRecords.length} 件）。</p>
               )}

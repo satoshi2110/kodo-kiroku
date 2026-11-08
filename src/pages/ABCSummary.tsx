@@ -5,6 +5,7 @@
  * AI のまとめ（Phase 3、決定72）: AI あり のチームだけ。集計を短い文にするだけで、機能の判断や支援の方法は書かない。
  * 送るのは件数の集計だけ（名前は置きかえる）で、1回分を使う。
  */
+import { AiUsageLine } from '../components/AiUsageLine';
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -164,11 +165,7 @@ export default function ABCSummary() {
                 ) : (
                   <p className="help">閲覧者はまとめを見るだけです。</p>
                 )}
-                {usage && (
-                  <span className="muted">
-                    あなたの残り: 今日 {usage.mine.dayLeft}回・今月 {usage.mine.monthLeft}回 ／ チームの残り: 今日 {usage.team.dayLeft}回・今月 {usage.team.monthLeft}回
-                  </span>
-                )}
+                {usage && <AiUsageLine mine={usage.mine} team={usage.team} />}
                 {error && <p className="ai-error" role="alert">{error}</p>}
               </div>
             </div>

@@ -11,6 +11,7 @@ import { useApp } from '../state';
 import { KIND_LABEL, type Behavior, type ChainOrder, type TaskAnalysis } from '../db/types';
 import { ACTION_MAX, CHAIN_LABEL, DEFAULT_TASK_NOTE, PCT_MIN, RUNS_MAX, STEP_MAX, STEP_MIN, SUPPORT_MAX } from '../lib/tasks';
 import { Segmented, TopBar } from '../components/ui';
+import { AiUsageLine } from '../components/AiUsageLine';
 import { aiTeamUsage, aiUsage, audit, base, canRunAi } from '../db/repo';
 import { isMockProvider, requestAi } from '../ai/adapter';
 import { buildStepsInput } from '../ai/build';
@@ -116,6 +117,7 @@ function TaskEdit({ b, task }: { b: Behavior; task: TaskAnalysis | undefined }) 
             <button type="button" className="btn btn--block" disabled={busy || !aiLeft} onClick={askAi}>
               {busy ? 'AI が下書きを作っています…' : draft ? 'AI にもう一度頼む' : 'AI に下書きを頼む'}
             </button>
+            {usage && <AiUsageLine mine={usage.me} team={usage.team} />}
             {usage && !aiLeft && <p className="help">AI の回数を使い切りました。</p>}
             {aiError && <p className="ai-error" role="alert">{aiError}</p>}
             {draft && <DraftView o={draft.output} onUse={() => applyDraft(draft.output)} />}

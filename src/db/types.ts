@@ -141,7 +141,7 @@ export interface TaskAnalysis extends BaseRecord {
 /** 手順のチェックのステップごとの結果（決定125）。stopped = 途中でやめた（分母に残す）、na = 機会なし（分母から外す） */
 export type StepResult = 'independent' | 'verbal' | 'model' | 'physical' | 'stopped' | 'na';
 
-/** 手順のチェック（データシート、6.15）。1回の機会で1件。+1（Event）は作らない（決定124） */
+/** 手順のチェック（データシート、6.15）。1回の機会で1件。全部一人でできた回は、回数で記録する行動なら +1（Event）も同じ日時で作る（決定134） */
 export interface StepCheck extends BaseRecord {
   personId: string;
   behaviorId: string;
@@ -610,6 +610,7 @@ export interface DeviceSetting {
   // ---- 画面の知らせ（6.11、決定106・107）。この端末だけの設定。なし = オン ----
   notify?: NotifyPrefs;
   reminderOff?: Record<string, string>; // チームごとに、「今日は出さない」を押した日
+  homeOrder?: Record<string, string[]>; // 対象者ごとの、ホームの行動カードの並び（まとまりの先頭の行動 id。この端末だけ。決定137）
   reviewSeen?: Record<string, string>; // チームごとに、「確かめた」を押した見直し日
   meetingSeenAt?: Record<string, string>; // チームごとに、「会議メモができました」をこの時刻まで確かめた
 }

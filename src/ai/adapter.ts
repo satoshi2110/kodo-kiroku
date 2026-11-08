@@ -1,6 +1,7 @@
 /**
  * AI 呼び出しのアダプタ層（9章）。画面はここだけを呼ぶ。
- * - server: 同じサイトの /api/ai（Cloudflare Pages Functions）に送る。API キーはサーバー側だけにある。
+ * - server: /api/ai（Cloudflare Pages Functions）に送る。API キーはサーバー側だけにある。
+ *   ふだんは同じサイト。スマホのアプリ（Capacitor）は画面が端末の中から開かれるので、VITE_AI_BASE_URL に公開先の住所を書いてビルドする
  *   ログインの証（アクセストークン）を添え、サーバーがチームの一員か・回数が残っているかを確かめる（決定84）
  * - mock: 外に何も送らず、決まった見本の結果を返す（開発中と、キー未設定のとき）
  * AI「なし」のチームでは、画面がそもそもここを呼ばない。
@@ -25,6 +26,9 @@ const provider: Provider = (import.meta.env.VITE_AI_PROVIDER as Provider | undef
 
 export const isMockProvider = provider === 'mock';
 
+// 例: https://kodo-kiroku.pages.dev（末尾の / はなくてよい）。空なら同じサイトの /api/ai
+const aiEndpoint = `${((import.meta.env.VITE_AI_BASE_URL as string | undefined) ?? '').replace(/\/$/, '')}/api/ai`;
+
 export async function requestAi(req: AiRequest): Promise<AiResponse> {
   if (req.kind === 'analyze' && req.input.abcRecords.length < MIN_ABC_RECORDS) {
     return { status: 'insufficient', message: `ABC記録が ${req.input.abcRecords.length} 件です。${MIN_ABC_RECORDS} 件以上になると分析できます。` };
@@ -38,7 +42,7 @@ export async function requestAi(req: AiRequest): Promise<AiResponse> {
     headers.Authorization = `Bearer ${token}`;
   }
   try {
-    const res = await fetch('/api/ai', {
+    const res = await fetch(aiEndpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(req),

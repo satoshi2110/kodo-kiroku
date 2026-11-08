@@ -25,7 +25,7 @@ export interface RecordSet {
   restraintLogs: RestraintLog[]; // 身体拘束の記録（グラフ・時間帯の図だけに使う。記録を付けた日の判定には入れない）
   schedules: UserSchedule[]; // メンバーごとのいつもの時間（1人1つ）
   tasks: TaskAnalysis[]; // 手順（6.15。やめた手順は除く）
-  stepChecks: StepCheck[]; // 手順のチェック（記録を付けた日の判定には入れない。決定124）
+  stepChecks: StepCheck[]; // 手順のチェック（チェックそのものは記録を付けた日の判定には入れない。全部一人でできた回の +1 は Event として入る。決定134）
   firstDate: string; // いちばん古い記録の日（なければ今日）
 }
 

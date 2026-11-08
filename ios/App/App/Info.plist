@@ -6,10 +6,6 @@
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>ja</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>登録した場所に入っているかを確かめ、場所を自動で切りかえるために、位置を1回だけ使います。いまいる位置は保存も送信もしません（「いまここを登録」で場所の中心にするときを除く）。</string>
-	<key>NSCameraUsageDescription</key>
-	<string>好きなもの・ごほうびの写真を撮るときと、招待の QR コードを読むときに使います。</string>
 	<key>CFBundleDisplayName</key>
 	<string>行動記録</string>
 	<key>CFBundleExecutable</key>
@@ -28,6 +24,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>好きなもの・ごほうびの写真を撮るときと、招待の QR コードを読むときに使います。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>開発中の確かめのため、同じ Wi-Fi の Mac で動かしている AI のサーバーにつなぐときに使います。</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>登録した場所に入っているかを確かめ、場所を自動で切りかえるために、位置を1回だけ使います。いまいる位置は保存も送信もしません（「いまここを登録」で場所の中心にするときを除く）。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
